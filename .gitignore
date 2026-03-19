@@ -4,6 +4,10 @@
 
 # Xcode
 #
+
+.expo
+ios
+android
 build/
 *.pbxuser
 !default.pbxuser

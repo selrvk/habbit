@@ -1,4 +1,8 @@
 {
   "name": "DailyTracker",
-  "displayName": "DailyTracker"
+  "displayName": "DailyTracker",
+  "plugins": [
+    "expo-font",
+    "expo-asset"
+  ]
 }
