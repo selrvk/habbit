@@ -67,7 +67,7 @@ const getLast7Days = (dailyTotals: DailyTotal[], spentToday: number): ChartDay[]
 };
 const defaultStats = (): Stats => ({ currentStreak: 0, bestStreak: 0, totalCompleted: 0, lastFullDate: '' });
 
-// ─── Numpad Modal ─────────────────────────────────────────────────────────────
+// Numpad Modal
 
 const NUMPAD_KEYS = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
 
@@ -124,7 +124,7 @@ const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onC
   );
 };
 
-// ─── Text Modal ───────────────────────────────────────────────────────────────
+// Text Modal
 
 const TextModal = ({ visible, title, placeholder, initialValue, onSave, onClose }: {
   visible: boolean; title: string; placeholder: string; initialValue: string; onSave: (v: string) => void; onClose: () => void;
@@ -174,7 +174,7 @@ const TextModal = ({ visible, title, placeholder, initialValue, onSave, onClose 
   );
 };
 
-// ─── Commission Modal ─────────────────────────────────────────────────────────
+// Commission Modal
 
 const CommissionModal = ({ visible, initialValue, onSave, onClose }: {
   visible: boolean; initialValue: string; onSave: (label: string) => void; onClose: () => void;
@@ -226,7 +226,7 @@ const CommissionModal = ({ visible, initialValue, onSave, onClose }: {
   );
 };
 
-// ─── Weekly Chart ─────────────────────────────────────────────────────────────
+// Weekly Chart
 
 const WeeklyChart = ({ days, allocatedPerDay, currency }: { days: ChartDay[]; allocatedPerDay: number; currency: string }) => {
   const CHART_H = 100;
@@ -261,7 +261,7 @@ const WeeklyChart = ({ days, allocatedPerDay, currency }: { days: ChartDay[]; al
   );
 };
 
-// ─── Swipeable Task ───────────────────────────────────────────────────────────
+// Swipeable Task
 
 const SWIPE_THRESHOLD = 60;
 
@@ -316,7 +316,7 @@ const SwipeableTaskItem = ({ item, onComplete, onUncomplete }: { item: Commissio
   );
 };
 
-// ─── Section Divider ──────────────────────────────────────────────────────────
+// Section Divider
 
 const SectionDivider = ({ title }: { title: string }) => (
   <View className="flex-row items-center gap-x-2.5 my-5">
@@ -336,7 +336,7 @@ const SectionDivider = ({ title }: { title: string }) => (
   </View>
 );
 
-// ─── Bottom Nav ───────────────────────────────────────────────────────────────
+// Bottom Nav
 
 const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: TabKey) => void }) => {
   const items: { icon: string; label: string; key: TabKey }[] = [
@@ -362,7 +362,7 @@ const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: TabKey)
   );
 };
 
-// ─── Profile Screen ───────────────────────────────────────────────────────────
+// Profile Screen
 
 const ProfileScreen = ({ name, avatar, stats, onSetName, onSetAvatar, onResetToday }: {
   name: string; avatar: string; stats: Stats;
@@ -426,7 +426,7 @@ const ProfileScreen = ({ name, avatar, stats, onSetName, onSetAvatar, onResetTod
   );
 };
 
-// ─── Finance Screen ───────────────────────────────────────────────────────────
+// Finance Screen
 
 const CURRENCIES = ['₱','$','€','£','¥'];
 
@@ -505,7 +505,7 @@ const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocatedPerDay,
   );
 };
 
-// ─── Tasks Screen ─────────────────────────────────────────────────────────────
+// Tasks Screen
 
 const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: { commissions: Commission[]; onAdd: (l: string) => void; onEdit: (id: string, l: string) => void; onDelete: (id: string) => void }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -545,7 +545,7 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: { commissions: Co
   );
 };
 
-// ─── Home Screen ──────────────────────────────────────────────────────────────
+// Home Screen
 
 const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, todayHistory, setTodayHistory, allocatedPerDay, currency, name, avatar, onGoToTasks, onCommissionComplete, onCommissionUncomplete }: {
   commissions: Commission[]; setCommissions: React.Dispatch<React.SetStateAction<Commission[]>>;
@@ -667,7 +667,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
   );
 };
 
-// ─── Root App ─────────────────────────────────────────────────────────────────
+// Root App
 
 export default function App() {
   const [activeTab, setActiveTab]             = useState<TabKey>('home');
@@ -681,8 +681,6 @@ export default function App() {
   const [avatar, setAvatar]                   = useState('🐰');
   const [stats, setStats]                     = useState<Stats>(defaultStats());
 
-  // ── KEY FIX: prevents the persist useEffect from overwriting storage
-  //    before the async load has finished reading it ──────────────────────────
   const hasLoaded = useRef(false);
 
   const todayKey     = getTodayKey();
@@ -692,7 +690,7 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_STATS, JSON.stringify(s)).catch(() => {});
   }, []);
 
-  // ── Load on mount ──────────────────────────────────────────────────────────
+  // Load on mount
 
   useEffect(() => {
     const load = async () => {
@@ -755,21 +753,19 @@ export default function App() {
       } catch {
         // fail silently
       } finally {
-        // ── Mark load as complete so the persist effect can now safely run ──
         hasLoaded.current = true;
       }
     };
     load();
   }, []);
 
-  // ── Persist commissions — guarded by hasLoaded so it never fires before
-  //    the initial load finishes, preventing empty [] from overwriting data ───
+  // Persist commissions
   useEffect(() => {
     if (!hasLoaded.current) return;
     AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: commissions, date: todayKey })).catch(() => {});
   }, [commissions]);
 
-  // ── Streak: fires when all commissions become completed ───────────────────
+  // Streak: fires when all commissions become completed
 
   useEffect(() => {
     if (!hasLoaded.current) return;
