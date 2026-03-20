@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // Update this to match your actual file structure
   content: [
     "./App.{js,jsx,ts,tsx}",
     "./app/**/*.{js,jsx,ts,tsx}",
@@ -11,7 +10,6 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Core palette — use these as: bg-bg, text-cream, bg-card, etc.
         bg:     "#4B2E2B",   // darkest brown — main background
         mid:    "#6B3A2A",   // mid brown — subtle separators / hover states
         card:   "#8C5A3C",   // card/surface brown
@@ -19,7 +17,6 @@ module.exports = {
         cream:  "#FFF8F0",   // off-white — all text, light surfaces
       },
       fontFamily: {
-        // Use as: font-jua  or  font-dynapuff
         jua:      ["Jua-Regular"],
         dynapuff: ["DynaPuff-Regular"],
       },
