@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		092B1835A91B15E17AF774FE /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 785766AED2AB07C2EEC5DAC4 /* libPods-DailyTracker.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		3944D2E36D6EFD5FB1AE00E7 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */; };
 		56086F6C2F6C04470005F64D /* Jua-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6B2F6C04470005F64D /* Jua-Regular.ttf */; };
 		56086F6E2F6C04520005F64D /* DynaPuff-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
@@ -21,13 +21,13 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DailyTracker/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DailyTracker/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = DailyTracker/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		4B08330780AC4120EDA8F750 /* Pods-DailyTracker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.release.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.release.xcconfig"; sourceTree = "<group>"; };
+		237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.release.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.release.xcconfig"; sourceTree = "<group>"; };
+		45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
+		51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56086F6B2F6C04470005F64D /* Jua-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Jua-Regular.ttf"; sourceTree = "<group>"; };
 		56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DynaPuff-Regular.ttf"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DailyTracker/AppDelegate.swift; sourceTree = "<group>"; };
-		785766AED2AB07C2EEC5DAC4 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DailyTracker/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		8B1EFF30818D52A79D02F620 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -36,7 +36,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				092B1835A91B15E17AF774FE /* libPods-DailyTracker.a in Frameworks */,
+				3944D2E36D6EFD5FB1AE00E7 /* libPods-DailyTracker.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -61,7 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				785766AED2AB07C2EEC5DAC4 /* libPods-DailyTracker.a */,
+				51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -98,8 +98,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				8B1EFF30818D52A79D02F620 /* Pods-DailyTracker.debug.xcconfig */,
-				4B08330780AC4120EDA8F750 /* Pods-DailyTracker.release.xcconfig */,
+				45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */,
+				237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -111,13 +111,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "DailyTracker" */;
 			buildPhases = (
-				3129B6B33CEEE9AEDB57E8CA /* [CP] Check Pods Manifest.lock */,
+				57FCACEEF39AFA876A9F9D6D /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				C8807B5422010159B5040BD7 /* [CP] Embed Pods Frameworks */,
-				BAFE50637622B1A4D0D00C27 /* [CP] Copy Pods Resources */,
+				A740424CC11C0DDECA24A1B7 /* [CP] Embed Pods Frameworks */,
+				7FF38DB1984BD374D81C9355 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -191,7 +191,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"\\\"$WITH_ENVIRONMENT\\\" \\\"$REACT_NATIVE_XCODE\\\"\"\n";
 		};
-		3129B6B33CEEE9AEDB57E8CA /* [CP] Check Pods Manifest.lock */ = {
+		57FCACEEF39AFA876A9F9D6D /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -213,7 +213,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		BAFE50637622B1A4D0D00C27 /* [CP] Copy Pods Resources */ = {
+		7FF38DB1984BD374D81C9355 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -230,7 +230,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C8807B5422010159B5040BD7 /* [CP] Embed Pods Frameworks */ = {
+		A740424CC11C0DDECA24A1B7 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -263,7 +263,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 8B1EFF30818D52A79D02F620 /* Pods-DailyTracker.debug.xcconfig */;
+			baseConfigurationReference = 45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -294,7 +294,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4B08330780AC4120EDA8F750 /* Pods-DailyTracker.release.xcconfig */;
+			baseConfigurationReference = 237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
