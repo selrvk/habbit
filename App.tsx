@@ -711,8 +711,6 @@ const CommissionModal = ({ visible, initialValue, initialDays, initialReminderTi
       setReminderHour(initialReminderTime?.hour ?? 20);
       setReminderMinute(initialReminderTime?.minute ?? 0);
       haptic.medium();
-      // Always reset to start values before animating in — prevents the
-      // "already at destination" glitch on second+ open within the same screen mount
       scaleAnim.setValue(0.88);
       opacityAnim.setValue(0);
       Animated.parallel([
@@ -752,8 +750,8 @@ const CommissionModal = ({ visible, initialValue, initialDays, initialReminderTi
                 </View>
                 <View style={{ marginBottom: 18 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text className={JUA} style={{ fontSize: 11, color: 'rgba(232,213,192,0.5)' }}>SCHEDULE</Text>
-                    <Text className={JUA} style={{ fontSize: 11, color: '#D4956A', opacity: 0.8 }}>{daysLabel(days)}</Text>
+                    <Text className={JUA} style={{ fontSize: 12, color: 'rgba(232,213,192,0.5)' }}>SCHEDULE</Text>
+                    <Text className={JUA} style={{ fontSize: 12, color: '#D4956A', opacity: 0.9 }}>{daysLabel(days)}</Text>
                   </View>
                   <DayPicker days={days} onChange={setDays} />
                 </View>
@@ -894,9 +892,9 @@ const SwipeableTaskItem = ({ item, onComplete, onUncomplete, onSwipeStart, onSwi
         <View className="px-4 py-4 flex-row items-center justify-between">
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text className={`${JUA} text-cream text-base`} style={item.completed ? { textDecorationLine: 'line-through' } : {}}>{item.label}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: item.days?.length > 0 || item.reminderTime ? 3 : 0 }}>
-              {item.days && item.days.length > 0 && item.days.length < 7 && <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,149,106,0.5)' }}>{daysLabel(item.days)}</Text>}
-              {item.reminderTime && <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,149,106,0.5)' }}>🔔 {formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: item.days?.length > 0 || item.reminderTime ? 4 : 0 }}>
+              {item.days && item.days.length > 0 && item.days.length < 7 && <Text className={JUA} style={{ fontSize: 12, color: 'rgba(212,149,106,0.65)' }}>{daysLabel(item.days)}</Text>}
+              {item.reminderTime && <Text className={JUA} style={{ fontSize: 12, color: 'rgba(212,149,106,0.65)' }}>🔔 {formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>}
             </View>
           </View>
           <View className="w-5 h-5 rounded-full border-2 items-center justify-center" style={{ borderColor: item.completed ? '#D4956A' : 'rgba(212,149,106,0.5)', backgroundColor: item.completed ? '#D4956A' : 'transparent' }}>
@@ -994,7 +992,7 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
         <Text className={DYNAPUFF} style={{ fontSize: 32, color: accent ? '#D4956A' : '#e8d5c0', lineHeight: 36 }}>{value}</Text>
         {showDaysSuffix && <Text className={JUA} style={{ fontSize: 12, color: accent ? 'rgba(212,149,106,0.7)' : 'rgba(232,213,192,0.5)', marginBottom: 4 }}>days</Text>}
       </View>
-      <Text className={JUA} style={{ fontSize: 10, color: 'rgba(232,213,192,0.5)', textAlign: 'center', marginTop: 2 }}>{label}</Text>
+      <Text className={JUA} style={{ fontSize: 11, color: 'rgba(232,213,192,0.5)', textAlign: 'center', marginTop: 2 }}>{label}</Text>
     </View>
   );
 
@@ -1068,7 +1066,7 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
         </View>
         <SectionDivider title="✦ Notifications ✦" />
         <ToggleRow icon="🌙" title="New Day Reminder" subtitle="Notifies at midnight when your Habbits reset" enabled={midnightNotifEnabled} onToggle={() => { haptic.light(); onToggleMidnightNotif(!midnightNotifEnabled); }} />
-        <Text className={JUA} style={{ fontSize: 11, color: 'rgba(232,213,192,0.35)', textAlign: 'center', marginTop: 10, marginBottom: 4 }}>Per-Habbit reminders are set inside each Habbit ✦ tap Edit on any Habbit</Text>
+        <Text className={JUA} style={{ fontSize: 12, color: 'rgba(232,213,192,0.4)', textAlign: 'center', marginTop: 10, marginBottom: 4 }}>Per-Habbit reminders are set inside each Habbit ✦ tap Edit on any Habbit</Text>
         <SectionDivider title="✦ Danger Zone ✦" />
         <TouchableOpacity onPress={handleReset} activeOpacity={0.8} style={{ backgroundColor: 'rgba(200,80,60,0.1)', borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,80,60,0.3)', marginBottom: 12 }}>
           <Text className={DYNAPUFF} style={{ color: '#f09090', fontSize: 15 }}>Reset Today's Data</Text>
@@ -1149,9 +1147,15 @@ const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocatedPerDay,
             </View>
           </View>
         </View>
-        <View className="mb-1">
-          <View className="w-full h-2 bg-card rounded-full overflow-hidden"><View className="h-full rounded-full" style={{ width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} /></View>
-          <Text className={`${JUA} text-cream text-xs opacity-40 mt-1 text-right`}>{budgetPct.toFixed(0)}% of daily budget</Text>
+        {/* ── Budget progress bar — thicker and clearly labelled ── */}
+        <View className="mb-4">
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <Text className={JUA} style={{ fontSize: 12, color: 'rgba(232,213,192,0.55)' }}>Budget used today</Text>
+            <Text className={JUA} style={{ fontSize: 12, color: isOverBudget ? '#f09090' : 'rgba(212,149,106,0.8)' }}>{budgetPct.toFixed(0)}%{isOverBudget ? ' — over!' : ' of daily'}</Text>
+          </View>
+          <View style={{ width: '100%', height: 14, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212,149,106,0.22)' }}>
+            <View style={{ height: '100%', borderRadius: 8, width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} />
+          </View>
         </View>
         <SectionDivider title="✦ This Week ✦" />
         <View className="bg-card rounded-2xl p-4 mb-3" style={{ borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)', shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 }}>
@@ -1213,7 +1217,7 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
   return (
     <>
       <CommissionModal visible={modalVisible} initialValue={editingItem?.label ?? ''} initialDays={editingItem?.days ?? []} initialReminderTime={editingItem?.reminderTime ?? null} onSave={handleSave} onClose={closeModal} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View className="flex-row items-center justify-between mb-1">
           <View><Text className={`${JUA} text-cream text-sm opacity-70`}>Manage your</Text><Text className={`${DYNAPUFF} text-cream text-2xl`}>Habbits</Text></View>
           <View className="w-12 h-12 rounded-full bg-card justify-center items-center" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
@@ -1221,11 +1225,15 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
           </View>
         </View>
         <SectionDivider title={`✦ ${commissions.length} Habbit${commissions.length !== 1 ? 's' : ''} ✦`} />
+        {/* Add button always visible at the top — keeps it in thumb reach */}
+        <TouchableOpacity onPress={openAdd} activeOpacity={0.8} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 15, alignItems: 'center', marginBottom: 16, shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }}>
+          <Text className={`${DYNAPUFF} text-cream text-base`}>+ Add Habbit</Text>
+        </TouchableOpacity>
         {commissions.length === 0 && (
-          <View className="items-center py-10">
-            <Image source={IMAGES.bunny} style={{ width: 56, height: 56, marginBottom: 12, opacity: 0.6 }} resizeMode="contain" />
+          <View className="items-center py-6">
+            <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 10, opacity: 0.6 }} resizeMode="contain" />
             <Text className={`${DYNAPUFF} text-cream text-lg mb-2`}>No Habbits yet!</Text>
-            <Text className={`${JUA} text-cream text-sm opacity-50 text-center`}>Add your first daily Habbit{'\n'}using the button below.</Text>
+            <Text className={`${JUA} text-cream text-sm opacity-50 text-center`}>Tap the button above to add{'\n'}your first daily Habbit.</Text>
           </View>
         )}
         {commissions.map(item => (
@@ -1235,15 +1243,15 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
               <View style={{ flex: 1, paddingVertical: 10 }}>
                 <Text className={`${JUA} text-cream text-base`} numberOfLines={1}>{item.label}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }}>
-                  {/* Schedule pill — slightly brighter so it reads at a glance */}
-                  <View style={{ backgroundColor: 'rgba(212,149,106,0.18)', borderRadius: 99, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
-                    <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,149,106,0.9)' }}>{daysLabel(item.days ?? [])}</Text>
+                  {/* Schedule pill */}
+                  <View style={{ backgroundColor: 'rgba(212,149,106,0.18)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+                    <Text className={JUA} style={{ fontSize: 12, color: 'rgba(212,149,106,0.9)' }}>{daysLabel(item.days ?? [])}</Text>
                   </View>
                   {/* Reminder pill — only shown when set */}
                   {item.reminderTime && (
-                    <View style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(212,149,106,0.28)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={{ fontSize: 9 }}>🔔</Text>
-                      <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,149,106,0.8)' }}>{formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>
+                    <View style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.28)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 10 }}>🔔</Text>
+                      <Text className={JUA} style={{ fontSize: 12, color: 'rgba(212,149,106,0.8)' }}>{formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>
                     </View>
                   )}
                 </View>
@@ -1255,9 +1263,6 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
             </View>
           </View>
         ))}
-        <TouchableOpacity onPress={openAdd} activeOpacity={0.8} className="rounded-2xl py-4 items-center mt-4" style={{ backgroundColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }}>
-          <Text className={`${DYNAPUFF} text-cream text-base`}>+ Add Habbit</Text>
-        </TouchableOpacity>
       </ScrollView>
     </>
   );
@@ -1312,7 +1317,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
   return (
     <>
       <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} />
-      <ScrollView className="flex" contentContainerClassName="px-4 pt-3.5 pb-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
+      <ScrollView className="flex" contentContainerClassName="px-4 pt-5 pb-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
         <View className="flex-row items-center gap-x-3.5 mb-6">
           <View className="p-0.5 rounded-full" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6 }}>
             <View className="w-12 h-12 rounded-full bg-card justify-center items-center"><Image source={avatarImage(avatar)} style={{ width: 36, height: 36 }} resizeMode="contain" /></View>
@@ -1369,7 +1374,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
                 <View className="h-full rounded-full" style={{ width: totalCount > 0 ? `${(completedCount / totalCount) * 100}%` : '0%', backgroundColor: allDone ? '#9de087' : '#D4956A' }} />
               </View>
             </View>
-            <Text className={`${JUA} text-accent text-xs text-center mb-4 opacity-70`}>{allDone ? '🎉 All done for today!' : 'Swipe right to complete · left to undo'}</Text>
+            <Text className={`${JUA} text-accent text-sm text-center mb-4 opacity-70`}>{allDone ? '🎉 All done for today!' : 'Swipe right to complete · left to undo'}</Text>
             {activeTasks.map(item => <SwipeableTaskItem key={item.id} item={item} onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete} onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />)}
             {completedTasks.length > 0 && (
               <>
@@ -1398,9 +1403,15 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
             </View>
           </View>
         </View>
+        {/* ── Budget progress bar — thicker and clearly labelled ── */}
         <View className="mb-5">
-          <View className="w-full h-2 bg-card rounded-full overflow-hidden"><View className="h-full rounded-full" style={{ width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} /></View>
-          <Text className={`${JUA} text-cream text-xs opacity-50 mt-1 text-right`}>{budgetPct.toFixed(0)}% of daily budget</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <Text className={JUA} style={{ fontSize: 12, color: 'rgba(232,213,192,0.55)' }}>Budget used today</Text>
+            <Text className={JUA} style={{ fontSize: 12, color: isOverBudget ? '#f09090' : 'rgba(212,149,106,0.8)' }}>{budgetPct.toFixed(0)}%{isOverBudget ? ' — over!' : ' of daily'}</Text>
+          </View>
+          <View style={{ width: '100%', height: 14, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212,149,106,0.22)' }}>
+            <View style={{ height: '100%', borderRadius: 8, width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} />
+          </View>
         </View>
         <TouchableOpacity className="rounded-2xl py-4 items-center" style={{ backgroundColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }} onPress={() => { haptic.medium(); setModalVisible(true); }} activeOpacity={0.8}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1507,7 +1518,7 @@ export default function App() {
     load();
   }, []);
 
-  // ── Onboarding complete — now receives budget + currency ───────────────────
+  // ── Onboarding complete ────────────────────────────────────────────────────
 
   const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
     const { name: onboardName, firstHabbit, budget, currency: onboardCurrency } = result;
@@ -1657,7 +1668,7 @@ export default function App() {
   };
 
   return (
-    <View className="flex-1 bg-bg pt-10">
+    <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
       <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
       <View className="flex-1">{renderScreen()}</View>
       <BottomNav active={activeTab} onPress={setActiveTab} />
