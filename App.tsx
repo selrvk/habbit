@@ -2,6 +2,7 @@
 
 import "./global.css";
 
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StatusBar, Platform,
@@ -139,6 +140,16 @@ const avatarImage = (key: string) =>
 const DAY_LABELS     = ['S','M','T','W','T','F','S'];
 const CAL_DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const CURRENCIES     = ['\u20b1','$','\u20ac','\u00a3','\u00a5'];
+
+// Navbar height
+const OVER   = 22;
+const PILL_H = 62;
+const NAV_BUFFER = 12;
+
+const useNavHeight = () => {
+  const insets = useSafeAreaInsets();
+  return OVER + PILL_H + insets.bottom + NAV_BUFFER;
+};
 
 // Default budget shown when user skips — reasonable starting point for any currency
 const DEFAULT_BUDGET   = 500;
@@ -951,8 +962,8 @@ const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: TabKey)
 
   const BUBBLE = 48;
   const PILL_H = 62;
-  const OVER   = 22;  // how far bubble rises above pill top
-  const SAFE   = Platform.OS === 'ios' ? 28 : 10;
+  const OVER   = 22; 
+  const { bottom: SAFE } = useSafeAreaInsets();
   const tabW   = pillWidth / 4;
 
   const bubbleX = slideAnim.interpolate({
@@ -1047,6 +1058,8 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
   onSetName: (v: string) => void; onSetAvatar: (v: string) => void;
   onResetToday: () => void; onDeleteAllData: () => void; onToggleMidnightNotif: (v: boolean) => void;
 }) => {
+  
+  const navHeight = useNavHeight();
   const [nameModal, setNameModal] = useState(false);
   const handleReset = () => {
     haptic.error();
@@ -1101,7 +1114,7 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
   return (
     <>
       <TextModal visible={nameModal} title="Edit Name" placeholder="Your name" initialValue={name} onSave={(v) => { onSetName(v); setNameModal(false); }} onClose={() => setNameModal(false)} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
           <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2.5, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 }}>
             <Image source={avatarImage(avatar)} style={{ width: 62, height: 62 }} resizeMode="contain" />
@@ -1173,6 +1186,7 @@ const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocatedPerDay,
   spentToday: number; todayHistory: SpendingEntry[]; dailyTotals: DailyTotal[]; allocatedPerDay: number; currency: string;
   onSetAllocated: (v: number) => void; onSetCurrency: (v: string) => void; onUndoEntry: (id: string) => void;
 }) => {
+  const navHeight = useNavHeight();
   const [budgetModal, setBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
   const isOverBudget = spentToday > allocatedPerDay;
@@ -1191,7 +1205,7 @@ const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocatedPerDay,
   return (
     <>
       <NumpadModal visible={budgetModal} title="Set Daily Budget" hint={`Current budget: ${currency}${allocatedPerDay.toFixed(2)}`} confirmLabel="Set Budget to" amount={budgetInput} currency={currency} onChangeAmount={setBudgetInput} onConfirm={() => { onSetAllocated(parseFloat(budgetInput || '0')); setBudgetInput(''); setBudgetModal(false); }} onClose={() => { setBudgetModal(false); setBudgetInput(''); }} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center justify-between mb-1">
           <View><Text className={`${JUA} text-cream text-sm opacity-70`}>Track your</Text><Text className={`${DYNAPUFF} text-cream text-2xl`}>Finance</Text></View>
           <View className="w-12 h-12 rounded-full bg-card justify-center items-center" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
@@ -1284,6 +1298,7 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
   onEdit: (id: string, label: string, days: number[], reminderTime: ReminderTime | null) => void;
   onDelete: (id: string) => void;
 }) => {
+  const navHeight = useNavHeight();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<Commission | null>(null);
   const openAdd = () => { setEditingItem(null); setModalVisible(true); };
@@ -1303,7 +1318,7 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
   return (
     <>
       <CommissionModal visible={modalVisible} initialValue={editingItem?.label ?? ''} initialDays={editingItem?.days ?? []} initialReminderTime={editingItem?.reminderTime ?? null} onSave={handleSave} onClose={closeModal} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View className="flex-row items-center justify-between mb-1">
           <View><Text className={`${JUA} text-cream text-sm opacity-70`}>Manage your</Text><Text className={`${DYNAPUFF} text-cream text-2xl`}>Habbits</Text></View>
           <View className="w-12 h-12 rounded-full bg-card justify-center items-center" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
@@ -1363,6 +1378,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
   allocatedPerDay: number; currency: string; name: string; avatar: string;
   onGoToTasks: () => void; onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
 }) => {
+  const navHeight = useNavHeight();
   const [showCompleted, setShowCompleted] = useState(false);
   const [addingAmount, setAddingAmount]   = useState('');
   const [modalVisible, setModalVisible]   = useState(false);
@@ -1403,7 +1419,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
   return (
     <>
       <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} />
-      <ScrollView className="flex" contentContainerClassName="px-4 pt-5 pb-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
         <View className="flex-row items-center gap-x-3.5 mb-6">
           <View className="p-0.5 rounded-full" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6 }}>
             <View className="w-12 h-12 rounded-full bg-card justify-center items-center"><Image source={avatarImage(avatar)} style={{ width: 36, height: 36 }} resizeMode="contain" /></View>
@@ -1754,10 +1770,12 @@ export default function App() {
   };
 
   return (
-    <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
-      <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
-      <View className="flex-1">{renderScreen()}</View>
-      <BottomNav active={activeTab} onPress={setActiveTab} />
-    </View>
+    <SafeAreaProvider>
+      <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
+        <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
+        <View className="flex-1">{renderScreen()}</View>
+        <BottomNav active={activeTab} onPress={setActiveTab} />
+      </View>
+    </SafeAreaProvider>
   );
 }
