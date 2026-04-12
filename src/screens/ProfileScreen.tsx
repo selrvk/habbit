@@ -77,7 +77,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
   return (
     <>
       <TextModal visible={nameModal} title="Edit Name" placeholder="Your name" initialValue={name} onSave={v => { onSetName(v); setNameModal(false); }} onClose={() => setNameModal(false)} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
 
         <View style={{ marginBottom: 8 }}>
           {/* Gear button */}

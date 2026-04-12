@@ -259,7 +259,7 @@ export default function App() {
         <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
           <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
           <View style={{ flex: 1 }}>{renderScreen()}</View>
-          <BottomNav active={activeTab} onPress={setActiveTab} />
+          {activeTab !== 'settings' && <BottomNav active={activeTab} onPress={setActiveTab} />}
         </View>
       </SafeAreaProvider>
     </SettingsProvider>
