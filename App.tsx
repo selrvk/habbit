@@ -5,8 +5,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StatusBar, Platform,
-  Animated, PanResponder, Modal, TouchableWithoutFeedback,
-  TextInput, KeyboardAvoidingView, Alert, Image,
+  Animated, TextInput, KeyboardAvoidingView, Alert, Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
@@ -19,8 +18,6 @@ import { ReminderTime, Commission, CommissionsData, SpendingEntry, FinanceData, 
 
 // Components
 import { SectionDivider }      from './src/components/SectionDivider';
-import { DayPicker }           from './src/components/DayPicker';
-import { TimePicker }          from './src/components/TimePicker';
 import { NumpadModal }         from './src/components/NumpadModal';
 import { TextModal }           from './src/components/TextModal';
 import { CommissionModal }     from './src/components/CommissionModal';
@@ -29,7 +26,7 @@ import { CompletionCalendar }  from './src/components/CompletionCalendar';
 import { SwipeableTaskItem }   from './src/components/SwipeableTaskItem';
 import { BottomNav }           from './src/components/BottomNav';
 
-// ─── Haptic helpers ───────────────────────────────────────────────────────────
+// Haptic helpers
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -46,8 +43,8 @@ const useNavHeight = () => {
   return OVER + PILL_H + insets.bottom + NAV_BUFFER;
 };
 
-// ─── Onboarding ───────────────────────────────────────────────────────────────
-// Steps: 0 Welcome → 1 Name → 2 First Habbit → 3 Daily Budget → 4 Tour
+// Onboarding 
+// Steps: 0 Welcome > 1 Name > 2 First Habbit > 3 Daily Budget > 4 Tour
 
 const ONBOARD_STEPS = 5;
 
