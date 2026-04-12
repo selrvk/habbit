@@ -28,6 +28,14 @@ const IMAGES = {
   tasks:   require('./assets/Tasks.png'),
 };
 
+const AVATARIMAGES = {
+  avatar_bunny: require('./assets/avatars/rabbit.png'),
+  avatar_hamster: require('./assets/avatars/hamster.png'),
+  avatar_bear: require('./assets/avatars/bear.png'),
+  avatar_panda: require('./assets/avatars/panda.png'),
+  avatar_fox: require('./assets/avatars/fox.png'),
+}
+
 // ─── Haptic helpers ───────────────────────────────────────────────────────────
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
@@ -72,7 +80,7 @@ const scheduleHabitNotifs = async (commission: Commission) => {
     const scheduledDays = commission.days.length === 0 ? [0,1,2,3,4,5,6] : commission.days;
     for (const dow of scheduledDays) {
       await notifee.createTriggerNotification(
-        { id: `hr-${commission.id}-${dow}`, title: 'Habbit Reminder! 🐰', body: commission.label,
+        { id: `hr-${commission.id}-${dow}`, title: 'Habbit 🐰', body: commission.label,
           android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' } },
         { type: TriggerType.TIMESTAMP, timestamp: getNextWeeklyTimestamp(dow, hour, minute), repeatFrequency: RepeatFrequency.WEEKLY }
       );
@@ -119,14 +127,22 @@ const ALL_STORAGE_KEYS = [
   STORAGE_SETTINGS, STORAGE_STATS, STORAGE_ONBOARDED, STORAGE_COMPLETION_HISTORY,
 ];
 
-const AVATARS        = ['🐰','🐹','🐻','🐼','🦊'];
+// Avatar image keys — must match AVATARIMAGES object
+type AvatarKey = keyof typeof AVATARIMAGES;
+const AVATAR_KEYS: AvatarKey[] = ['avatar_bunny','avatar_hamster','avatar_bear','avatar_panda','avatar_fox'];
+const DEFAULT_AVATAR: AvatarKey = 'avatar_bunny';
+
+// Resolve avatar key to image source (falls back for any old data)
+const avatarImage = (key: string) =>
+  AVATARIMAGES[key as AvatarKey] ?? AVATARIMAGES.avatar_bunny;
+
 const DAY_LABELS     = ['S','M','T','W','T','F','S'];
 const CAL_DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const CURRENCIES     = ['₱','$','€','£','¥'];
+const CURRENCIES     = ['\u20b1','$','\u20ac','\u00a3','\u00a5'];
 
 // Default budget shown when user skips — reasonable starting point for any currency
 const DEFAULT_BUDGET   = 500;
-const DEFAULT_CURRENCY = '₱';
+const DEFAULT_CURRENCY = '\u20b1';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1004,7 +1020,7 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
           <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2.5, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 }}>
-            <Image source={IMAGES.bunny} style={{ width: 58, height: 58 }} resizeMode="contain" />
+            <Image source={avatarImage(avatar)} style={{ width: 62, height: 62 }} resizeMode="contain" />
           </View>
           <TouchableOpacity onPress={() => { haptic.light(); setNameModal(true); }} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text className={DYNAPUFF} style={{ fontSize: 26, color: '#e8d5c0' }}>{name}</Text>
@@ -1014,12 +1030,16 @@ const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midni
           </TouchableOpacity>
         </View>
         <SectionDivider title="✦ Choose Avatar ✦" />
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 4 }}>
-          {AVATARS.map(a => (
-            <TouchableOpacity key={a} onPress={() => { haptic.light(); onSetAvatar(a); }} activeOpacity={0.7} style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: avatar === a ? 'rgba(212,149,106,0.2)' : '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: avatar === a ? '#D4956A' : 'rgba(212,149,106,0.15)', shadowColor: avatar === a ? '#D4956A' : 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: avatar === a ? 4 : 0 }}>
-              <Text style={{ fontSize: 28 }}>{a}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
+          {AVATAR_KEYS.map(key => {
+            const isSelected = avatar === key;
+            return (
+              <TouchableOpacity key={key} onPress={() => { haptic.light(); onSetAvatar(key); }} activeOpacity={0.7}
+                style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: isSelected ? 'rgba(212,149,106,0.2)' : '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isSelected ? '#D4956A' : 'rgba(212,149,106,0.15)', shadowColor: isSelected ? '#D4956A' : 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: isSelected ? 4 : 0 }}>
+                <Image source={avatarImage(key)} style={{ width: 38, height: 38 }} resizeMode="contain" />
+              </TouchableOpacity>
+            );
+          })}
         </View>
         <SectionDivider title="✦ Your Stats ✦" />
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
@@ -1223,7 +1243,7 @@ const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
                   {item.reminderTime && (
                     <View style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(212,149,106,0.28)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Text style={{ fontSize: 9 }}>🔔</Text>
-                      <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,190,60,0.8)' }}>{formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>
+                      <Text className={JUA} style={{ fontSize: 10, color: 'rgba(212,149,106,0.8)' }}>{formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>
                     </View>
                   )}
                 </View>
@@ -1295,7 +1315,7 @@ const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, to
       <ScrollView className="flex" contentContainerClassName="px-4 pt-3.5 pb-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
         <View className="flex-row items-center gap-x-3.5 mb-6">
           <View className="p-0.5 rounded-full" style={{ borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6 }}>
-            <View className="w-12 h-12 rounded-full bg-card justify-center items-center"><Text className="text-3xl">{avatar}</Text></View>
+            <View className="w-12 h-12 rounded-full bg-card justify-center items-center"><Image source={avatarImage(avatar)} style={{ width: 36, height: 36 }} resizeMode="contain" /></View>
           </View>
           <View><Text className={`${JUA} text-cream text-sm opacity-70`}>Welcome back,</Text><Text className={`${DYNAPUFF} text-cream text-2xl tracking-wide`}>{name}</Text></View>
         </View>
@@ -1405,7 +1425,7 @@ export default function App() {
   const [allocatedPerDay, setAllocatedPerDay]     = useState(DEFAULT_BUDGET);
   const [currency, setCurrency]                   = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
-  const [avatar, setAvatar]                       = useState('🐰');
+  const [avatar, setAvatar]                       = useState(DEFAULT_AVATAR);
   const [stats, setStats]                         = useState<Stats>(defaultStats());
   const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
   const [midnightNotifEnabled, setMidnightNotifEnabled] = useState(false);
@@ -1496,7 +1516,7 @@ export default function App() {
     setCurrency(onboardCurrency);
     await AsyncStorage.setItem(STORAGE_SETTINGS, JSON.stringify({
       allocatedPerDay: budget, currency: onboardCurrency,
-      name: onboardName, avatar: '🐰', midnightNotifEnabled: false,
+      name: onboardName, avatar: DEFAULT_AVATAR, midnightNotifEnabled: false,
     }));
     if (firstHabbit) {
       const initial: Commission[] = [{ id: generateId(), label: firstHabbit, completed: false, days: [], reminderTime: null }];
@@ -1535,7 +1555,7 @@ export default function App() {
 
   const saveSettings = useCallback((partial: Partial<Settings>) => {
     AsyncStorage.getItem(STORAGE_SETTINGS).then(s => {
-      const current: Settings = s ? JSON.parse(s) : { allocatedPerDay: DEFAULT_BUDGET, currency: DEFAULT_CURRENCY, name: 'Friend', avatar: '🐰', midnightNotifEnabled: false };
+      const current: Settings = s ? JSON.parse(s) : { allocatedPerDay: DEFAULT_BUDGET, currency: DEFAULT_CURRENCY, name: 'Friend', avatar: DEFAULT_AVATAR, midnightNotifEnabled: false };
       AsyncStorage.setItem(STORAGE_SETTINGS, JSON.stringify({ ...current, ...partial })).catch(() => {});
     });
   }, []);
@@ -1611,7 +1631,7 @@ export default function App() {
     setIsOnboarded(false); setActiveTab('home'); setCommissions([]);
     setSpentToday(0); setTodayHistory([]); setDailyTotals([]);
     setAllocatedPerDay(DEFAULT_BUDGET); setCurrency(DEFAULT_CURRENCY); setName('Friend');
-    setAvatar('🐰'); setStats(defaultStats()); setCompletionHistory([]);
+    setAvatar(DEFAULT_AVATAR); setStats(defaultStats()); setCompletionHistory([]);
     setMidnightNotifEnabled(false);
     hasLoaded.current = false;
   }, [commissions]);
