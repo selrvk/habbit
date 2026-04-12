@@ -10,11 +10,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg:     "#4B2E2B",   // darkest brown — main background
-        mid:    "#6B3A2A",   // mid brown — subtle separators / hover states
-        card:   "#8C5A3C",   // card/surface brown
-        accent: "#C08552",   // warm tan — buttons, highlights, borders
-        cream:  "#FFF8F0",   // off-white — all text, light surfaces
+        bg:     "#4B2E2B",   
+        mid:    "#6B3A2A",   
+        card:   "#8C5A3C",   
+        accent: "#C08552",   
+        cream:  "#FFF8F0",   
       },
       fontFamily: {
         jua:      ["Jua-Regular"],

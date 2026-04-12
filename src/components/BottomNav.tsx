@@ -16,7 +16,7 @@ const NAV_ITEMS: { image: any; label: string; key: TabKey }[] = [
 
 export const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: TabKey) => void }) => {
   const { bottom: SAFE } = useSafeAreaInsets();
-  const activeIndex = NAV_ITEMS.findIndex(i => i.key === active);
+  const activeIndex = Math.max(NAV_ITEMS.findIndex(i => i.key === active), 0);
   const slideAnim   = useRef(new Animated.Value(activeIndex)).current;
   const [pillWidth, setPillWidth] = useState(0);
   const BUBBLE = 48;
@@ -33,7 +33,7 @@ export const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: 
 
   return (
     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: OVER + PILL_H + SAFE, paddingHorizontal: 16 }} pointerEvents="box-none">
-      {pillWidth > 0 && (
+      {pillWidth > 0 && activeIndex >= 0 && active !== 'settings' && (
         <Animated.View style={{ position: 'absolute', top: 0, left: 16, width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2, backgroundColor: '#D4956A', justifyContent: 'center', alignItems: 'center', transform: [{ translateX: bubbleX }], shadowColor: '#D4956A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.55, shadowRadius: 12, elevation: 10, zIndex: 10 }}>
           <Image source={NAV_ITEMS[activeIndex].image} style={{ width: 26, height: 26 }} resizeMode="contain" />
         </Animated.View>
@@ -48,7 +48,7 @@ export const BottomNav = ({ active, onPress }: { active: TabKey; onPress: (key: 
               <View style={{ height: 22, justifyContent: 'center', alignItems: 'center' }}>
                 {!isActive && <Image source={image} style={{ width: 20, height: 20, opacity: 0.4 }} resizeMode="contain" />}
               </View>
-              <Text style={{ fontFamily: 'Jua', fontSize: 10, marginTop: 3, color: isActive ? '#D4956A' : 'rgba(232,213,192,0.4)' }}>{label}</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 10, marginTop: 3, color: (isActive && active !== 'settings') ? '#D4956A' : 'rgba(232,213,192,0.4)' }}>{label}</Text>
             </TouchableOpacity>
           );
         })}

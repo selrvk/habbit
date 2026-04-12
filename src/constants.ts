@@ -18,11 +18,12 @@ export const AVATAR_KEYS: AvatarKey[] = ['avatar_bunny','avatar_hamster','avatar
 
 export const IMAGES = {
   appLogo: require('../assets/AppLogo.png'),
-  bunny:   require('../assets/Bunny.png'),
+  bunny:   require('../assets/bunny-3d.png'),
   carrot:  require('../assets/carrot-3d.png'),
   carrots: require('../assets/carrots-3d.png'),
-  home:    require('../assets/Home.png'),
-  tasks:   require('../assets/Tasks.png'),
+  home:    require('../assets/home-3d.png'),
+  tasks:   require('../assets/habbits-3d.png'),
+  settings: require('../assets/settings.png'),
 };
 
 export const AVATARIMAGES = {
@@ -33,7 +34,6 @@ export const AVATARIMAGES = {
   avatar_fox:     require('../assets/avatars/fox.png'),
 };
 
-// Navbar sizing
 export const OVER     = 22;
 export const PILL_H   = 62;
 export const NAV_BUFFER = 12;

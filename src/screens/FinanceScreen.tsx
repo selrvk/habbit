@@ -1,0 +1,152 @@
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import { IMAGES, CURRENCIES } from '../constants';
+import { getLast7Days } from '../helpers';
+import { useNavHeight } from '../hooks/useNavHeight';
+import { SectionDivider } from '../components/SectionDivider';
+import { NumpadModal } from '../components/NumpadModal';
+import { WeeklyChart } from '../components/WeeklyChart';
+import type { SpendingEntry, DailyTotal } from '../types';
+
+const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
+const haptic = {
+  light:   () => ReactNativeHapticFeedback.trigger('impactLight',         HAPTIC_OPTIONS),
+  medium:  () => ReactNativeHapticFeedback.trigger('impactMedium',        HAPTIC_OPTIONS),
+  error:   () => ReactNativeHapticFeedback.trigger('notificationError',   HAPTIC_OPTIONS),
+  warning: () => ReactNativeHapticFeedback.trigger('notificationWarning', HAPTIC_OPTIONS),
+};
+
+export const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocatedPerDay, currency, onSetAllocated, onSetCurrency, onUndoEntry }: {
+  spentToday: number; todayHistory: SpendingEntry[]; dailyTotals: DailyTotal[];
+  allocatedPerDay: number; currency: string;
+  onSetAllocated: (v: number) => void; onSetCurrency: (v: string) => void; onUndoEntry: (id: string) => void;
+}) => {
+  const navHeight = useNavHeight();
+  const [budgetModal, setBudgetModal] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
+
+  const isOverBudget  = spentToday > allocatedPerDay;
+  const remaining     = Math.max(allocatedPerDay - spentToday, 0);
+  const budgetPct     = Math.min((spentToday / allocatedPerDay) * 100, 100);
+  const chartDays     = getLast7Days(dailyTotals, spentToday);
+  const completedDays = dailyTotals.filter(d => d.total > 0);
+  const avgSpend      = completedDays.length > 0 ? completedDays.reduce((s, d) => s + d.total, 0) / completedDays.length : null;
+
+  const handleUndoConfirm = (entry: SpendingEntry) => {
+    haptic.warning();
+    Alert.alert('Undo Entry', `Remove ${currency}${entry.amount.toFixed(2)} added at ${entry.time}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Undo', style: 'destructive', onPress: () => { haptic.error(); onUndoEntry(entry.id); } },
+    ]);
+  };
+
+  return (
+    <>
+      <NumpadModal visible={budgetModal} title="Set Daily Budget" hint={`Current budget: ${currency}${allocatedPerDay.toFixed(2)}`} confirmLabel="Set Budget to" amount={budgetInput} currency={currency} onChangeAmount={setBudgetInput}
+        onConfirm={() => { onSetAllocated(parseFloat(budgetInput || '0')); setBudgetInput(''); setBudgetModal(false); }}
+        onClose={() => { setBudgetModal(false); setBudgetInput(''); }} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
+
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <View>
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.7 }}>Track your</Text>
+            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 24 }}>Finance</Text>
+          </View>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
+            <Image source={IMAGES.carrots} style={{ width: 28, height: 28 }} resizeMode="contain" />
+          </View>
+        </View>
+
+        {/* Currency picker */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 4 }}>
+          <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 12, opacity: 0.5, marginRight: 4 }}>Currency</Text>
+          {CURRENCIES.map(c => (
+            <TouchableOpacity key={c} onPress={() => { haptic.light(); onSetCurrency(c); }} activeOpacity={0.7}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99, backgroundColor: currency === c ? '#D4956A' : 'rgba(212,149,106,0.1)', borderWidth: 1, borderColor: currency === c ? '#D4956A' : 'rgba(212,149,106,0.3)' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: 13, color: currency === c ? '#fff' : 'rgba(232,213,192,0.6)' }}>{c}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <SectionDivider title="✦ Today ✦" />
+
+        {/* Budget card */}
+        <TouchableOpacity onPress={() => { haptic.medium(); setBudgetModal(true); }} activeOpacity={0.8}
+          style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)', shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 }}>
+          <View>
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 12, opacity: 0.6, marginBottom: 4 }}>Daily Budget</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Image source={IMAGES.carrots} style={{ width: 22, height: 22 }} resizeMode="contain" />
+              <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 20 }}>{currency}{allocatedPerDay.toFixed(2)}</Text>
+            </View>
+          </View>
+          <View style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)' }}>
+            <Text style={{ fontFamily: 'Jua', fontSize: 12, color: '#D4956A' }}>Edit</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Spent / Remaining */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+          <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: isOverBudget ? 'rgba(200,80,60,0.4)' : 'rgba(212,149,106,0.2)' }}>
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 12, opacity: 0.6, marginBottom: 6 }}>Spent Today</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Image source={IMAGES.carrot} style={{ width: 20, height: 20 }} resizeMode="contain" />
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: 18, color: isOverBudget ? '#f09090' : '#e8d5c0' }}>{currency}{spentToday.toFixed(2)}</Text>
+            </View>
+          </View>
+          <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)' }}>
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 12, opacity: 0.6, marginBottom: 6 }}>Remaining</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Image source={isOverBudget ? IMAGES.carrot : IMAGES.carrots} style={{ width: 20, height: 20 }} resizeMode="contain" />
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: 18, color: isOverBudget ? '#f09090' : '#9de087' }}>{isOverBudget ? `-${currency}${(spentToday - allocatedPerDay).toFixed(2)}` : `${currency}${remaining.toFixed(2)}`}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Progress bar */}
+        <View style={{ marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(232,213,192,0.55)' }}>Budget used today</Text>
+            <Text style={{ fontFamily: 'Jua', fontSize: 12, color: isOverBudget ? '#f09090' : 'rgba(212,149,106,0.8)' }}>{budgetPct.toFixed(0)}%{isOverBudget ? ' — over!' : ' of daily'}</Text>
+          </View>
+          <View style={{ width: '100%', height: 14, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212,149,106,0.22)' }}>
+            <View style={{ height: '100%', borderRadius: 8, width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} />
+          </View>
+        </View>
+
+        <SectionDivider title="✦ This Week ✦" />
+        <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)' }}>
+          <WeeklyChart days={chartDays} allocatedPerDay={allocatedPerDay} currency={currency} />
+        </View>
+        <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)' }}>
+          <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.7 }}>Avg daily spend</Text>
+          <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 18 }}>{avgSpend !== null ? `${currency}${avgSpend.toFixed(2)}` : '—'}</Text>
+        </View>
+
+        <SectionDivider title="✦ Today's History ✦" />
+        {todayHistory.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <Image source={IMAGES.carrot} style={{ width: 40, height: 40, marginBottom: 8, opacity: 0.4 }} resizeMode="contain" />
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.4, textAlign: 'center' }}>No spending recorded yet today.</Text>
+          </View>
+        ) : (
+          [...todayHistory].reverse().map(entry => (
+            <View key={entry.id} style={{ backgroundColor: '#5C3D2E', borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderLeftWidth: 3, borderLeftColor: '#D4956A' }}>
+              <Image source={IMAGES.carrot} style={{ width: 20, height: 20, marginRight: 10 }} resizeMode="contain" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 16 }}>{currency}{entry.amount.toFixed(2)}</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: 12, color: '#e8d5c0', opacity: 0.45 }}>{entry.time}</Text>
+              </View>
+              <TouchableOpacity onPress={() => handleUndoConfirm(entry)} activeOpacity={0.7}
+                style={{ backgroundColor: 'rgba(200,80,60,0.1)', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(200,80,60,0.25)' }}>
+                <Text style={{ fontFamily: 'Jua', fontSize: 12, color: '#f09090' }}>Undo</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </>
+  );
+};
