@@ -11,6 +11,7 @@ import {
 import { useAppSettings } from './../context/SettingsContext';
 import type { FontSize } from './../context/SettingsContext';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import { useFontSize } from '../hooks/useFontSize';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -18,7 +19,7 @@ const JUA     = 'font-jua';
 const DYNAPUFF = 'font-dynapuff';
 
 const C = {
-  bg:        '#3B2220',
+  bg:        '#2A1A18',
   card:      '#5C3D2E',
   cardDeep:  '#4A2E20',
   accent:    '#D4956A',
@@ -40,82 +41,55 @@ const haptic = {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /** Section wrapper with a pill header — matches SectionDivider look */
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <View style={{ marginBottom: 24 }}>
-    <Text
-      className={JUA}
-      style={{
-        fontSize: 10,
-        color: C.accent,
-        opacity: 0.7,
-        letterSpacing: 2,
-        marginBottom: 10,
-        marginLeft: 2,
-      }}
-    >
-      {title.toUpperCase()}
-    </Text>
-    <View style={{
-      backgroundColor: C.card,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: C.border,
-      overflow: 'hidden',
-      shadowColor: C.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.18,
-      shadowRadius: 6,
-      elevation: 3,
-    }}>
-      {children}
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
+  const fs = useFontSize();
+  return (
+    <View style={{ marginBottom: 24 }}>
+      <Text
+        style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent, opacity: 0.7, letterSpacing: 2, marginBottom: 10, marginLeft: 2 }}
+      >
+        {title.toUpperCase()}
+      </Text>
+      <View style={{
+        backgroundColor: C.card, borderRadius: 18, borderWidth: 1,
+        borderColor: C.border, overflow: 'hidden', shadowColor: C.shadow,
+        shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 6, elevation: 3,
+      }}>
+        {children}
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 /** A single row inside a Section */
-const Row = ({
-  icon, label, sublabel, rightEl, onPress, last = false,
-}: {
+const Row = ({ icon, label, sublabel, rightEl, onPress, last = false }: {
   icon: string; label: string; sublabel?: string;
   rightEl?: React.ReactNode; onPress?: () => void; last?: boolean;
 }) => {
+  const fs = useFontSize();
   const Inner = (
     <View style={{
       flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: 16, paddingVertical: 14,
-      borderBottomWidth: last ? 0 : 1,
-      borderBottomColor: C.border,
+      borderBottomWidth: last ? 0 : 1, borderBottomColor: C.border,
     }}>
-      {/* Icon pill */}
       <View style={{
         width: 34, height: 34, borderRadius: 10,
         backgroundColor: 'rgba(212,149,106,0.14)',
-        justifyContent: 'center', alignItems: 'center',
-        marginRight: 12,
+        justifyContent: 'center', alignItems: 'center', marginRight: 12,
       }}>
-        <Text style={{ fontSize: 17 }}>{icon}</Text>
+        <Text style={{ fontSize: fs(17) }}>{icon}</Text>
       </View>
-
-      {/* Text */}
       <View style={{ flex: 1 }}>
-        <Text className={JUA} style={{ fontSize: 14, color: C.cream }}>{label}</Text>
-        {sublabel ? (
-          <Text className={JUA} style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{sublabel}</Text>
-        ) : null}
+        <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{label}</Text>
+          {sublabel
+            ? <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>{sublabel}</Text>
+            : null}
       </View>
-
-      {/* Right element */}
       {rightEl}
     </View>
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
-        {Inner}
-      </TouchableOpacity>
-    );
-  }
+  if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.75}>{Inner}</TouchableOpacity>;
   return Inner;
 };
 
@@ -143,6 +117,7 @@ const Toggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 /** Three-way font-size picker */
 const FontSizePicker = () => {
   const { fontSize, setFontSize } = useAppSettings();
+  const fs = useFontSize();
 
   const options: { key: FontSize; label: string; preview: number }[] = [
     { key: 'small',  label: 'Small',  preview: 13 },
@@ -160,32 +135,17 @@ const FontSizePicker = () => {
             onPress={() => { haptic.light(); setFontSize(opt.key); }}
             activeOpacity={0.75}
             style={{
-              flex: 1, alignItems: 'center',
-              paddingVertical: 12, borderRadius: 12,
+              flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12,
               backgroundColor: selected ? 'rgba(212,149,106,0.22)' : 'rgba(212,149,106,0.06)',
-              borderWidth: 1.5,
-              borderColor: selected ? C.accent : C.border,
+              borderWidth: 1.5, borderColor: selected ? C.accent : C.border,
             }}
           >
-            {/* Preview "Aa" at scaled size */}
-            <Text
-              style={{
-                fontFamily: 'DynaPuff',
-                fontSize: opt.preview,
-                color: selected ? C.accent : C.muted,
-                marginBottom: 5,
-              }}
-            >
+            {/* "Aa" always renders at the option's own fixed size so you can compare them */}
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: opt.preview, color: selected ? C.accent : C.muted, marginBottom: 5 }}>
               Aa
             </Text>
-            <Text
-              className={JUA}
-              style={{
-                fontSize: 10,
-                color: selected ? C.accent : C.dim,
-                letterSpacing: 0.5,
-              }}
-            >
+            {/* The label underneath scales with the current setting */}
+            <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: selected ? C.accent : C.dim, letterSpacing: 0.5 }}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -215,6 +175,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onDeleteAllData, 
   onBack,
 }) => {
+  const fs = useFontSize(); 
   const LIGHT_MODE_READY = false;
 
   const handleReset = () => {
@@ -244,7 +205,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <View style={{
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'ios' ? 4 : 12,
+        paddingTop: (Platform.OS === 'ios' ? 4 : 12),
         paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: C.border,
@@ -265,15 +226,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </TouchableOpacity>
 
         <View>
-          <Text className={JUA} style={{ fontSize: 11, color: C.muted, letterSpacing: 1 }}>
-            APP
-          </Text>
-          <Text
-            className={DYNAPUFF}
-            style={{ fontSize: 22, color: C.cream, lineHeight: 26 }}
-          >
-            Settings
-          </Text>
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, letterSpacing: 1 }}>APP</Text>
+          <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(22), color: C.cream, lineHeight: fs(28) }}>Settings</Text>
         </View>
       </View>
 
@@ -299,11 +253,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 justifyContent: 'center', alignItems: 'center',
                 marginRight: 12,
               }}>
-                <Text style={{ fontSize: 17 }}>🔡</Text>
+                <Text style={{ fontSize: fs(17) }}>🔡</Text>
               </View>
               <View>
-                <Text className={JUA} style={{ fontSize: 14, color: C.cream }}>Text Size</Text>
-                <Text className={JUA} style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Text Size</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>
                   Adjusts text throughout the app
                 </Text>
               </View>
@@ -326,7 +280,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4,
                   borderWidth: 1, borderColor: C.border,
                 }}>
-                  <Text className={JUA} style={{ fontSize: 10, color: C.muted }}>Soon</Text>
+                  <Text  style={{ fontFamily: 'Jua', fontSize: 10, color: C.muted }}>Soon</Text>
                 </View>
               )
             }
@@ -365,7 +319,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4,
                 borderWidth: 1, borderColor: C.border,
               }}>
-                <Text className={JUA} style={{ fontSize: 10, color: C.muted }}>Soon</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: 10, color: C.muted }}>Soon</Text>
               </View>
             }
           />
@@ -378,7 +332,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
-              <Text className={JUA} style={{ fontSize: 12, color: C.muted }}>v1.0</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.0</Text>
             }
           />
           <Row
@@ -403,7 +357,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             sublabel="Unchecks Habbits · clears today's spending"
             last={false}
             onPress={handleReset}
-            rightEl={<Text style={{ fontSize: 13, color: 'rgba(240,144,144,0.6)' }}>›</Text>}
+            rightEl={<Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(240,144,144,0.6)' }}>›</Text>}
         />
         <Row
             icon="🗑️"
@@ -411,15 +365,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             sublabel="Resets app completely · cannot be undone"
             last
             onPress={handleDeleteAll}
-            rightEl={<Text style={{ fontSize: 13, color: 'rgba(255,107,107,0.6)' }}>›</Text>}
+            rightEl={<Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(255,107,107,0.6)' }}>›</Text>}
         />
         </Section>
 
         {/* Footer note */}
-        <Text
-          className={JUA}
-          style={{ fontSize: 11, color: C.dim, textAlign: 'center', marginTop: 8 }}
-        >
+        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.dim, textAlign: 'center', marginTop: 8 }}>
           More settings are on the way 🥕
         </Text>
       </ScrollView>

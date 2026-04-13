@@ -7,27 +7,31 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		048017149498471C9589DF09 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 039E1AFEDC7248EF83A282B7 /* Colors.xcassets */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		3944D2E36D6EFD5FB1AE00E7 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */; };
 		56086F6C2F6C04470005F64D /* Jua-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6B2F6C04470005F64D /* Jua-Regular.ttf */; };
 		56086F6E2F6C04520005F64D /* DynaPuff-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */; };
+		65669CB4BB8444B684F4CAD3 /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		F4F7321D70EDD86F738A7E32 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BC4E80AF2A4C26C3529F4488 /* libPods-DailyTracker.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		039E1AFEDC7248EF83A282B7 /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = DailyTracker/Colors.xcassets; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* DailyTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DailyTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DailyTracker/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DailyTracker/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = DailyTracker/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.release.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.release.xcconfig"; sourceTree = "<group>"; };
-		45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
-		51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56086F6B2F6C04470005F64D /* Jua-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Jua-Regular.ttf"; sourceTree = "<group>"; };
 		56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DynaPuff-Regular.ttf"; sourceTree = "<group>"; };
+		718AABF9D2E0D6C55A52F7B2 /* Pods-DailyTracker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.release.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.release.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DailyTracker/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DailyTracker/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		87CAE8945184C9B00A852D88 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
+		BC4E80AF2A4C26C3529F4488 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = DailyTracker/BootSplash.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -36,7 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3944D2E36D6EFD5FB1AE00E7 /* libPods-DailyTracker.a in Frameworks */,
+				F4F7321D70EDD86F738A7E32 /* libPods-DailyTracker.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,6 +57,8 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */,
+				039E1AFEDC7248EF83A282B7 /* Colors.xcassets */,
 			);
 			name = DailyTracker;
 			sourceTree = "<group>";
@@ -61,7 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				51ABF09279942B4341D01C29 /* libPods-DailyTracker.a */,
+				BC4E80AF2A4C26C3529F4488 /* libPods-DailyTracker.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -98,8 +104,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */,
-				237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */,
+				87CAE8945184C9B00A852D88 /* Pods-DailyTracker.debug.xcconfig */,
+				718AABF9D2E0D6C55A52F7B2 /* Pods-DailyTracker.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -111,13 +117,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "DailyTracker" */;
 			buildPhases = (
-				57FCACEEF39AFA876A9F9D6D /* [CP] Check Pods Manifest.lock */,
+				5180641B4AB75E49ABE31762 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				A740424CC11C0DDECA24A1B7 /* [CP] Embed Pods Frameworks */,
-				7FF38DB1984BD374D81C9355 /* [CP] Copy Pods Resources */,
+				FF8658AE2FF784B7A5585336 /* [CP] Embed Pods Frameworks */,
+				1BCDDC83309BAF516C36BD5C /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -169,6 +175,8 @@
 				56086F6C2F6C04470005F64D /* Jua-Regular.ttf in Resources */,
 				56086F6E2F6C04520005F64D /* DynaPuff-Regular.ttf in Resources */,
 				CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */,
+				65669CB4BB8444B684F4CAD3 /* BootSplash.storyboard in Resources */,
+				048017149498471C9589DF09 /* Colors.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,7 +199,28 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"\\\"$WITH_ENVIRONMENT\\\" \\\"$REACT_NATIVE_XCODE\\\"\"\n";
 		};
-		57FCACEEF39AFA876A9F9D6D /* [CP] Check Pods Manifest.lock */ = {
+		1BCDDC83309BAF516C36BD5C /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		5180641B4AB75E49ABE31762 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -213,28 +242,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		7FF38DB1984BD374D81C9355 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		A740424CC11C0DDECA24A1B7 /* [CP] Embed Pods Frameworks */ = {
+		FF8658AE2FF784B7A5585336 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -271,11 +279,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 45E1E039D45DB5F601900F62 /* Pods-DailyTracker.debug.xcconfig */;
+			baseConfigurationReference = 87CAE8945184C9B00A852D88 /* Pods-DailyTracker.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 4G2WGN67KA;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = DailyTracker/Info.plist;
@@ -286,7 +294,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -307,11 +315,11 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 237F6E28C1132A74E24528A7 /* Pods-DailyTracker.release.xcconfig */;
+			baseConfigurationReference = 718AABF9D2E0D6C55A52F7B2 /* Pods-DailyTracker.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 4G2WGN67KA;
 				INFOPLIST_FILE = DailyTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Habbit;
@@ -321,7 +329,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

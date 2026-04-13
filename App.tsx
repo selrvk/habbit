@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 
+
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions } from './src/helpers';
 import { initNotifications, scheduleHabitNotifs, cancelHabitNotifs, scheduleMidnightNotif, cancelMidnightNotif } from './src/notifications';
@@ -110,7 +111,9 @@ export default function App() {
         setStats(loadedStats); saveStats(loadedStats);
         setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
       } catch { setIsOnboarded(true); }
-      finally { hasLoaded.current = true; }
+      finally { 
+        hasLoaded.current = true;
+      }
     };
     load();
   }, []);
