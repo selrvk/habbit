@@ -97,7 +97,7 @@ export const BottomNav = ({ active, onPress, avatar }: { active: TabKey; onPress
           position: 'absolute',
           left: 16,
           width: BUNNY_W,
-          bottom: SAFE + PILL_H - 16, 
+          bottom: SAFE + PILL_H - 4, 
           height: BUNNY_H,
           transform: [{ translateX: bunnyX }, { translateY: peekAnim }],
           zIndex: 5,
