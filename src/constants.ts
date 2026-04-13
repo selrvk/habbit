@@ -16,6 +16,14 @@ export const CAL_DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 export const AVATAR_KEYS: AvatarKey[] = ['avatar_bunny','avatar_hamster','avatar_bear','avatar_panda','avatar_fox'];
 
+export const PEEK_IMAGES = {
+  avatar_bunny:   require('../assets/navbar-peeks/bunny-peeking.png'),
+  avatar_hamster: require('../assets/navbar-peeks/hamster-peeking.png'),
+  avatar_bear:    require('../assets/navbar-peeks/bear-peeking.png'),
+  avatar_panda:   require('../assets/navbar-peeks/panda-peeking.png'),
+  avatar_fox:     require('../assets/navbar-peeks/fox-peeking.png'),
+};
+
 export const IMAGES = {
   appLogo: require('../assets/AppLogo.png'),
   bunny:   require('../assets/bunny-3d.png'),
