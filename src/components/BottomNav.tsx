@@ -79,7 +79,7 @@ export const BottomNav = ({ active, onPress, avatar }: { active: TabKey; onPress
   const highlightX = slideAnim.interpolate({
     inputRange:  [0, 1, 2, 3],
     outputRange: pillWidth > 0
-      ? [0, 1, 2, 3].map(i => tabW * i + tabW / 2 - BUNNY_W / 2)
+      ? [0, 1, 2, 3].map(i => tabW * i + (tabW / 2) - (BUNNY_W / 2 + 2))
       : [0, 0, 0, 0],
   });
 
@@ -158,7 +158,7 @@ export const BottomNav = ({ active, onPress, avatar }: { active: TabKey; onPress
                 {/* Always show icon, dim when inactive */}
                 <Image
                   source={image}
-                  style={{ width: 20, height: 20, opacity: isActive ? 0 : 0.4 }}
+                  style={{ width: 20, height: 20, opacity: isActive ? 1 : 0.4 }}
                   resizeMode="contain"
                 />
               </View>
