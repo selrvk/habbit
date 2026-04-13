@@ -1,3 +1,5 @@
+// src/components/BottomNav.tsx
+
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

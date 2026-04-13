@@ -1,11 +1,17 @@
+// src/components/WeeklyChart.tsx
+
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import type { ChartDay } from '../types';
 
-export const WeeklyChart = ({ days, allocatedPerDay, currency }: { days: ChartDay[]; allocatedPerDay: number; currency: string }) => {
+export const WeeklyChart = ({ days, allocatedPerDay, currency, onDayPress }: {
+  days: ChartDay[]; allocatedPerDay: number; currency: string;
+  onDayPress?: (day: ChartDay) => void;
+}) => {
   const CHART_H = 100;
   const maxVal  = Math.max(allocatedPerDay, ...days.map(d => d.total), 1);
   const budgetY = CHART_H - (allocatedPerDay / maxVal) * CHART_H;
+
   return (
     <View>
       <View style={{ height: CHART_H + 4, flexDirection: 'row', alignItems: 'flex-end', position: 'relative' }}>
@@ -15,19 +21,29 @@ export const WeeklyChart = ({ days, allocatedPerDay, currency }: { days: ChartDa
         </View>
         {days.map(day => {
           const barH = day.total > 0 ? Math.max((day.total / maxVal) * CHART_H, 4) : 0;
-          const over  = day.total > allocatedPerDay;
+          const over = day.total > allocatedPerDay;
           return (
-            <View key={day.date} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
-              {day.total > 0 && <Text style={{ fontSize: 8, marginBottom: 2, color: over ? '#f09090' : 'rgba(232,213,192,0.5)', fontFamily: 'Jua' }}>{day.total >= 1000 ? `${(day.total/1000).toFixed(1)}k` : day.total.toFixed(0)}</Text>}
+            <TouchableOpacity
+              key={day.date}
+              activeOpacity={day.total > 0 ? 0.7 : 1}
+              onPress={() => day.total > 0 && onDayPress?.(day)}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: CHART_H }}>
+              {day.total > 0 && (
+                <Text style={{ fontSize: 8, marginBottom: 2, color: over ? '#f09090' : 'rgba(232,213,192,0.5)', fontFamily: 'Jua' }}>
+                  {day.total >= 1000 ? `${(day.total / 1000).toFixed(1)}k` : day.total.toFixed(0)}
+                </Text>
+              )}
               <View style={{ width: '65%', height: barH, borderRadius: 4, backgroundColor: day.isToday ? (over ? '#f09090' : '#D4956A') : (over ? 'rgba(240,144,144,0.45)' : 'rgba(212,149,106,0.35)') }} />
-            </View>
+            </TouchableOpacity>
           );
         })}
       </View>
       <View style={{ flexDirection: 'row', marginTop: 6 }}>
         {days.map(day => (
           <View key={day.date} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontFamily: 'Jua', fontSize: 10, color: day.isToday ? '#D4956A' : 'rgba(232,213,192,0.45)' }}>{day.isToday ? 'Today' : day.dayName}</Text>
+            <Text style={{ fontFamily: 'Jua', fontSize: 10, color: day.isToday ? '#D4956A' : 'rgba(232,213,192,0.45)' }}>
+              {day.isToday ? 'Today' : day.dayName}
+            </Text>
           </View>
         ))}
       </View>

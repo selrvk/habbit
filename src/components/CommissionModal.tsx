@@ -1,3 +1,5 @@
+// src/components/CommissionModal.tsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, Animated, KeyboardAvoidingView, Platform, TouchableWithoutFeedback } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';

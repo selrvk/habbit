@@ -75,7 +75,7 @@ export default function App() {
           if (parsed.date === todayKey) { setSpentToday(parsed.spentToday); setTodayHistory(parsed.history ?? []); }
           else {
             if (parsed.spentToday > 0) {
-              existingTotals = [...existingTotals.filter(t => t.date !== parsed.date), { date: parsed.date, total: parsed.spentToday }].sort((a, b) => a.date.localeCompare(b.date)).slice(-6);
+              existingTotals = [...existingTotals.filter(t => t.date !== parsed.date), { date: parsed.date, total: parsed.spentToday, entries: parsed.history ?? [] }].sort((a, b) => a.date.localeCompare(b.date)).slice(-6);
               await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
             }
             setSpentToday(0); setTodayHistory([]);

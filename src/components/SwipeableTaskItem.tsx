@@ -1,3 +1,5 @@
+// src/components/SwipeableTaskItem.tsx
+
 import React, { useRef, useEffect } from 'react';
 import { View, Text, Animated, PanResponder } from 'react-native';
 import { formatTime12, daysLabel } from '../helpers';
@@ -79,9 +81,9 @@ export const SwipeableTaskItem = ({ item, onComplete, onUncomplete, onSwipeStart
               {item.reminderTime && <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(212,149,106,0.65)' }}>🔔 {formatTime12(item.reminderTime.hour, item.reminderTime.minute)}</Text>}
             </View>
           </View>
-          <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center', borderColor: item.completed ? '#D4956A' : 'rgba(212,149,106,0.5)', backgroundColor: item.completed ? '#D4956A' : 'transparent' }}>
-            {item.completed && <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
-          </View>
+          {item.completed && (
+            <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(212,149,106,0.55)' }}>✓</Text>
+          )}
         </View>
       </Animated.View>
     </View>

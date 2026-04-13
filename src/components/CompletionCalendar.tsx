@@ -1,3 +1,5 @@
+// src/components/CompletionCalendar.tsx  
+
 import React from 'react';
 import { View, Text } from 'react-native';
 import { buildCalendarGrid } from '../helpers';

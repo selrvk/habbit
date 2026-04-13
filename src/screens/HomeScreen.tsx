@@ -53,10 +53,10 @@ export const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentTo
     AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: amount, date: todayKey, history })).catch(() => {});
   }, [todayKey]);
 
-  const handleConfirm = () => {
+  const handleConfirm = (note?: string) => {
     const toAdd = parseFloat(addingAmount || '0');
     if (toAdd <= 0) return;
-    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime() };
+    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note };
     const newSpent = spentToday + toAdd;
     const newHistory = [...todayHistory, entry];
     setSpentToday(newSpent); setTodayHistory(newHistory);
@@ -69,7 +69,7 @@ export const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentTo
 
   return (
     <>
-      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} />
+      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
 
         {/* Header */}

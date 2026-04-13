@@ -1,3 +1,5 @@
+// src/components/SectionDivider.tsx
+
 import React from 'react';
 import { View, Text } from 'react-native';
 import { DYNAPUFF } from '../constants';
