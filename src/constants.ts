@@ -44,4 +44,4 @@ export const AVATARIMAGES = {
 
 export const OVER     = 22;
 export const PILL_H   = 62;
-export const NAV_BUFFER = 12;
+export const NAV_BUFFER = 24;

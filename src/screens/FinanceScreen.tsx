@@ -141,7 +141,7 @@ export const FinanceScreen = ({ spentToday, todayHistory, dailyTotals, allocated
           
         </View>
       </Modal>
-
+      
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
