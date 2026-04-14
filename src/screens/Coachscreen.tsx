@@ -14,11 +14,18 @@ import { SectionDivider } from '../components/SectionDivider';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { STORAGE_COACH_MESSAGES } from '../storage';
 import { useFontSize } from '../hooks/useFontSize';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
 const JUA      = 'Jua';
 const DYNAPUFF = 'DynaPuff';
+
+const HAPTIC = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
+const haptic = {
+  light: () => ReactNativeHapticFeedback.trigger('impactLight',  HAPTIC),
+  success: () => ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC),
+};
 
 const IMAGES = {
   idle:     require('../../assets/bonbon/idle.png'),
@@ -194,12 +201,14 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     setInput('');
     setIsReplying(true);
     setBunnyState('thinking');
+    haptic.light();
 
     try {
-      // ← Swap sendMessage() for your real backend call here
+      
       const reply = await sendMessage(text, { name, streak });
       setBunnyState('talking');
       setMessages(prev => [...prev, { id: uid(), from: 'bunny', text: reply }]);
+      
     } catch {
       setMessages(prev => [...prev, {
         id: uid(), from: 'bunny',
@@ -208,7 +217,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     } finally {
       setIsReplying(false);
       // Return to idle after the talking animation has a moment to show
-      setTimeout(() => setBunnyState('idle'), 1800);
+      setTimeout(() => setBunnyState('idle'), 2000);
     }
   };
 
@@ -235,7 +244,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
             </Text>
           </View>
 
-          {/* Clear chat button — replaces the bunny avatar */}
+          {/* Clear chat button */}
           <TouchableOpacity
             onPress={handleClearChat}
             activeOpacity={0.7}

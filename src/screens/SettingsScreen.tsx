@@ -12,6 +12,7 @@ import { useAppSettings } from './../context/SettingsContext';
 import type { FontSize } from './../context/SettingsContext';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useFontSize } from '../hooks/useFontSize';
+import { Linking } from 'react-native';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -332,7 +333,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
-              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.3</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.5</Text>
             }
           />
           <Row
@@ -344,7 +345,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={{ fontSize: 13, color: C.muted }}>›</Text>
             }
             onPress={() => {
-              // Wire to Linking.openURL('mailto:...') when ready
+              haptic.light();
+              Linking.openURL(
+                'mailto:selrvk@gmail.com?subject=Habbit%20Feedback'
+              );
             }}
           />
         </Section>
