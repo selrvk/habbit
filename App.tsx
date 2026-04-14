@@ -9,7 +9,7 @@ import { SettingsProvider } from './src/context/SettingsContext';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions } from './src/helpers';
-import { initNotifications, scheduleHabitNotifs, cancelHabitNotifs, scheduleMidnightNotif, cancelMidnightNotif } from './src/notifications';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, scheduleMidnightNotif, cancelMidnightNotif } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, FinanceData, Settings, SpendingEntry, Stats, CompletionRecord, ReminderTime, TabKey } from './src/types';
 
@@ -209,8 +209,7 @@ export default function App() {
     setStats(prev => { if (prev.lastFullDate !== todayKey) return prev; const updated = { ...prev, currentStreak: Math.max(prev.currentStreak - 1, 0), lastFullDate: yesterdayKey }; saveStats(updated); return updated; });
   }, [commissions, todayKey]);
   const handleDeleteAllData = useCallback(async () => {
-    for (const c of commissions) { await cancelHabitNotifs(c.id); }
-    await cancelMidnightNotif();
+    await cancelAllNotifications();
     try { await (AsyncStorage as any).multiRemove(ALL_STORAGE_KEYS); } catch {}
     setIsOnboarded(false); setActiveTab('home'); setCommissions([]);
     setSpentToday(0); setTodayHistory([]); setDailyTotals([]);

@@ -44,7 +44,10 @@ export const scheduleHabitNotifs = async (commission: Commission) => {
 };
 
 export const cancelHabitNotifs = async (commissionId: string) => {
-  try { await notifee.cancelNotifications([0,1,2,3,4,5,6].map(d=>`hr-${commissionId}-${d}`)); } catch {}
+  try {
+    const ids = [0,1,2,3,4,5,6].map(d => `hr-${commissionId}-${d}`);
+    await Promise.all(ids.map(id => notifee.cancelNotification(id)));
+  } catch {}
 };
 
 export const scheduleMidnightNotif = async () => {
@@ -60,4 +63,11 @@ export const scheduleMidnightNotif = async () => {
 
 export const cancelMidnightNotif = async () => {
   try { await notifee.cancelNotification(MIDNIGHT_NOTIF_ID); } catch {}
+};
+
+export const cancelAllNotifications = async () => {
+  try { 
+    await notifee.cancelAllNotifications();
+    await notifee.cancelDisplayedNotifications();
+   } catch {}
 };

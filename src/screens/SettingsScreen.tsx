@@ -332,7 +332,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
-              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.0</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.3</Text>
             }
           />
           <Row
