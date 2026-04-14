@@ -209,14 +209,24 @@ export default function App() {
     setStats(prev => { if (prev.lastFullDate !== todayKey) return prev; const updated = { ...prev, currentStreak: Math.max(prev.currentStreak - 1, 0), lastFullDate: yesterdayKey }; saveStats(updated); return updated; });
   }, [commissions, todayKey]);
   const handleDeleteAllData = useCallback(async () => {
-    await cancelAllNotifications();
-    try { await (AsyncStorage as any).multiRemove(ALL_STORAGE_KEYS); } catch {}
-    setIsOnboarded(false); setActiveTab('home'); setCommissions([]);
-    setSpentToday(0); setTodayHistory([]); setDailyTotals([]);
-    setAllocatedPerDay(DEFAULT_BUDGET); setCurrency(DEFAULT_CURRENCY); setName('Friend');
-    setAvatar(DEFAULT_AVATAR); setStats(defaultStats()); setCompletionHistory([]);
-    setMidnightNotifEnabled(false); hasLoaded.current = false;
-  }, [commissions]);
+  await cancelAllNotifications();
+  await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key)));
+
+  setIsOnboarded(false);
+  setActiveTab('home');
+  hasLoaded.current = false;
+  setCommissions([]);
+  setSpentToday(0);
+  setTodayHistory([]);
+  setDailyTotals([]);
+  setAllocatedPerDay(DEFAULT_BUDGET);
+  setCurrency(DEFAULT_CURRENCY);
+  setName('Friend');
+  setAvatar(DEFAULT_AVATAR);
+  setStats(defaultStats());
+  setCompletionHistory([]);
+  setMidnightNotifEnabled(false);
+}, [commissions]);
 
   if (isOnboarded === null) return (
     <View style={{ flex: 1, backgroundColor: '#2A1A18', justifyContent: 'center', alignItems: 'center' }}>
