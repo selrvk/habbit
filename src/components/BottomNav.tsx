@@ -13,6 +13,7 @@ const NAV_ITEMS: { image: any; label: string; key: TabKey }[] = [
   { image: IMAGES.home,    label: 'Home',    key: 'home'    },
   { image: IMAGES.tasks,   label: 'Habbits', key: 'tasks'   },
   { image: IMAGES.carrots, label: 'Finance', key: 'finance' },
+  { image: IMAGES.chat,    label: 'Chat',    key: 'chat'    },
   { image: IMAGES.bunny,   label: 'Profile', key: 'profile' },
 ];
 
@@ -33,7 +34,7 @@ export const BottomNav = ({ active, onPress, avatar }: { active: TabKey; onPress
   // Vertical for peek animation
   const peekAnim  = useRef(new Animated.Value(PEEK_Y)).current;
 
-  const tabW = pillWidth / 4;
+  const tabW = pillWidth / 5;
 
   // On mount — just snap to position, no dip
   const isMounted = useRef(false);
@@ -72,17 +73,17 @@ export const BottomNav = ({ active, onPress, avatar }: { active: TabKey; onPress
   }, [activeIndex]);
 
   const bunnyX = slideAnim.interpolate({
-    inputRange:  [0, 1, 2, 3],
+    inputRange:  [0, 1, 2, 3, 4],
     outputRange: pillWidth > 0
-      ? [0, 1, 2, 3].map(i => tabW * i + tabW / 2 - BUNNY_W / 2)
-      : [0, 0, 0, 0],
+      ? [0, 1, 2, 3, 4].map(i => tabW * i + tabW / 2 - BUNNY_W / 2)
+      : [0, 0, 0, 0, 0],
   });
 
   const highlightX = slideAnim.interpolate({
-    inputRange:  [0, 1, 2, 3],
+    inputRange:  [0, 1, 2, 3, 4],
     outputRange: pillWidth > 0
-      ? [0, 1, 2, 3].map(i => tabW * i + (tabW / 2) - (BUNNY_W / 2 + 2))
-      : [0, 0, 0, 0],
+      ? [0, 1, 2, 3, 4].map(i => tabW * i + (tabW / 2) - (BUNNY_W / 2 + 2))
+      : [0, 0, 0, 0, 0],
   });
 
   

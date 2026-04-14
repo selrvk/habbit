@@ -31,6 +31,7 @@ export const IMAGES = {
   carrots: require('../assets/carrots-3d.png'),
   home:    require('../assets/home-3d.png'),
   tasks:   require('../assets/habbits-3d.png'),
+  chat:     require('../assets/chat-3d.png'),
   settings: require('../assets/settings.png'),
 };
 

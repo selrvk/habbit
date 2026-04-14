@@ -7,6 +7,7 @@ import { useNavHeight } from '../hooks/useNavHeight';
 import { SectionDivider } from '../components/SectionDivider';
 import { CommissionModal } from '../components/CommissionModal';
 import type { Commission, ReminderTime } from '../types';
+import { useFontSize } from '../hooks/useFontSize';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -23,7 +24,7 @@ export const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
   const navHeight = useNavHeight();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem]   = useState<Commission | null>(null);
-
+  const fs = useFontSize();
   const openAdd  = () => { setEditingItem(null); setModalVisible(true); };
   const openEdit = (item: Commission) => { setEditingItem(item); setModalVisible(true); };
   const closeModal = () => { setModalVisible(false); setEditingItem(null); };
@@ -57,26 +58,26 @@ export const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
         <SectionDivider title={`✦ ${commissions.length} Habbit${commissions.length !== 1 ? 's' : ''} ✦`} />
         <TouchableOpacity onPress={openAdd} activeOpacity={0.8}
           style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 15, alignItems: 'center', marginBottom: 16, shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }}>
-          <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}>+ Add Habbit</Text>
+          <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(16) }}>+ Add Habbit</Text>
         </TouchableOpacity>
         {commissions.length === 0 && (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
             <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 10, opacity: 0.6 }} resizeMode="contain" />
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 18, marginBottom: 8 }}>No Habbits yet!</Text>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.5, textAlign: 'center' }}>Tap the button above to add{'\n'}your first daily Habbit.</Text>
+            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18), marginBottom: 8 }}>No Habbits yet!</Text>
+            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(14), opacity: 0.5, textAlign: 'center' }}>Tap the button above to add{'\n'}your first daily Habbit.</Text>
           </View>
         )}
         {commissions.map(item => (
           <View key={item.id} style={{ backgroundColor: '#5C3D2E', borderRadius: 12, marginBottom: 10, overflow: 'hidden', borderLeftWidth: 3, borderLeftColor: '#D4956A', shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ paddingHorizontal: 12, paddingVertical: 16, opacity: 0.3 }}>
-                <Text style={{ color: '#D4956A', fontSize: 14 }}>☰</Text>
+                <Text style={{ color: '#D4956A', fontSize: fs(14) }}>☰</Text>
               </View>
               <View style={{ flex: 1, paddingVertical: 10 }}>
-                <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 16 }} numberOfLines={1}>{item.label}</Text>
+                <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16) }} numberOfLines={1}>{item.label}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }}>
                   <View style={{ backgroundColor: 'rgba(212,149,106,0.18)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
-                    <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(212,149,106,0.9)' }}>{daysLabel(item.days ?? [])}</Text>
+                    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.9)' }}>{daysLabel(item.days ?? [])}</Text>
                   </View>
                   {item.reminderTime && (
                     <View style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.28)', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -89,11 +90,11 @@ export const TasksScreen = ({ commissions, onAdd, onEdit, onDelete }: {
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 12, gap: 4 }}>
                 <TouchableOpacity onPress={() => openEdit(item)} activeOpacity={0.7}
                   style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)' }}>
-                  <Text style={{ fontFamily: 'Jua', fontSize: 12, color: '#D4956A' }}>Edit</Text>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleDelete(item)} activeOpacity={0.7}
                   style={{ backgroundColor: 'rgba(200,80,60,0.1)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(200,80,60,0.25)' }}>
-                  <Text style={{ fontFamily: 'Jua', fontSize: 12, color: '#f09090' }}>✕</Text>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#f09090' }}>✕</Text>
                 </TouchableOpacity>
               </View>
             </View>

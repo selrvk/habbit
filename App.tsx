@@ -15,6 +15,7 @@ import type { Commission, CommissionsData, DailyTotal, FinanceData, Settings, Sp
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
 import { BottomNav } from './src/components/BottomNav';
+import { CoachScreen } from "./src/screens/Coachscreen";
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -242,6 +243,7 @@ export default function App() {
       case 'home':    return <HomeScreen commissions={commissions} setCommissions={setCommissions} spentToday={spentToday} setSpentToday={setSpentToday} todayHistory={todayHistory} setTodayHistory={setTodayHistory} allocatedPerDay={allocatedPerDay} currency={currency} name={name} avatar={avatar} onGoToTasks={() => setActiveTab('tasks')} onCommissionComplete={handleCommissionComplete} onCommissionUncomplete={handleCommissionUncomplete} />;
       case 'tasks':   return <TasksScreen commissions={commissions} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} />;
       case 'finance': return <FinanceScreen spentToday={spentToday} todayHistory={todayHistory} dailyTotals={dailyTotals} allocatedPerDay={allocatedPerDay} currency={currency} onSetAllocated={handleSetAllocated} onSetCurrency={handleSetCurrency} onUndoEntry={handleUndoEntry} />;
+      case 'chat': return <CoachScreen name={name} streak={stats.currentStreak} ></CoachScreen>
       case 'profile': return <ProfileScreen
         name={name} avatar={avatar} stats={stats}
         completionHistory={completionHistory} todayKey={todayKey}
