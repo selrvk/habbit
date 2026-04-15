@@ -8,7 +8,7 @@ import { SettingsProvider } from './src/context/SettingsContext';
 
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
-import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions } from './src/helpers';
+import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, scheduleMidnightNotif, cancelMidnightNotif } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, FinanceData, Settings, SpendingEntry, Stats, CompletionRecord, ReminderTime, TabKey } from './src/types';
@@ -200,6 +200,18 @@ export default function App() {
       return newHistory;
     });
   }, [spentToday, todayKey]);
+
+  const handleFinanceAddSpend = useCallback((amount: string, note?: string) => {
+    const toAdd = parseFloat(amount || '0');
+    if (toAdd <= 0) return;
+    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note };
+    const newSpent   = spentToday + toAdd;
+    const newHistory = [...todayHistory, entry];
+    setSpentToday(newSpent);
+    setTodayHistory(newHistory);
+    AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: newSpent, date: todayKey, history: newHistory })).catch(() => {});
+  }, [spentToday, todayHistory, todayKey]);
+
   const handleResetToday = useCallback(() => {
     const reset = commissions.map(c => ({ ...c, completed: false }));
     setCommissions(reset);
@@ -242,7 +254,7 @@ export default function App() {
     switch (activeTab) {
       case 'home':    return <HomeScreen commissions={commissions} setCommissions={setCommissions} spentToday={spentToday} setSpentToday={setSpentToday} todayHistory={todayHistory} setTodayHistory={setTodayHistory} allocatedPerDay={allocatedPerDay} currency={currency} name={name} avatar={avatar} onGoToTasks={() => setActiveTab('tasks')} onCommissionComplete={handleCommissionComplete} onCommissionUncomplete={handleCommissionUncomplete} />;
       case 'tasks':   return <TasksScreen commissions={commissions} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} />;
-      case 'finance': return <FinanceScreen spentToday={spentToday} todayHistory={todayHistory} dailyTotals={dailyTotals} allocatedPerDay={allocatedPerDay} currency={currency} onSetAllocated={handleSetAllocated} onSetCurrency={handleSetCurrency} onUndoEntry={handleUndoEntry} />;
+      case 'finance': return <FinanceScreen spentToday={spentToday} todayHistory={todayHistory} dailyTotals={dailyTotals} allocatedPerDay={allocatedPerDay} currency={currency} onSetAllocated={handleSetAllocated} onUndoEntry={handleUndoEntry} onAddSpending={handleFinanceAddSpend} />;
       case 'chat': return <CoachScreen name={name} streak={stats.currentStreak} ></CoachScreen>
       case 'profile': return <ProfileScreen
         name={name} avatar={avatar} stats={stats}
@@ -262,6 +274,7 @@ export default function App() {
           onDeleteAllData={handleDeleteAllData} 
           onToggleMidnightNotif={handleToggleMidnightNotif}
           onBack={() => setActiveTab('profile')} 
+          onSetCurrency={handleSetCurrency}  
         />
       );
     }

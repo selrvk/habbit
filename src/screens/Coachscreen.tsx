@@ -119,21 +119,6 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fs = useFontSize();
 
-  // ── Initial greeting on mount ──────────────────────────────────────────────
-  useEffect(() => {
-    setBunnyState('talking');
-    const greeting = name
-      ? `Hey there, ${name}! 👋 This feature isn't available yet — stay tuned! 🐰`
-      : `Hey there! 👋 This feature isn't available yet — stay tuned! 🐰`;
-
-    const timer = setTimeout(() => {
-      setMessages([{ id: uid(), from: 'bunny', text: greeting }]);
-      setBunnyState('idle');
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Load persisted messages on mount — only greet if history is empty
   useEffect(() => {
     (async () => {
@@ -240,7 +225,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
               Chat with
             </Text>
             <Text style={{ fontFamily: DYNAPUFF, color: '#e8d5c0', fontSize: 24 }}>
-              Your Coach
+              Bon
             </Text>
           </View>
 

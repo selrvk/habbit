@@ -156,20 +156,62 @@ const FontSizePicker = () => {
   );
 };
 
+const CURRENCIES = [
+  { symbol: '₱', label: 'PHP' },
+  { symbol: '$',  label: 'USD' },
+  { symbol: '€',  label: 'EUR' },
+  { symbol: '£',  label: 'GBP' },
+  { symbol: '¥',  label: 'JPY' },
+  { symbol: '₩',  label: 'KRW' },
+];
+
+const CurrencyPicker = ({ currency, onSetCurrency }: { currency: string; onSetCurrency: (v: string) => void }) => {
+  const fs = useFontSize();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 14 }}>
+      {CURRENCIES.map(c => {
+        const selected = currency === c.symbol;
+        return (
+          <TouchableOpacity
+            key={c.symbol}
+            onPress={() => { haptic.light(); onSetCurrency(c.symbol); }}
+            activeOpacity={0.75}
+            style={{
+              alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14,
+              borderRadius: 12, minWidth: 64,
+              backgroundColor: selected ? 'rgba(212,149,106,0.22)' : 'rgba(212,149,106,0.06)',
+              borderWidth: 1.5, borderColor: selected ? C.accent : C.border,
+            }}
+          >
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: selected ? C.accent : C.muted }}>
+              {c.symbol}
+            </Text>
+            <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: selected ? C.accent : C.dim, marginTop: 3, letterSpacing: 0.5 }}>
+              {c.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 interface SettingsScreenProps {
-  /** Budget & currency live here until you move them from FinanceScreen */
-  currency:             string;
-  allocatedPerDay:      number;
-  midnightNotifEnabled: boolean;
+  currency:              string;
+  allocatedPerDay:       number;
+  midnightNotifEnabled:  boolean;
+  onSetCurrency:         (v: string) => void;  // ← add
   onToggleMidnightNotif: (v: boolean) => void;
-  onResetToday:          () => void; 
-  onDeleteAllData:       () => void; 
-  onBack: () => void;
+  onResetToday:          () => void;
+  onDeleteAllData:       () => void;
+  onBack:                () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  currency,           
+  onSetCurrency,      
   midnightNotifEnabled,
   onToggleMidnightNotif,
   onResetToday,    
@@ -287,6 +329,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             }
           />
         </Section>
+
+        {/* ── Finance ────────────────────────────────────────────────── */}
+      <Section title="Finance">
+        <View style={{ borderBottomWidth: 0, borderBottomColor: C.border }}>
+          <View style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4,
+          }}>
+            <View style={{
+              width: 34, height: 34, borderRadius: 10,
+              backgroundColor: 'rgba(212,149,106,0.14)',
+              justifyContent: 'center', alignItems: 'center', marginRight: 12,
+            }}>
+              <Text style={{ fontSize: fs(17) }}>💰</Text>
+            </View>
+            <View>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Currency</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>
+                Used across Finance and Home
+              </Text>
+            </View>
+          </View>
+          <CurrencyPicker currency={currency} onSetCurrency={onSetCurrency} />
+        </View>
+      </Section>
 
         {/* ── Notifications ──────────────────────────────────────────── */}
         <Section title="Notifications">
