@@ -2,13 +2,14 @@ import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { getLast7Days } from '../helpers';
+import { getLast7Days, currencyStr} from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { SectionDivider } from '../components/SectionDivider';
 import { NumpadModal } from '../components/NumpadModal';
 import { WeeklyChart } from '../components/WeeklyChart';
 import type { SpendingEntry, DailyTotal, ChartDay } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
+import { CurrencyAmount } from '../components/CurrencyAmount';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -96,7 +97,7 @@ export const FinanceScreen = ({
     haptic.warning();
     Alert.alert(
       'Undo Entry',
-      `Remove ${currency}${fmt(entry.amount)} added at ${entry.time}?`,
+      `Remove ${currencyStr(currency, fmt(entry.amount))} added at ${entry.time}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Undo', style: 'destructive', onPress: () => { haptic.error(); onUndoEntry(entry.id); } },
@@ -135,7 +136,7 @@ export const FinanceScreen = ({
       <NumpadModal
         visible={budgetModal}
         title="Set Daily Budget"
-        hint={`Current budget: ${currency}${fmt(allocatedPerDay)}`}
+        hint={`Current budget: ${currencyStr(currency, fmt(allocatedPerDay))}`}
         confirmLabel="Set Budget to"
         amount={budgetInput}
         currency={currency}
@@ -148,7 +149,7 @@ export const FinanceScreen = ({
       <NumpadModal
         visible={spendModal}
         title="Add to Spent Today"
-        hint={`Remaining: ${currency}${fmt(remaining)}`}
+        hint={`Remaining: ${currencyStr(currency, fmt(remaining))}`}
         confirmLabel="Add"
         amount={spendInput}
         currency={currency}
@@ -180,9 +181,11 @@ export const FinanceScreen = ({
                 <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16) }}>
                   {selectedDay?.isToday ? 'Today' : selectedDay?.dayName}
                 </Text>
-                <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12), marginTop: 2 }}>
-                  {currency}{fmt(selectedDay?.total ?? 0)} spent
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <CurrencyAmount currency={currency} amount={`${fmt(selectedDay?.total ?? 0)} spent`}
+                    textStyle={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12) }}
+                    size={fs(12)} />
+                </View>
               </View>
               <TouchableOpacity onPress={() => setSelectedDay(null)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Text style={{ color: 'rgba(232,213,192,0.4)', fontSize: fs(18) }}>✕</Text>
@@ -202,7 +205,8 @@ export const FinanceScreen = ({
                   }}>
                     <Image source={IMAGES.carrot} style={{ width: 18, height: 18, marginRight: 10 }} resizeMode="contain" />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(15) }}>{currency}{fmt(entry.amount)}</Text>
+                      <CurrencyAmount currency={currency} amount={fmt(entry.amount)}
+                      textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(15) }} size={fs(15)} />
                       <Text style={{ fontFamily: 'Jua', fontSize: 11, color: '#e8d5c0', opacity: 0.45, marginTop: 1 }}>{entry.time}</Text>
                       {entry.note ? <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(212,149,106,0.75)', marginTop: 3 }}>{entry.note}</Text> : null}
                     </View>
@@ -263,7 +267,8 @@ export const FinanceScreen = ({
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.6, marginBottom: 4 }}>Daily Budget</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Image source={IMAGES.carrots} style={{ width: 22, height: 22 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(20) }}>{currency}{fmt(allocatedPerDay)}</Text>
+              <CurrencyAmount currency={currency} amount={fmt(allocatedPerDay)}
+              textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(20) }} size={fs(20)} />
             </View>
             <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: 'rgba(212,149,106,0.4)', marginTop: 4 }}>Resets at midnight</Text>
           </View>
@@ -281,9 +286,8 @@ export const FinanceScreen = ({
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.6, marginBottom: 6 }}>Spent Today</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Image source={IMAGES.carrot} style={{ width: 20, height: 20 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#e8d5c0' }}>
-                {currency}{fmt(spentToday)}
-              </Text>
+              <CurrencyAmount currency={currency} amount={fmt(spentToday)}
+              textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#e8d5c0' }} size={fs(18)} />
             </View>
           </View>
           <View style={{
@@ -295,9 +299,9 @@ export const FinanceScreen = ({
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Image source={isOverBudget ? IMAGES.carrot : IMAGES.carrots} style={{ width: 20, height: 20 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#9de087' }}>
-                {isOverBudget ? `-${currency}${fmt(overage)}` : `${currency}${fmt(remaining)}`}
-              </Text>
+              <CurrencyAmount currency={currency}
+              amount={isOverBudget ? `-${fmt(overage)}` : fmt(remaining)}
+              textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#9de087' }} size={fs(18)} />
             </View>
           </View>
         </View>
@@ -361,9 +365,11 @@ export const FinanceScreen = ({
             borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
           }}>
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.6, marginBottom: 4 }}>Avg daily spend</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }}>
-              {avgSpend !== null ? `${currency}${fmt(avgSpend)}` : '—'}
-            </Text>
+            {avgSpend !== null
+              ? <CurrencyAmount currency={currency} amount={fmt(avgSpend)}
+                  textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }} size={fs(18)} />
+              : <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }}>—</Text>
+            }
           </View>
           <View style={{
             flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16,
@@ -371,9 +377,8 @@ export const FinanceScreen = ({
             borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
           }}>
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.6, marginBottom: 4 }}>Weekly total</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }}>
-              {currency}{fmt(chartDays.reduce((s, d) => s + d.total, 0))}
-            </Text>
+            <CurrencyAmount currency={currency} amount={fmt(chartDays.reduce((s, d) => s + d.total, 0))}
+            textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }} size={fs(18)} />
           </View>
         </View>
 
@@ -396,7 +401,8 @@ export const FinanceScreen = ({
             }}>
               <Image source={IMAGES.carrot} style={{ width: 20, height: 20, marginRight: 10 }} resizeMode="contain" />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16) }}>{currency}{fmt(entry.amount)}</Text>
+                <CurrencyAmount currency={currency} amount={fmt(entry.amount)}
+                textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16) }} size={fs(16)} />
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#e8d5c0', opacity: 0.45 }}>{entry.time}</Text>
                 {entry.note ? <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.75)', marginTop: 2 }}>{entry.note}</Text> : null}
               </View>

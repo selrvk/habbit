@@ -5,6 +5,7 @@ import { View, Text, TouchableOpacity, Modal, Animated, Image, TextInput, Toucha
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { applyNumpadKey } from '../helpers';
+import { CurrencyAmount } from './CurrencyAmount';
 
 const haptic = {
   light:   () => ReactNativeHapticFeedback.trigger('impactLight',         { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -84,10 +85,18 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
                   {/* Amount display — always visible, dims on note step */}
                   <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: step === 'note' ? 'rgba(212,149,106,0.15)' : (hasAmount ? '#D4956A' : 'rgba(212,149,106,0.2)'), paddingVertical: 16, paddingHorizontal: 20, marginBottom: hint && step === 'amount' ? 6 : 18, alignItems: 'center' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                      <Text style={{ fontFamily: 'DynaPuff', fontSize: 18, color: step === 'note' ? 'rgba(212,149,106,0.3)' : 'rgba(212,149,106,0.6)' }}>{currency}</Text>
-                      <Text style={{ fontFamily: 'DynaPuff', fontSize: 42, minWidth: 60, textAlign: 'center', color: step === 'note' ? 'rgba(232,213,192,0.3)' : (hasAmount ? '#e8d5c0' : 'rgba(232,213,192,0.25)') }}>
-                        {amount === '' ? '0' : amount}
-                      </Text>
+                      <CurrencyAmount
+                        currency={currency}
+                        amount={amount === '' ? '0' : amount}
+                        textStyle={{
+                          fontFamily: 'DynaPuff',
+                          fontSize: 42,
+                          minWidth: 60,
+                          textAlign: 'center',
+                          color: step === 'note' ? 'rgba(232,213,192,0.3)' : (hasAmount ? '#e8d5c0' : 'rgba(232,213,192,0.25)'),
+                        }}
+                        size={42}
+                      />
                     </View>
                   </View>
 
@@ -144,9 +153,21 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
                         style={{ backgroundColor: hasAmount ? '#D4956A' : 'rgba(212,149,106,0.2)', borderRadius: 16, paddingVertical: 15, alignItems: 'center', shadowColor: hasAmount ? '#D4956A' : 'transparent', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: hasAmount ? 6 : 0 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           {hasAmount && <Image source={IMAGES.carrot} style={{ width: 18, height: 18 }} resizeMode="contain" />}
-                          <Text style={{ fontFamily: 'DynaPuff', color: hasAmount ? '#fff' : 'rgba(255,255,255,0.3)', fontSize: 16 }}>
-                            {hasAmount ? `${confirmLabel} ${currency}${amount}` : confirmLabel}
-                          </Text>
+                          {hasAmount ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}>{confirmLabel} </Text>
+                              <CurrencyAmount
+                                currency={currency}
+                                amount={amount}
+                                textStyle={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}
+                                size={16}
+                              />
+                            </View>
+                          ) : (
+                            <Text style={{ fontFamily: 'DynaPuff', color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>
+                              {confirmLabel}
+                            </Text>
+                          )}
                         </View>
                       </TouchableOpacity>
                     </Animated.View>

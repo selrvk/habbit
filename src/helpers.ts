@@ -75,3 +75,6 @@ export const buildCalendarGrid = (records: CompletionRecord[], todayKey: string,
 export const migrateCommissions = (items: any[]): Commission[] =>
   items.map(c=>({...c,days:c.days??[],reminderTime:c.reminderTime??null}));
 export const defaultStats = () => ({currentStreak:0,bestStreak:0,totalCompleted:0,lastFullDate:''});
+
+export const currencyStr = (currency: string, amount: string) =>
+  currency === '__carrot__' ? `🥕 ${amount}` : `${currency}${amount}`;

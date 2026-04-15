@@ -12,6 +12,7 @@ import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
 import { avatarImage } from '../helpers';
 import type { Commission, SpendingEntry } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
+import { CurrencyAmount } from '../components/CurrencyAmount';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -159,14 +160,16 @@ export const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentTo
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7, marginBottom: 8 }}>Spent Today</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Image source={IMAGES.carrot} style={{ width: 22, height: 22 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#e8d5c0' }}>{currency}{spentToday.toFixed(2)}</Text>
+              <CurrencyAmount currency={currency} amount={spentToday.toFixed(2)}
+                textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#e8d5c0' }} />
             </View>
           </View>
           <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)' }}>
             <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7, marginBottom: 8 }}>Allocated a Day</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Image source={IMAGES.carrots} style={{ width: 22, height: 22 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }}>{currency}{allocatedPerDay.toFixed(2)}</Text>
+              <CurrencyAmount currency={currency} amount={allocatedPerDay.toFixed(2)}
+                textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }} />
             </View>
           </View>
         </View>

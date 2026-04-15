@@ -6,13 +6,14 @@
 
 import React from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Platform, Alert
+  View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image
 } from 'react-native';
 import { useAppSettings } from './../context/SettingsContext';
 import type { FontSize } from './../context/SettingsContext';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useFontSize } from '../hooks/useFontSize';
 import { Linking } from 'react-native';
+import { IMAGES } from '../constants';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -157,6 +158,7 @@ const FontSizePicker = () => {
 };
 
 const CURRENCIES = [
+  { symbol: '__carrot__', label: 'Carrot', isImage: true }, 
   { symbol: '₱', label: 'PHP' },
   { symbol: '$',  label: 'USD' },
   { symbol: '€',  label: 'EUR' },
@@ -183,9 +185,12 @@ const CurrencyPicker = ({ currency, onSetCurrency }: { currency: string; onSetCu
               borderWidth: 1.5, borderColor: selected ? C.accent : C.border,
             }}
           >
-            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: selected ? C.accent : C.muted }}>
-              {c.symbol}
-            </Text>
+            {c.isImage
+              ? <Image source={IMAGES.carrot} style={{ width: fs(20), height: fs(20) }} resizeMode="contain" />
+              : <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: selected ? C.accent : C.muted }}>
+                  {c.symbol}
+                </Text>
+            }
             <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: selected ? C.accent : C.dim, marginTop: 3, letterSpacing: 0.5 }}>
               {c.label}
             </Text>
