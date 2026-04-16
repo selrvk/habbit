@@ -1,6 +1,6 @@
 // src/helpers.ts
 
-import type { AvatarKey, Commission, DailyTotal, ChartDay, CompletionRecord } from './types';
+import type { AvatarKey, Commission, DailyTotal, ChartDay, CompletionRecord, ReminderTime } from './types';
 import { AVATARIMAGES, DAY_LABELS, CAL_DAY_LABELS } from './constants';
 
 export const avatarImage = (key: string) =>
@@ -72,8 +72,40 @@ export const buildCalendarGrid = (records: CompletionRecord[], todayKey: string,
   }
   return cols;
 };
+
+/** Migrate stored commissions to the latest shape, filling in any missing fields. */
 export const migrateCommissions = (items: any[]): Commission[] =>
-  items.map(c=>({...c,days:c.days??[],reminderTime:c.reminderTime??null}));
+  items.map(c => ({
+    ...c,
+    days:            c.days            ?? [],
+    reminderTime:    c.reminderTime    ?? null,
+    timesPerDay:     c.timesPerDay     ?? 1,
+    completionCount: c.completionCount ?? 0,
+    reminderTimes:   c.reminderTimes   ?? [],
+    reminderSplit:   c.reminderSplit   ?? null,
+  }));
+
+/**
+ * Distribute `count` reminder times evenly between a start and end time.
+ * Returns an array of { hour, minute } objects.
+ */
+export const computeSplitTimes = (
+  startH: number, startM: number,
+  endH: number,   endM: number,
+  count: number,
+): ReminderTime[] => {
+  if (count <= 0) return [];
+  if (count === 1) return [{ hour: startH, minute: startM }];
+  const startMins = startH * 60 + startM;
+  const endMins   = endH   * 60 + endM;
+  if (endMins <= startMins) return [{ hour: startH, minute: startM }];
+  const step = (endMins - startMins) / (count - 1);
+  return Array.from({ length: count }, (_, i) => {
+    const total = Math.round(startMins + step * i);
+    return { hour: Math.floor(total / 60) % 24, minute: total % 60 };
+  });
+};
+
 export const defaultStats = () => ({currentStreak:0,bestStreak:0,totalCompleted:0,lastFullDate:''});
 
 export const currencyStr = (currency: string, amount: string) =>

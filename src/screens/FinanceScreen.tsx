@@ -203,7 +203,7 @@ export const FinanceScreen = ({
                     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
                     borderLeftWidth: 3, borderLeftColor: '#D4956A',
                   }}>
-                    <Image source={IMAGES.carrot} style={{ width: 18, height: 18, marginRight: 10 }} resizeMode="contain" />
+                    <Image source={IMAGES.carrot_currency} style={{ width: 18, height: 18, marginRight: 10 }} resizeMode="contain" />
                     <View style={{ flex: 1 }}>
                       <CurrencyAmount currency={currency} amount={fmt(entry.amount)}
                       textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(15) }} size={fs(15)} />

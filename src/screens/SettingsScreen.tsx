@@ -186,7 +186,7 @@ const CurrencyPicker = ({ currency, onSetCurrency }: { currency: string; onSetCu
             }}
           >
             {c.isImage
-              ? <Image source={IMAGES.carrot} style={{ width: fs(20), height: fs(20) }} resizeMode="contain" />
+              ? <Image source={IMAGES.carrot_currency} style={{ width: fs(20), height: fs(20) }} resizeMode="contain" />
               : <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: selected ? C.accent : C.muted }}>
                   {c.symbol}
                 </Text>

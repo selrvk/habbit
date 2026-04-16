@@ -1,6 +1,7 @@
 // src/notifications.ts
 
 import { Platform } from 'react-native';
+import { computeSplitTimes } from './helpers';
 import notifee, { TriggerType, RepeatFrequency, AndroidImportance } from '@notifee/react-native';
 import type { Commission } from './types';
 import { daysLabel } from './helpers';
@@ -28,26 +29,51 @@ const getNextWeeklyTimestamp = (dow:number,hour:number,minute:number):number => 
 };
 
 export const scheduleHabitNotifs = async (commission: Commission) => {
-  try {
-    await cancelHabitNotifs(commission.id);
-    if (!commission.reminderTime) return;
-    const {hour,minute}=commission.reminderTime;
-    const scheduledDays=commission.days.length===0?[0,1,2,3,4,5,6]:commission.days;
+  await cancelHabitNotifs(commission.id);
+  if (!commission.reminderTime && !commission.reminderTimes?.length) return;
+
+  const scheduledDays = commission.days.length === 0
+    ? [0,1,2,3,4,5,6] : commission.days;
+
+  // Build the list of {hour, minute} to fire each day
+  let times: { hour: number; minute: number }[] = [];
+
+  if ((commission.timesPerDay ?? 1) === 1) {
+    times = [commission.reminderTime!];
+    } else if (commission.reminderSplit === null) {
+      times = commission.reminderTimes ?? [];
+    } else {
+    // split evenly — compute from the window stored in reminderTimes[0] and reminderTimes[last]
+    const [from, to] = [commission.reminderTimes![0], commission.reminderTimes!.at(-1)!];
+    times = computeSplitTimes(from.hour, from.minute, to.hour, to.minute, commission.timesPerDay!);
+  }
+
+  for (const [ti, t] of times.entries()) {
     for (const dow of scheduledDays) {
       await notifee.createTriggerNotification(
-        {id:`hr-${commission.id}-${dow}`,title:'Habbit 🐰',body:commission.label,
-          android:{channelId:NOTIF_CHANNEL,pressAction:{id:'default'}},ios:{sound:'default'}},
-        {type:TriggerType.TIMESTAMP,timestamp:getNextWeeklyTimestamp(dow,hour,minute),repeatFrequency:RepeatFrequency.WEEKLY}
+        {
+          id: `hr-${commission.id}-${dow}-${ti}`,
+          title: 'Habbit 🐰',
+          body: commission.label,
+          android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } },
+          ios: { sound: 'default' },
+        },
+        {
+          type: TriggerType.TIMESTAMP,
+          timestamp: getNextWeeklyTimestamp(dow, t.hour, t.minute),
+          repeatFrequency: RepeatFrequency.WEEKLY,
+        }
       );
     }
-  } catch {}
+  }
 };
 
 export const cancelHabitNotifs = async (commissionId: string) => {
-  try {
-    const ids = [0,1,2,3,4,5,6].map(d => `hr-${commissionId}-${d}`);
-    await Promise.all(ids.map(id => notifee.cancelNotification(id)));
-  } catch {}
+  const ids = [0,1,2,3,4,5,6].flatMap(d =>
+    Array.from({ length: 10 }, (_, ti) => `hr-${commissionId}-${d}-${ti}`)
+  );
+  const legacyIds = [0,1,2,3,4,5,6].map(d => `hr-${commissionId}-${d}`);
+  await Promise.all([...ids, ...legacyIds].map(id => notifee.cancelNotification(id)));
 };
 
 export const scheduleMidnightNotif = async () => {

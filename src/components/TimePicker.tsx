@@ -1,6 +1,6 @@
 // src/components/TimePicker.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
@@ -10,11 +10,6 @@ const STEPS = [1, 5, 10];
 
 export const TimePicker = ({ hour, minute, onChange }: { hour: number; minute: number; onChange: (h: number, m: number) => void }) => {
   const [minStep, setMinStep] = useState(1);
-
-  // Always open in AM
-  useEffect(() => {
-    if (hour >= 12) onChange(hour - 12, minute);
-  }, []);
 
   const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
   const isAM = hour < 12;

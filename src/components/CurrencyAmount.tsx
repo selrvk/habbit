@@ -11,11 +11,12 @@ interface Props {
 
 export const CurrencyAmount = ({ currency, amount, textStyle, imageSize = 18 }: Props) => {
   if (currency === '__carrot__') {
+    const tintColor = (textStyle as any)?.color ?? '#e8d5c0';
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
         <Image
-          source={IMAGES.carrot}
-          style={{ width: imageSize, height: imageSize }}
+          source={IMAGES.carrot_currency}
+          style={{ width: imageSize, height: imageSize, tintColor }}
           resizeMode="contain"
         />
         <Text style={textStyle}>{amount}</Text>

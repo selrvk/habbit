@@ -6,14 +6,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 
-
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, scheduleMidnightNotif, cancelMidnightNotif } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, ALL_STORAGE_KEYS } from './src/storage';
-import type { Commission, CommissionsData, DailyTotal, FinanceData, Settings, SpendingEntry, Stats, CompletionRecord, ReminderTime, TabKey } from './src/types';
+import type { Commission, CommissionsData, DailyTotal, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
+import { AddHabbitScreen } from './src/screens/AddHabbitScreen';
 import { BottomNav } from './src/components/BottomNav';
 import { CoachScreen } from "./src/screens/Coachscreen";
 
@@ -25,9 +25,15 @@ const haptic = {
   warning: () => ReactNativeHapticFeedback.trigger('notificationWarning', HAPTIC_OPTIONS),
 };
 
+// Sub-screen state for the tasks tab
+type TasksSubScreen =
+  | { mode: 'add' }
+  | { mode: 'edit'; item: Commission };
+
 export default function App() {
   const [isOnboarded, setIsOnboarded]             = useState<boolean | null>(null);
   const [activeTab, setActiveTab]                 = useState<TabKey>('home');
+  const [tasksSubScreen, setTasksSubScreen]       = useState<TasksSubScreen | null>(null);
   const [commissions, setCommissions]             = useState<Commission[]>([]);
   const [spentToday, setSpentToday]               = useState(0);
   const [todayHistory, setTodayHistory]           = useState<SpendingEntry[]>([]);
@@ -103,7 +109,8 @@ export default function App() {
             } else if (parsed.date < yesterdayKey) {
               loadedStats = { ...loadedStats, currentStreak: 0 };
             }
-            const reset = migrated.map(c => ({ ...c, completed: false }));
+            // Reset completed + completionCount for the new day
+            const reset = migrated.map(c => ({ ...c, completed: false, completionCount: 0 }));
             setCommissions(reset);
             await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: reset, date: todayKey }));
           }
@@ -112,9 +119,7 @@ export default function App() {
         setStats(loadedStats); saveStats(loadedStats);
         setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
       } catch { setIsOnboarded(true); }
-      finally { 
-        hasLoaded.current = true;
-      }
+      finally { hasLoaded.current = true; }
     };
     load();
   }, []);
@@ -124,7 +129,11 @@ export default function App() {
     setName(onboardName); setAllocatedPerDay(budget); setCurrency(onboardCurrency);
     await AsyncStorage.setItem(STORAGE_SETTINGS, JSON.stringify({ allocatedPerDay: budget, currency: onboardCurrency, name: onboardName, avatar: DEFAULT_AVATAR, midnightNotifEnabled: false }));
     if (firstHabbit) {
-      const initial: Commission[] = [{ id: generateId(), label: firstHabbit, completed: false, days: [], reminderTime: null }];
+      const initial: Commission[] = [{
+        id: generateId(), label: firstHabbit, completed: false, days: [],
+        reminderTime: null, timesPerDay: 1, completionCount: 0,
+        reminderTimes: [], reminderSplit: null,
+      }];
       setCommissions(initial);
       await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: initial, date: todayKey }));
     }
@@ -172,24 +181,74 @@ export default function App() {
     setMidnightNotifEnabled(enabled); saveSettings({ midnightNotifEnabled: enabled });
     if (enabled) { scheduleMidnightNotif(); } else { cancelMidnightNotif(); }
   }, []);
+
+  // ── Commission complete: for multi-times habits, increment count ──────────
   const handleCommissionComplete = useCallback((id: string) => {
-    setCommissions(p => p.map(c => c.id === id ? { ...c, completed: true } : c));
+    setCommissions(p => p.map(c => {
+      if (c.id !== id) return c;
+      const tpd = c.timesPerDay ?? 1;
+      if (tpd === 1) return { ...c, completed: true };
+      const newCount = (c.completionCount ?? 0) + 1;
+      return { ...c, completionCount: newCount, completed: newCount >= tpd };
+    }));
     setStats(prev => { const updated = { ...prev, totalCompleted: prev.totalCompleted + 1 }; saveStats(updated); return updated; });
   }, []);
+
+  // ── Commission uncomplete: for multi-times habits, decrement count ────────
   const handleCommissionUncomplete = useCallback((id: string) => {
-    setCommissions(p => p.map(c => c.id === id ? { ...c, completed: false } : c));
+    setCommissions(p => p.map(c => {
+      if (c.id !== id) return c;
+      const tpd = c.timesPerDay ?? 1;
+      if (tpd === 1) return { ...c, completed: false };
+      const newCount = Math.max((c.completionCount ?? 0) - 1, 0);
+      return { ...c, completionCount: newCount, completed: false };
+    }));
     setStats(prev => { const updated = { ...prev, totalCompleted: Math.max(prev.totalCompleted - 1, 0) }; saveStats(updated); return updated; });
   }, []);
-  const handleAdd = useCallback((label: string, days: number[], reminderTime: ReminderTime | null) => {
-    const newItem: Commission = { id: generateId(), label, completed: false, days, reminderTime };
-    setCommissions(p => [...p, newItem]); scheduleHabitNotifs(newItem);
+
+  // ── Add: receives full HabbitFormData, closes sub-screen ─────────────────
+  const handleAdd = useCallback((data: HabbitFormData) => {
+    const newItem: Commission = {
+      id: generateId(),
+      label: data.label,
+      completed: false,
+      days: data.days,
+      reminderTime: data.reminderTime,
+      timesPerDay: data.timesPerDay,
+      completionCount: 0,
+      reminderTimes: data.reminderTimes,
+      reminderSplit: data.reminderSplit,
+    };
+    setCommissions(p => [...p, newItem]);
+    scheduleHabitNotifs(newItem);
+    setTasksSubScreen(null);
   }, []);
-  const handleEdit = useCallback((id: string, label: string, days: number[], reminderTime: ReminderTime | null) => {
-    setCommissions(p => p.map(c => { if (c.id !== id) return c; const updated = { ...c, label, days, reminderTime }; scheduleHabitNotifs(updated); return updated; }));
+
+  // ── Edit: receives id + full HabbitFormData, closes sub-screen ───────────
+  const handleEdit = useCallback((id: string, data: HabbitFormData) => {
+    setCommissions(p => p.map(c => {
+      if (c.id !== id) return c;
+      const updated: Commission = {
+        ...c,
+        label: data.label,
+        days: data.days,
+        reminderTime: data.reminderTime,
+        timesPerDay: data.timesPerDay,
+        reminderTimes: data.reminderTimes,
+        reminderSplit: data.reminderSplit,
+      };
+      scheduleHabitNotifs(updated);
+      return updated;
+    }));
+    setTasksSubScreen(null);
   }, []);
+
   const handleDelete = useCallback((id: string) => {
-    setCommissions(p => p.filter(c => c.id !== id)); cancelHabitNotifs(id);
+    setCommissions(p => p.filter(c => c.id !== id));
+    cancelHabitNotifs(id);
+    setTasksSubScreen(null);
   }, []);
+
   const handleUndoEntry = useCallback((id: string) => {
     setTodayHistory(prev => {
       const entry = prev.find(e => e.id === id); if (!entry) return prev;
@@ -212,8 +271,9 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: newSpent, date: todayKey, history: newHistory })).catch(() => {});
   }, [spentToday, todayHistory, todayKey]);
 
+  // ── Reset: also zeroes out completionCount ────────────────────────────────
   const handleResetToday = useCallback(() => {
-    const reset = commissions.map(c => ({ ...c, completed: false }));
+    const reset = commissions.map(c => ({ ...c, completed: false, completionCount: 0 }));
     setCommissions(reset);
     AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: reset, date: todayKey })).catch(() => {});
     setSpentToday(0); setTodayHistory([]);
@@ -221,26 +281,28 @@ export default function App() {
     setCompletionHistory(prev => { const updated = prev.filter(r => r.date !== todayKey); saveCompletionHistory(updated); return updated; });
     setStats(prev => { if (prev.lastFullDate !== todayKey) return prev; const updated = { ...prev, currentStreak: Math.max(prev.currentStreak - 1, 0), lastFullDate: yesterdayKey }; saveStats(updated); return updated; });
   }, [commissions, todayKey]);
+
   const handleDeleteAllData = useCallback(async () => {
-  await cancelAllNotifications();
-  await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key)));
+    await cancelAllNotifications();
+    await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key)));
+    setIsOnboarded(false);
+    setActiveTab('home');
+    setTasksSubScreen(null);
+    hasLoaded.current = false;
+    setCommissions([]);
+    setSpentToday(0);
+    setTodayHistory([]);
+    setDailyTotals([]);
+    setAllocatedPerDay(DEFAULT_BUDGET);
+    setCurrency(DEFAULT_CURRENCY);
+    setName('Friend');
+    setAvatar(DEFAULT_AVATAR);
+    setStats(defaultStats());
+    setCompletionHistory([]);
+    setMidnightNotifEnabled(false);
+  }, [commissions]);
 
-  setIsOnboarded(false);
-  setActiveTab('home');
-  hasLoaded.current = false;
-  setCommissions([]);
-  setSpentToday(0);
-  setTodayHistory([]);
-  setDailyTotals([]);
-  setAllocatedPerDay(DEFAULT_BUDGET);
-  setCurrency(DEFAULT_CURRENCY);
-  setName('Friend');
-  setAvatar(DEFAULT_AVATAR);
-  setStats(defaultStats());
-  setCompletionHistory([]);
-  setMidnightNotifEnabled(false);
-}, [commissions]);
-
+  // ── Loading splash ────────────────────────────────────────────────────────
   if (isOnboarded === null) return (
     <View style={{ flex: 1, backgroundColor: '#2A1A18', justifyContent: 'center', alignItems: 'center' }}>
       <StatusBar barStyle="light-content" backgroundColor="#2A1A18" />
@@ -252,33 +314,97 @@ export default function App() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'home':    return <HomeScreen commissions={commissions} setCommissions={setCommissions} spentToday={spentToday} setSpentToday={setSpentToday} todayHistory={todayHistory} setTodayHistory={setTodayHistory} allocatedPerDay={allocatedPerDay} currency={currency} name={name} avatar={avatar} onGoToTasks={() => setActiveTab('tasks')} onCommissionComplete={handleCommissionComplete} onCommissionUncomplete={handleCommissionUncomplete} />;
-      case 'tasks':   return <TasksScreen commissions={commissions} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} />;
-      case 'finance': return <FinanceScreen spentToday={spentToday} todayHistory={todayHistory} dailyTotals={dailyTotals} allocatedPerDay={allocatedPerDay} currency={currency} onSetAllocated={handleSetAllocated} onUndoEntry={handleUndoEntry} onAddSpending={handleFinanceAddSpend} />;
-      case 'chat': return <CoachScreen name={name} streak={stats.currentStreak} ></CoachScreen>
-      case 'profile': return <ProfileScreen
-        name={name} avatar={avatar} stats={stats}
-        completionHistory={completionHistory} todayKey={todayKey}
-        midnightNotifEnabled={midnightNotifEnabled}
-        onSetName={handleSetName} onSetAvatar={handleSetAvatar}
-        onResetToday={handleResetToday} onDeleteAllData={handleDeleteAllData}
-        onToggleMidnightNotif={handleToggleMidnightNotif}
-        onOpenSettings={() => setActiveTab('settings')} 
-      />
-      case 'settings': return (
-        <SettingsScreen
-          currency={currency}
-          allocatedPerDay={allocatedPerDay}
-          midnightNotifEnabled={midnightNotifEnabled}
-          onResetToday={handleResetToday}       
-          onDeleteAllData={handleDeleteAllData} 
-          onToggleMidnightNotif={handleToggleMidnightNotif}
-          onBack={() => setActiveTab('profile')} 
-          onSetCurrency={handleSetCurrency}  
-        />
-      );
+      case 'home':
+        return (
+          <HomeScreen
+            commissions={commissions}
+            setCommissions={setCommissions}
+            spentToday={spentToday}
+            setSpentToday={setSpentToday}
+            todayHistory={todayHistory}
+            setTodayHistory={setTodayHistory}
+            allocatedPerDay={allocatedPerDay}
+            currency={currency}
+            name={name}
+            avatar={avatar}
+            onGoToTasks={() => setActiveTab('tasks')}
+            onCommissionComplete={handleCommissionComplete}
+            onCommissionUncomplete={handleCommissionUncomplete}
+          />
+        );
+
+      case 'tasks':
+        // Sub-screen: add or edit
+        if (tasksSubScreen !== null) {
+          return (
+            <AddHabbitScreen
+              initialValue={tasksSubScreen.mode === 'edit' ? tasksSubScreen.item : undefined}
+              onSave={
+                tasksSubScreen.mode === 'edit'
+                  ? (data) => handleEdit(tasksSubScreen.item.id, data)
+                  : handleAdd
+              }
+              onClose={() => setTasksSubScreen(null)}
+            />
+          );
+        }
+        return (
+          <TasksScreen
+            commissions={commissions}
+            onNavigateAdd={() => setTasksSubScreen({ mode: 'add' })}
+            onNavigateEdit={(item) => setTasksSubScreen({ mode: 'edit', item })}
+            onDelete={handleDelete}
+          />
+        );
+
+      case 'finance':
+        return (
+          <FinanceScreen
+            spentToday={spentToday}
+            todayHistory={todayHistory}
+            dailyTotals={dailyTotals}
+            allocatedPerDay={allocatedPerDay}
+            currency={currency}
+            onSetAllocated={handleSetAllocated}
+            onUndoEntry={handleUndoEntry}
+            onAddSpending={handleFinanceAddSpend}
+          />
+        );
+
+      case 'chat':
+        return <CoachScreen name={name} streak={stats.currentStreak} />;
+
+      case 'profile':
+        return (
+          <ProfileScreen
+            name={name} avatar={avatar} stats={stats}
+            completionHistory={completionHistory} todayKey={todayKey}
+            midnightNotifEnabled={midnightNotifEnabled}
+            onSetName={handleSetName} onSetAvatar={handleSetAvatar}
+            onResetToday={handleResetToday} onDeleteAllData={handleDeleteAllData}
+            onToggleMidnightNotif={handleToggleMidnightNotif}
+            onOpenSettings={() => setActiveTab('settings')}
+          />
+        );
+
+      case 'settings':
+        return (
+          <SettingsScreen
+            currency={currency}
+            allocatedPerDay={allocatedPerDay}
+            midnightNotifEnabled={midnightNotifEnabled}
+            onResetToday={handleResetToday}
+            onDeleteAllData={handleDeleteAllData}
+            onToggleMidnightNotif={handleToggleMidnightNotif}
+            onBack={() => setActiveTab('profile')}
+            onSetCurrency={handleSetCurrency}
+          />
+        );
     }
   };
+
+  // Hide BottomNav when on tasks sub-screen (add/edit page)
+  const showBottomNav = activeTab !== 'settings' && tasksSubScreen === null;
 
   return (
     <SettingsProvider>
@@ -286,7 +412,7 @@ export default function App() {
         <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
           <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
           <View style={{ flex: 1 }}>{renderScreen()}</View>
-          {activeTab !== 'settings' && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
+          {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
         </View>
       </SafeAreaProvider>
     </SettingsProvider>

@@ -33,7 +33,7 @@ export const IMAGES = {
   tasks:   require('../assets/habbits-3d.png'),
   chat:     require('../assets/chat-3d.png'),
   settings: require('../assets/settings.png'),
-  carrot_currency: require('../assets/carrot-3d.png')
+  carrot_currency: require('../assets/currency_carrot.png')
 };
 
 export const AVATARIMAGES = {
