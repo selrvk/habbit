@@ -73,14 +73,17 @@ export const AddHabbitScreen = ({
   const [singleMinute, setSingleMinute] = useState(initialValue?.reminderTime?.minute ?? 0);
 
   // ── multi mode: 'manual' | 'split' ──
-  const [reminderMode, setReminderMode] = useState<'manual' | 'split'>(
-    initialValue?.reminderSplit ? 'split' : 'manual',
-  );
+const [reminderMode, setReminderMode] = useState<'manual' | 'split'>(
+  initialValue?.reminderSplit ? 'split' :
+  initialValue?.reminderTimes?.length ? 'manual' : 'split', 
+);
 
   // ── manual: one picker per time ──
   const [manualTimes, setManualTimes] = useState<ReminderTime[]>(
     buildManualTimes(initialValue?.timesPerDay ?? 1, initialValue?.reminderTimes ?? []),
   );
+
+  const [selectedManualIdx, setSelectedManualIdx] = useState(0);
 
   // ── split evenly ──
   const splitEndTouched = useRef(!!initialValue?.reminderSplit);
@@ -321,23 +324,54 @@ export const AddHabbitScreen = ({
 
                   {reminderMode === 'manual' ? (
                     /* ── Manual: one picker per time ── */
-                    manualTimes.map((t, i) => (
-                      <View key={i}>
-                        {i > 0 && (
-                          <View style={{ height: 1, backgroundColor: 'rgba(212,149,106,0.1)', marginVertical: 12 }} />
-                        )}
-                        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(212,149,106,0.55)', marginBottom: 8, letterSpacing: 0.5 }}>
-                          REMINDER {i + 1}
-                        </Text>
-                        <TimePicker
-                          hour={t.hour}
-                          minute={t.minute}
-                          onChange={(h, m) =>
-                            setManualTimes(prev => prev.map((x, idx) => idx === i ? { hour: h, minute: m } : x))
-                          }
-                        />
+                    <>
+                      {/* Chip strip */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                        {manualTimes.map((t, i) => {
+                          const selected = selectedManualIdx === i;
+                          return (
+                            <TouchableOpacity
+                              key={i}
+                              onPress={() => { haptic.light(); setSelectedManualIdx(i); }}
+                              activeOpacity={0.75}
+                              style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 4,
+                                backgroundColor: selected ? '#D4956A' : 'rgba(212,149,106,0.12)',
+                                borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6,
+                                borderWidth: 1,
+                                borderColor: selected ? '#D4956A' : 'rgba(212,149,106,0.28)',
+                              }}>
+                              <Text style={{ fontSize: 10 }}>🔔</Text>
+                              <Text style={{
+                                fontFamily: 'Jua', fontSize: fs(12),
+                                color: selected ? '#fff' : 'rgba(212,149,106,0.9)',
+                              }}>
+                                {formatTime12(t.hour, t.minute)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
-                    ))
+
+                      {/* Label for active picker */}
+                      <Text style={{
+                        fontFamily: 'Jua', fontSize: fs(11),
+                        color: 'rgba(212,149,106,0.55)', marginBottom: 8, letterSpacing: 0.5,
+                      }}>
+                        REMINDER {selectedManualIdx + 1} OF {manualTimes.length}
+                      </Text>
+
+                      {/* Single shared picker */}
+                      <TimePicker
+                        hour={manualTimes[selectedManualIdx].hour}
+                        minute={manualTimes[selectedManualIdx].minute}
+                        onChange={(h, m) =>
+                          setManualTimes(prev =>
+                            prev.map((x, idx) => idx === selectedManualIdx ? { hour: h, minute: m } : x)
+                          )
+                        }
+                      />
+                    </>
                   ) : (
                     /* ── Split evenly ── */
                     <>
@@ -347,7 +381,7 @@ export const AddHabbitScreen = ({
                         onChange={(h, m) => {
                           setSplitStartH(h);
                           setSplitStartM(m);
-                          if (!splitEndTouched.current) {           // 👈 only sync if user hasn't touched TO
+                          if (!splitEndTouched.current) {        
                             setSplitEndH(Math.min(h + 12, 23));
                             setSplitEndM(m);
                           }
