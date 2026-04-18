@@ -1,8 +1,4 @@
 // src/screens/CoachScreen.tsx
-//
-// Minimal chat scaffold — bunny greets on mount and replies with
-// placeholder messages. Swap sendMessage() logic when the real
-// backend is ready; everything else (UI, state shape) can stay.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useRef, useEffect } from 'react';
@@ -15,6 +11,15 @@ import { useNavHeight } from '../hooks/useNavHeight';
 import { STORAGE_COACH_MESSAGES } from '../storage';
 import { useFontSize } from '../hooks/useFontSize';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import { buildCoachContext } from '../utils/buildCoachContext';
+import { buildSystemPrompt } from '../utils/coachPrompt';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
+import {
+  getRemainingMessages,
+  consumeMessage,
+  MESSAGE_LIMITS,
+  HISTORY_LIMITS,
+} from '../utils/messageQuota';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -23,8 +28,8 @@ const DYNAPUFF = 'DynaPuff';
 
 const HAPTIC = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
-  light: () => ReactNativeHapticFeedback.trigger('impactLight',  HAPTIC),
-  success: () => ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC),
+  light:   () => ReactNativeHapticFeedback.trigger('impactLight',          HAPTIC),
+  success: () => ReactNativeHapticFeedback.trigger('notificationSuccess',  HAPTIC),
 };
 
 const IMAGES = {
@@ -32,22 +37,6 @@ const IMAGES = {
   thinking: require('../../assets/bonbon/thinking.png'),
   talking:  require('../../assets/bonbon/talking.png'),
 };
-
-// ─── Placeholder replies ──────────────────────────────────────────────────────
-// Replace this array (or the whole sendMessage fn) with a real API call later.
-
-const SILLY_REPLIES = [
-  "There's nothing down this rabbit hole… yet!",
-  "Oops! This bunny hasn't learned that trick yet. Stay tuned!",
-  "Feature still under construction — my ears aren't ready!",
-  "I'd answer, but I'm just a placeholder bunny for now!",
-  "Shh… the real coach is still in the oven.",
-  "Nope, nope, nope! Nothing to see here (yet).",
-  "My crystal ball is fuzzy on that one. Try again later?",
-  "I'm just vibing here until the real coach shows up!",
-  "Hmm, very interesting question… that I totally cannot answer yet.",
-  "Top secret. Classified. Coming soon. You know the drill!",
-];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,36 +51,108 @@ interface Message {
 interface CoachScreenProps {
   name: string;
   streak: number;
+  isPro: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const uid = () => Math.random().toString(36).slice(2);
 
-/**
- * sendMessage — drop-in replacement point.
- * Currently returns a random silly string after a fake delay.
- * When the feature goes live, swap this for your real API call
- * and keep the rest of the component untouched.
- */
-async function sendMessage(_userText: string, _ctx: { name: string; streak: number }): Promise<string> {
-  await new Promise(r => setTimeout(r, 900 + Math.random() * 400));
-  return SILLY_REPLIES[Math.floor(Math.random() * SILLY_REPLIES.length)];
+const formatMessageText = (text: string) =>
+  text.replace(/__carrot__/g, '🥕');
+
+// ─── Suggested prompts (outside component — stable reference) ─────────────────
+
+const SUGGESTED_PROMPTS = [
+  "How did my habits go this week?",
+  "Where am I spending the most money?",
+  "What should I focus on today?",
+];
+
+const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
+  <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
+    {SUGGESTED_PROMPTS.map(p => (
+      <TouchableOpacity
+        key={p}
+        onPress={() => onSelect(p)}
+        activeOpacity={0.7}
+        style={{
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          backgroundColor: 'rgba(212,149,106,0.08)',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: 'rgba(212,149,106,0.22)',
+        }}
+      >
+        <Text style={{ fontFamily: JUA, fontSize: 13, color: 'rgba(232,213,192,0.75)' }}>
+          {p}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+
+// ─── API call ─────────────────────────────────────────────────────────────────
+
+async function sendMessage(
+  userText: string,
+  ctx: { name: string; streak: number },
+  history: Message[],
+  isPro: boolean,          // ← new
+): Promise<string> {
+  const context      = await buildCoachContext(ctx.name, ctx.streak);
+  const systemPrompt = buildSystemPrompt(context);
+
+  const historyLimit  = isPro ? HISTORY_LIMITS.pro : HISTORY_LIMITS.free;
+  const recentHistory = history.slice(-historyLimit);            // ← was hardcoded 12
+
+  const geminiHistory = recentHistory
+    .slice(0, -1)
+    .map(m => ({
+      role:  m.from === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }],
+    }))
+    .filter((_, i, arr) => !(i === 0 && arr[0].role === 'model'));
+
+  const body = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [
+      ...geminiHistory,
+      { role: 'user', parts: [{ text: userText }] },
+    ],
+  };
+
+  const res = await fetch(
+    `${SUPABASE_URL}/functions/v1/gemini-proxy`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const BunnyAvatar = ({ state }: { state: BunnyState; size?: number }) => (
+const BunnyAvatar = ({ state }: { state: BunnyState }) => (
   <Image
-  source={IMAGES[state]}
-  style={{ width: 52, height: 52 }}
-  resizeMode="contain"
-/>
+    source={IMAGES[state]}
+    style={{ width: 52, height: 52 }}
+    resizeMode="contain"
+  />
 );
 
 const ThinkingBubble = () => (
   <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, gap: 8 }}>
-    <BunnyAvatar state="thinking" size={32} />
+    <BunnyAvatar state="thinking" />
     <View
       style={{
         backgroundColor: '#5C3D2E',
@@ -109,17 +170,59 @@ const ThinkingBubble = () => (
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
+export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro }) => {
+  const [remaining, setRemaining] = useState<number | null>(null); 
   const [messages, setMessages]     = useState<Message[]>([]);
   const [input, setInput]           = useState('');
   const [bunnyState, setBunnyState] = useState<BunnyState>('idle');
   const [isReplying, setIsReplying] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const navHeight = useNavHeight();
+  const scrollRef   = useRef<ScrollView>(null);
+  const navHeight   = useNavHeight();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fs = useFontSize();
 
-  // Load persisted messages on mount — only greet if history is empty
+  useEffect(() => {
+    getRemainingMessages(isPro).then(setRemaining);
+  }, [messages, isPro]);
+
+  // Ref to the running typewriter interval so we can cancel it on unmount/clear
+  const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Greeting helper ───────────────────────────────────────────────────────
+  const getGreeting = () => name
+    ? `Hey ${name}! 🐰 I'm Bonbon, your habit and finance coach. Ask me how your week is going, where your money's been going, or what to focus on next!`
+    : `Hey there! 🐰 I'm Bonbon, your habit and finance coach. Ask me how your week is going, where your money's been going, or what to focus on next!`;
+
+  // ── Typewriter effect ─────────────────────────────────────────────────────
+  const startTypewriter = (msgId: string, fullText: string, onDone: () => void) => {
+    if (typewriterRef.current) clearInterval(typewriterRef.current);
+
+    let i = 0;
+    const SPEED_MS = 18; // ms per character — lower = faster
+
+    typewriterRef.current = setInterval(() => {
+      i += 1;
+      setMessages(prev =>
+        prev.map(m => m.id === msgId ? { ...m, text: fullText.slice(0, i) } : m),
+      );
+      scrollRef.current?.scrollToEnd({ animated: false });
+
+      if (i >= fullText.length) {
+        clearInterval(typewriterRef.current!);
+        typewriterRef.current = null;
+        onDone();
+      }
+    }, SPEED_MS);
+  };
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (typewriterRef.current) clearInterval(typewriterRef.current);
+    };
+  }, []);
+
+  // ── Load or greet on mount ────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -130,83 +233,120 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         }
       } catch {}
 
-      // First time — show greeting
       setBunnyState('talking');
-      const greeting = name
-        ? `Hey there, ${name}! 👋 This feature isn't available yet — stay tuned! 🐰`
-        : `Hey there! 👋 This feature isn't available yet — stay tuned! 🐰`;
       setTimeout(() => {
-        setMessages([{ id: uid(), from: 'bunny', text: greeting }]);
+        setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
         setBunnyState('idle');
       }, 500);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist messages whenever they change
+  // ── Persist messages ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (messages.length === 0) return;
     AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(messages)).catch(() => {});
   }, [messages]);
 
+  // ── Keyboard listeners ────────────────────────────────────────────────────
   useEffect(() => {
     const show = Keyboard.addListener(
-        Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-        () => setKeyboardOpen(true)
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardOpen(true),
     );
     const hide = Keyboard.addListener(
-        Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-        () => setKeyboardOpen(false)
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardOpen(false),
     );
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // ── Auto-scroll on new messages ────────────────────────────────────────────
+  // ── Auto-scroll on new messages ───────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(timer);
   }, [messages, isReplying]);
 
+  // ── Clear chat ────────────────────────────────────────────────────────────
   const handleClearChat = () => {
     Alert.alert('Clear Chat', 'Delete all messages with Bonbon?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Clear', style: 'destructive', onPress: async () => {
+        if (typewriterRef.current) clearInterval(typewriterRef.current);
+        typewriterRef.current = null;
         await AsyncStorage.removeItem(STORAGE_COACH_MESSAGES);
         setMessages([]);
+        setBunnyState('talking');
+        setTimeout(() => {
+          setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
+          setBunnyState('idle');
+        }, 500);
       }},
     ]);
   };
 
-  // ── Send handler ───────────────────────────────────────────────────────────
+  // ── Send handler ──────────────────────────────────────────────────────────
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isReplying) return;
 
-    // Append user message
-    setMessages(prev => [...prev, { id: uid(), from: 'user', text }]);
+    const userMsg: Message = { id: uid(), from: 'user', text };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsReplying(true);
     setBunnyState('thinking');
     haptic.light();
 
+    const quota = await getRemainingMessages(isPro);
+
+    if (quota <= 0) {
+    const limit = isPro ? MESSAGE_LIMITS.pro : MESSAGE_LIMITS.free;
+    setMessages(prev => [...prev, {
+      id:   uid(),
+      from: 'bunny',
+      text: isPro
+        ? `You've hit your ${limit} message limit for today — I'll be back tomorrow! 🐰`
+        : `You've used your ${limit} free messages for today! Upgrade for up to ${MESSAGE_LIMITS.pro} messages/day. 🐰`,
+    }]);
+    setBunnyState('idle');
+    setIsReplying(false);
+    return;
+  }
+
     try {
-      
-      const reply = await sendMessage(text, { name, streak });
+      const reply = await sendMessage(text, { name, streak }, [...messages, userMsg], isPro);
+      await consumeMessage(); 
+
+      // Add empty bubble — typewriter fills it in character by character
+      const replyId = uid();
+      setMessages(prev => [...prev, { id: replyId, from: 'bunny', text: '' }]);
       setBunnyState('talking');
-      setMessages(prev => [...prev, { id: uid(), from: 'bunny', text: reply }]);
-      
-    } catch {
-      setMessages(prev => [...prev, {
-        id: uid(), from: 'bunny',
-        text: "Oops, something went wrong on my end! 🐰",
-      }]);
-    } finally {
+
+      startTypewriter(replyId, reply, () => {
+        setBunnyState('idle');
+        setIsReplying(false);
+        haptic.success();
+      });
+
+    } catch (e) {
+      const msg = String(e).includes('429')
+        ? "I'm a little overwhelmed right now — try again in a moment! 🐰"
+        : String(e).includes('network') || String(e).includes('fetch')
+        ? "I couldn't reach my brain just now. Check your connection? 🐰"
+        : "Oops, something went wrong on my end! 🐰";
+
+      setMessages(prev => [...prev, { id: uid(), from: 'bunny', text: msg }]);
+      setBunnyState('idle');
       setIsReplying(false);
-      // Return to idle after the talking animation has a moment to show
-      setTimeout(() => setBunnyState('idle'), 2000);
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Index of last bunny message (drives avatar state) ─────────────────────
+  const lastBunnyIndex = (() => {
+    let last = -1;
+    messages.forEach((m, i) => { if (m.from === 'bunny') last = i; });
+    return last;
+  })();
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <KeyboardAvoidingView
@@ -229,7 +369,6 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
             </Text>
           </View>
 
-          {/* Clear chat button */}
           <TouchableOpacity
             onPress={handleClearChat}
             activeOpacity={0.7}
@@ -257,7 +396,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {messages.map(msg => (
+        {messages.map((msg, index) => (
           <View
             key={msg.id}
             style={{
@@ -267,7 +406,11 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
               gap: 8,
             }}
           >
-            {msg.from === 'bunny' && <BunnyAvatar state="idle" size={32} />}
+            {msg.from === 'bunny' && (
+              <BunnyAvatar
+                state={index === lastBunnyIndex ? bunnyState : 'idle'}
+              />
+            )}
 
             <View style={{
               maxWidth: '76%',
@@ -290,15 +433,42 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
                 fontSize: fs(13),
                 lineHeight: 20,
               }}>
-                {msg.text}
+                {formatMessageText(msg.text)}
               </Text>
             </View>
           </View>
         ))}
 
-        {/* Typing indicator while bunny is "thinking" */}
-        {isReplying && <ThinkingBubble />}
+        {/* ThinkingBubble only shows while waiting for API response,
+            not during typewriter (bunnyState === 'talking' then) */}
+        {isReplying && bunnyState === 'thinking' && <ThinkingBubble />}
       </ScrollView>
+
+      {/* ── Suggested prompts ──────────────────────────────────────────────── */}
+      {messages.length > 0 &&
+        messages.every(m => m.from === 'bunny') &&
+        !isReplying && (
+        <SuggestedPrompts
+          onSelect={(text) => {
+            haptic.light();
+            setInput(text);
+          }}
+        />
+      )}
+
+      {!isPro && remaining !== null && remaining <= 3 && (
+        <Text style={{
+          fontFamily: JUA,
+          fontSize: 11,
+          color: 'rgba(232,213,192,0.45)',
+          textAlign: 'center',
+          paddingBottom: 4,
+        }}>
+          {remaining === 0
+            ? 'No messages left today'
+            : `${remaining} message${remaining === 1 ? '' : 's'} left today`}
+        </Text>
+      )}
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
       <View style={{
@@ -306,7 +476,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 10,
-        paddingBottom: keyboardOpen ? 10 : 10 + navHeight,  
+        paddingBottom: keyboardOpen ? 10 : 10 + navHeight,
         gap: 8,
         borderTopWidth: 1,
         borderTopColor: 'rgba(212,149,106,0.12)',
@@ -356,7 +526,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           }}
         >
           <Text style={{ fontSize: 18, color: input.trim() && !isReplying ? '#fff' : 'rgba(232,213,192,0.3)' }}>
-            ↑
+            ↑ 
           </Text>
         </TouchableOpacity>
       </View>
