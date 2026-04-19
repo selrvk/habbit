@@ -20,6 +20,8 @@ import {
   MESSAGE_LIMITS,
   HISTORY_LIMITS,
 } from '../utils/messageQuota';
+import { useProStatus } from '../context/ProContext';
+import type { CoachContext } from '../utils/buildCoachContext';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -28,8 +30,8 @@ const DYNAPUFF = 'DynaPuff';
 
 const HAPTIC = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
-  light:   () => ReactNativeHapticFeedback.trigger('impactLight',          HAPTIC),
-  success: () => ReactNativeHapticFeedback.trigger('notificationSuccess',  HAPTIC),
+  light:   () => ReactNativeHapticFeedback.trigger('impactLight',         HAPTIC),
+  success: () => ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC),
 };
 
 const IMAGES = {
@@ -51,7 +53,6 @@ interface Message {
 interface CoachScreenProps {
   name: string;
   streak: number;
-  isPro: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ const uid = () => Math.random().toString(36).slice(2);
 const formatMessageText = (text: string) =>
   text.replace(/__carrot__/g, '🥕');
 
-// ─── Suggested prompts (outside component — stable reference) ─────────────────
+// ─── Suggested prompts ────────────────────────────────────────────────────────
 
 const SUGGESTED_PROMPTS = [
   "How did my habits go this week?",
@@ -70,7 +71,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
-  <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
+  <View style={{ paddingBottom: 12, gap: 8 }}>
     {SUGGESTED_PROMPTS.map(p => (
       <TouchableOpacity
         key={p}
@@ -79,7 +80,6 @@ const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
         style={{
           paddingHorizontal: 14,
           paddingVertical: 10,
-          backgroundColor: 'rgba(212,149,106,0.08)',
           borderRadius: 12,
           borderWidth: 1,
           borderColor: 'rgba(212,149,106,0.22)',
@@ -97,15 +97,14 @@ const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
 
 async function sendMessage(
   userText: string,
-  ctx: { name: string; streak: number },
+  cachedContext: CoachContext,          // ← receives pre-built context
   history: Message[],
-  isPro: boolean,          // ← new
+  isPro: boolean,
 ): Promise<string> {
-  const context      = await buildCoachContext(ctx.name, ctx.streak);
-  const systemPrompt = buildSystemPrompt(context);
+  const systemPrompt = buildSystemPrompt(cachedContext);
 
   const historyLimit  = isPro ? HISTORY_LIMITS.pro : HISTORY_LIMITS.free;
-  const recentHistory = history.slice(-historyLimit);            // ← was hardcoded 12
+  const recentHistory = history.slice(-historyLimit);
 
   const geminiHistory = recentHistory
     .slice(0, -1)
@@ -153,14 +152,12 @@ const BunnyAvatar = ({ state }: { state: BunnyState }) => (
 const ThinkingBubble = () => (
   <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, gap: 8 }}>
     <BunnyAvatar state="thinking" />
-    <View
-      style={{
-        backgroundColor: '#5C3D2E',
-        borderRadius: 16, borderBottomLeftRadius: 4,
-        paddingHorizontal: 14, paddingVertical: 10,
-        borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
-      }}
-    >
+    <View style={{
+      backgroundColor: '#5C3D2E',
+      borderRadius: 16, borderBottomLeftRadius: 4,
+      paddingHorizontal: 14, paddingVertical: 10,
+      borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
+    }}>
       <Text style={{ fontFamily: JUA, color: 'rgba(232,213,192,0.4)', fontSize: 15, letterSpacing: 4 }}>
         • • •
       </Text>
@@ -170,22 +167,23 @@ const ThinkingBubble = () => (
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro }) => {
-  const [remaining, setRemaining] = useState<number | null>(null); 
-  const [messages, setMessages]     = useState<Message[]>([]);
-  const [input, setInput]           = useState('');
-  const [bunnyState, setBunnyState] = useState<BunnyState>('idle');
-  const [isReplying, setIsReplying] = useState(false);
-  const scrollRef   = useRef<ScrollView>(null);
-  const navHeight   = useNavHeight();
+export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
+  const { isPro } = useProStatus();
+  const [messages, setMessages]       = useState<Message[]>([]);
+  const [remaining, setRemaining]     = useState<number | null>(null);
+  const [input, setInput]             = useState('');
+  const [bunnyState, setBunnyState]   = useState<BunnyState>('idle');
+  const [isReplying, setIsReplying]   = useState(false);
+  const [hasLoaded, setHasLoaded]     = useState(false);   // ← fix #4: moved inside component
+  const scrollRef                     = useRef<ScrollView>(null);
+  const navHeight                     = useNavHeight();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const fs = useFontSize();
+  const fs                            = useFontSize();
 
-  useEffect(() => {
-    getRemainingMessages(isPro).then(setRemaining);
-  }, [messages, isPro]);
+  // ── fix #5: cache context so we don't do 6 AsyncStorage reads per message ─
+  const contextRef = useRef<CoachContext | null>(null);
 
-  // Ref to the running typewriter interval so we can cancel it on unmount/clear
+  const isTypingRef   = useRef(false);
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Greeting helper ───────────────────────────────────────────────────────
@@ -193,12 +191,18 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
     ? `Hey ${name}! 🐰 I'm Bonbon, your habit and finance coach. Ask me how your week is going, where your money's been going, or what to focus on next!`
     : `Hey there! 🐰 I'm Bonbon, your habit and finance coach. Ask me how your week is going, where your money's been going, or what to focus on next!`;
 
+  // ── Quota refresh ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    getRemainingMessages(isPro).then(setRemaining);
+  }, [messages, isPro]);
+
   // ── Typewriter effect ─────────────────────────────────────────────────────
   const startTypewriter = (msgId: string, fullText: string, onDone: () => void) => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
 
     let i = 0;
-    const SPEED_MS = 18; // ms per character — lower = faster
+    const SPEED_MS = 18;
+    isTypingRef.current = true;
 
     typewriterRef.current = setInterval(() => {
       i += 1;
@@ -210,17 +214,31 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
       if (i >= fullText.length) {
         clearInterval(typewriterRef.current!);
         typewriterRef.current = null;
+        isTypingRef.current   = false;
+
+        setMessages(prev => {
+          const final = prev.map(m => m.id === msgId ? { ...m, text: fullText } : m);
+          AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(final)).catch(() => {});
+          return final;
+        });
+
         onDone();
       }
     }, SPEED_MS);
   };
 
-  // Clean up on unmount
+  // ── Clean up typewriter on unmount ────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (typewriterRef.current) clearInterval(typewriterRef.current);
     };
   }, []);
+
+  // ── Persist messages ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (messages.length === 0) return;
+    AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(messages)).catch(() => {});
+  }, [messages]);
 
   // ── Load or greet on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -229,6 +247,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
         const raw = await AsyncStorage.getItem(STORAGE_COACH_MESSAGES);
         if (raw) {
           setMessages(JSON.parse(raw));
+          setHasLoaded(true);   // ← fix #4: set inside async after data loads
           return;
         }
       } catch {}
@@ -237,14 +256,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
       setTimeout(() => {
         setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
         setBunnyState('idle');
+        setHasLoaded(true);     // ← also set after greeting
       }, 500);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Persist messages ──────────────────────────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(messages)).catch(() => {});
-  }, [messages]);
 
   // ── Keyboard listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -272,6 +287,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
       { text: 'Clear', style: 'destructive', onPress: async () => {
         if (typewriterRef.current) clearInterval(typewriterRef.current);
         typewriterRef.current = null;
+        contextRef.current    = null;   // ← reset cached context on clear
         await AsyncStorage.removeItem(STORAGE_COACH_MESSAGES);
         setMessages([]);
         setBunnyState('talking');
@@ -288,6 +304,19 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
     const text = input.trim();
     if (!text || isReplying) return;
 
+    const quota = await getRemainingMessages(isPro);
+
+    if (quota <= 0) {
+      const limit = isPro ? MESSAGE_LIMITS.pro : MESSAGE_LIMITS.free;
+      setMessages(prev => [...prev, {
+        id: uid(), from: 'bunny',
+        text: isPro
+          ? `You've hit your ${limit} message limit for today — I'll be back tomorrow! 🐰`
+          : `You've used your ${limit} free messages for today! Upgrade for up to ${MESSAGE_LIMITS.pro} messages/day. 🐰`,
+      }]);
+      return;
+    }
+
     const userMsg: Message = { id: uid(), from: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -295,32 +324,25 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
     setBunnyState('thinking');
     haptic.light();
 
-    const quota = await getRemainingMessages(isPro);
-
-    if (quota <= 0) {
-    const limit = isPro ? MESSAGE_LIMITS.pro : MESSAGE_LIMITS.free;
-    setMessages(prev => [...prev, {
-      id:   uid(),
-      from: 'bunny',
-      text: isPro
-        ? `You've hit your ${limit} message limit for today — I'll be back tomorrow! 🐰`
-        : `You've used your ${limit} free messages for today! Upgrade for up to ${MESSAGE_LIMITS.pro} messages/day. 🐰`,
-    }]);
-    setBunnyState('idle');
-    setIsReplying(false);
-    return;
-  }
-
     try {
-      const reply = await sendMessage(text, { name, streak }, [...messages, userMsg], isPro);
-      await consumeMessage(); 
+      // ── fix #5: build context once, reuse for entire conversation ──────────
+      if (!contextRef.current) {
+        contextRef.current = await buildCoachContext(name, streak);
+      }
 
-      // Add empty bubble — typewriter fills it in character by character
+      const reply = await sendMessage(
+        text,
+        contextRef.current,
+        [...messages, userMsg],
+        isPro,
+      );
+      await consumeMessage();
+
       const replyId = uid();
       setMessages(prev => [...prev, { id: replyId, from: 'bunny', text: '' }]);
       setBunnyState('talking');
 
-      startTypewriter(replyId, reply, () => {
+      startTypewriter(replyId, formatMessageText(reply), () => {
         setBunnyState('idle');
         setIsReplying(false);
         haptic.success();
@@ -346,8 +368,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
     return last;
   })();
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── fix #4: blank screen while AsyncStorage loads ─────────────────────────
+  if (!hasLoaded) return <View style={{ flex: 1, backgroundColor: '#2A1A18' }} />;
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -365,7 +389,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
               Chat with
             </Text>
             <Text style={{ fontFamily: DYNAPUFF, color: '#e8d5c0', fontSize: 24 }}>
-              Bon
+              Bonbon
             </Text>
           </View>
 
@@ -407,16 +431,12 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
             }}
           >
             {msg.from === 'bunny' && (
-              <BunnyAvatar
-                state={index === lastBunnyIndex ? bunnyState : 'idle'}
-              />
+              <BunnyAvatar state={index === lastBunnyIndex ? bunnyState : 'idle'} />
             )}
 
             <View style={{
               maxWidth: '76%',
-              backgroundColor: msg.from === 'bunny'
-                ? '#5C3D2E'
-                : 'rgba(212,149,106,0.18)',
+              backgroundColor: msg.from === 'bunny' ? '#5C3D2E' : 'rgba(212,149,106,0.18)',
               borderRadius: 16,
               borderBottomLeftRadius:  msg.from === 'bunny' ? 4 : 16,
               borderBottomRightRadius: msg.from === 'user'  ? 4 : 16,
@@ -439,15 +459,13 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
           </View>
         ))}
 
-        {/* ThinkingBubble only shows while waiting for API response,
-            not during typewriter (bunnyState === 'talking' then) */}
         {isReplying && bunnyState === 'thinking' && <ThinkingBubble />}
-      </ScrollView>
 
-      {/* ── Suggested prompts ──────────────────────────────────────────────── */}
+        {/* ── fix #2: suggested prompts after every bunny reply ──────────────── */}
       {messages.length > 0 &&
-        messages.every(m => m.from === 'bunny') &&
-        !isReplying && (
+        messages[messages.length - 1]?.from === 'bunny' &&
+        !isReplying &&
+        !input.trim() && (
         <SuggestedPrompts
           onSelect={(text) => {
             haptic.light();
@@ -455,18 +473,20 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
           }}
         />
       )}
+      
+      </ScrollView>
 
-      {!isPro && remaining !== null && remaining <= 3 && (
+      {/* ── fix #3: quota counter always visible for free users ────────────── */}
+      {!isPro && remaining !== null && (
         <Text style={{
-          fontFamily: JUA,
-          fontSize: 11,
-          color: 'rgba(232,213,192,0.45)',
-          textAlign: 'center',
-          paddingBottom: 4,
+          fontFamily: JUA, fontSize: 11, textAlign: 'center', paddingBottom: 4,
+          color: remaining <= 3
+            ? (remaining === 0 ? '#f09090' : '#f5c26b')
+            : 'rgba(232,213,192,0.3)',
         }}>
           {remaining === 0
             ? 'No messages left today'
-            : `${remaining} message${remaining === 1 ? '' : 's'} left today`}
+            : `${remaining} / ${MESSAGE_LIMITS.free} messages left today`}
         </Text>
       )}
 
@@ -491,6 +511,9 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
           onSubmitEditing={handleSend}
           editable={!isReplying}
           multiline
+          onContentSizeChange={() =>           // ← fix #6: scroll when input grows
+            scrollRef.current?.scrollToEnd({ animated: true })
+          }
           style={{
             flex: 1,
             backgroundColor: '#5C3D2E',
@@ -525,8 +548,11 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, isPro })
               : 'rgba(212,149,106,0.2)',
           }}
         >
-          <Text style={{ fontSize: 18, color: input.trim() && !isReplying ? '#fff' : 'rgba(232,213,192,0.3)' }}>
-            ↑ 
+          <Text style={{
+            fontSize: 18,
+            color: input.trim() && !isReplying ? '#fff' : 'rgba(232,213,192,0.3)',
+          }}>
+            ↑
           </Text>
         </TouchableOpacity>
       </View>

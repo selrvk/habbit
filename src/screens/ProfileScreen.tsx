@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES, AVATAR_KEYS } from '../constants';
 import { avatarImage } from '../helpers';
@@ -7,6 +7,8 @@ import { useNavHeight } from '../hooks/useNavHeight';
 import { SectionDivider } from '../components/SectionDivider';
 import { TextModal } from '../components/TextModal';
 import { CompletionCalendar } from '../components/CompletionCalendar';
+import { useProStatus } from '../context/ProContext';
+import { PaywallScreen } from './PaywallScreen';
 import type { Stats, CompletionRecord } from '../types';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
@@ -24,6 +26,8 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
 }) => {
   const navHeight = useNavHeight();
   const [nameModal, setNameModal] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const { isPro } = useProStatus();
 
   const handleReset = () => {
     haptic.error();
@@ -74,8 +78,58 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
     </TouchableOpacity>
   );
 
+  // ── Pro badge (shown when Pro) ─────────────────────────────────────────────
+  const ProBadge = () => (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 8, marginTop: 10,
+      backgroundColor: 'rgba(212,149,106,0.12)',
+      borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
+      borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)',
+      alignSelf: 'center',
+    }}>
+      <Text style={{ fontSize: 16 }}>🥕</Text>
+      <Text style={{ fontFamily: 'DynaPuff', fontSize: 13, color: '#D4956A' }}>
+        Habbit Pro
+      </Text>
+      <Text style={{ fontSize: 16 }}>✨</Text>
+    </View>
+  );
+
+  // ── Upgrade nudge (shown when free) ───────────────────────────────────────
+  const UpgradeNudge = () => (
+    <TouchableOpacity
+      onPress={() => { haptic.light(); setShowPaywall(true); }}
+      activeOpacity={0.8}
+      style={{
+        marginTop: 10,
+        alignSelf: 'center',
+        borderRadius: 20,
+        paddingHorizontal: 16, paddingVertical: 10,
+        borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)',
+        backgroundColor: 'rgba(212,149,106,0.07)',
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+      }}
+    >
+      <Text style={{ fontSize: 15 }}>🐰</Text>
+      <View>
+        <Text style={{ fontFamily: 'DynaPuff', fontSize: 12, color: 'rgba(232,213,192,0.85)' }}>
+          Free Plan
+        </Text>
+        <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(232,213,192,0.4)', marginTop: 1 }}>
+          Tap to unlock Pro →
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <>
+      {/* Paywall modal */}
+      <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet">
+        <PaywallScreen onClose={() => setShowPaywall(false)} />
+      </Modal>
+
       <TextModal visible={nameModal} title="Edit Name" placeholder="Your name" initialValue={name} onSave={v => { onSetName(v); setNameModal(false); }} onClose={() => setNameModal(false)} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
 
@@ -96,9 +150,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
             <Text style={{ fontSize: 18 }}>⚙️</Text>
           </TouchableOpacity>
 
-          {/* Avatar + name — keep exactly as-is, just change alignItems wrapper */}
           <View style={{ alignItems: 'center' }}>
-            {/* ...your existing avatar image and name TouchableOpacity... */}
             <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2.5, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 }}>
               <Image source={avatarImage(avatar)} style={{ width: 62, height: 62 }} resizeMode="contain" />
             </View>
@@ -107,7 +159,10 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
               <View style={{ backgroundColor: 'rgba(212,149,106,0.15)', borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)' }}>
                 <Text style={{ fontFamily: 'Jua', fontSize: 11, color: '#D4956A' }}>Edit</Text>
               </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+
+            {/* ── Pro status ── */}
+            {isPro ? <ProBadge /> : <UpgradeNudge />}
           </View>
         </View>
 

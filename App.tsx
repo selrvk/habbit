@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
+import { ProProvider } from './src/context/ProContext';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
@@ -101,7 +102,14 @@ export default function App() {
             const allWereDone = migrated.length > 0 && migrated.every(c => c.completed);
             if (doneCount > 0) loadedStats = { ...loadedStats, totalCompleted: loadedStats.totalCompleted + doneCount };
             if (migrated.length > 0 && !loadedHistory.some(r => r.date === parsed.date)) {
-              loadedHistory = [...loadedHistory, { date: parsed.date, completed: allWereDone }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
+              loadedHistory = [...loadedHistory, { 
+                date: parsed.date, 
+                completed: allWereDone,
+                completedIds: migrated.filter(c => c.completed).map(c => c.id),
+                scheduledIds: migrated
+                  .filter(c => isScheduledForDay(c, new Date(parsed.date + 'T00:00:00').getDay()))
+                  .map(c => c.id),
+              }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
             }
             if (allWereDone && parsed.date === yesterdayKey) {
               const newStreak = loadedStats.currentStreak + 1;
@@ -161,7 +169,13 @@ export default function App() {
     });
     setCompletionHistory(prev => {
       if (prev.some(r => r.date === todayKey)) return prev;
-      const updated = [...prev, { date: todayKey, completed: true }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
+      const todayDow2 = new Date().getDay();
+      const updated = [...prev, {
+        date: todayKey,
+        completed: true,
+        completedIds: commissions.filter(c => c.completed).map(c => c.id),
+        scheduledIds: commissions.filter(c => isScheduledForDay(c, todayDow2)).map(c => c.id),
+      }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
       saveCompletionHistory(updated); return updated;
     });
   }, [commissions]);
@@ -282,25 +296,25 @@ export default function App() {
     setStats(prev => { if (prev.lastFullDate !== todayKey) return prev; const updated = { ...prev, currentStreak: Math.max(prev.currentStreak - 1, 0), lastFullDate: yesterdayKey }; saveStats(updated); return updated; });
   }, [commissions, todayKey]);
 
-  const handleDeleteAllData = useCallback(async () => {
-    await cancelAllNotifications();
-    await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key)));
-    setIsOnboarded(false);
-    setActiveTab('home');
-    setTasksSubScreen(null);
-    hasLoaded.current = false;
-    setCommissions([]);
-    setSpentToday(0);
-    setTodayHistory([]);
-    setDailyTotals([]);
-    setAllocatedPerDay(DEFAULT_BUDGET);
-    setCurrency(DEFAULT_CURRENCY);
-    setName('Friend');
-    setAvatar(DEFAULT_AVATAR);
-    setStats(defaultStats());
-    setCompletionHistory([]);
-    setMidnightNotifEnabled(false);
-  }, [commissions]);
+const handleDeleteAllData = useCallback(async () => {
+  await cancelAllNotifications();
+  await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key))); // full wipe
+  setIsOnboarded(false); // ← back in
+  setActiveTab('home');
+  setTasksSubScreen(null);
+  hasLoaded.current = false;
+  setCommissions([]);
+  setSpentToday(0);
+  setTodayHistory([]);
+  setDailyTotals([]);
+  setAllocatedPerDay(DEFAULT_BUDGET);
+  setCurrency(DEFAULT_CURRENCY);
+  setName('Friend');
+  setAvatar(DEFAULT_AVATAR);
+  setStats(defaultStats());
+  setCompletionHistory([]);
+  setMidnightNotifEnabled(false);
+}, [commissions]);
 
   // ── Loading splash ────────────────────────────────────────────────────────
   if (isOnboarded === null) return (
@@ -351,6 +365,8 @@ export default function App() {
         return (
           <TasksScreen
             commissions={commissions}
+            completionHistory={completionHistory} 
+            todayKey={todayKey}                   
             onNavigateAdd={() => setTasksSubScreen({ mode: 'add' })}
             onNavigateEdit={(item) => setTasksSubScreen({ mode: 'edit', item })}
             onDelete={handleDelete}
@@ -375,7 +391,7 @@ export default function App() {
         return <CoachScreen name={name} streak={stats.currentStreak} />;
 
       case 'profile':
-        return (
+        return (  
           <ProfileScreen
             name={name} avatar={avatar} stats={stats}
             completionHistory={completionHistory} todayKey={todayKey}
@@ -407,14 +423,16 @@ export default function App() {
   const showBottomNav = activeTab !== 'settings' && tasksSubScreen === null;
 
   return (
-    <SettingsProvider>
-      <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
-          <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
-          <View style={{ flex: 1 }}>{renderScreen()}</View>
-          {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
-        </View>
-      </SafeAreaProvider>
-    </SettingsProvider>
+    <ProProvider>  
+      <SettingsProvider>
+        <SafeAreaProvider>
+          <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
+            <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
+            <View style={{ flex: 1 }}>{renderScreen()}</View>
+            {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
+          </View>
+        </SafeAreaProvider>
+      </SettingsProvider>
+    </ProProvider>  
   );
 }

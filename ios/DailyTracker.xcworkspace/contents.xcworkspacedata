@@ -2,6 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:../../../../Documents/Products.storekit">
+   </FileRef>
+   <FileRef
       location = "group:DailyTracker.xcodeproj">
    </FileRef>
    <FileRef

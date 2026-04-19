@@ -2,21 +2,22 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  STORAGE_COMMISSIONS,
-  STORAGE_FINANCE,
-  STORAGE_FINANCE_HISTORY,
-  STORAGE_COMPLETION_HISTORY,
-  STORAGE_STATS,
-  STORAGE_SETTINGS,
+  STORAGE_COMMISSIONS, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY,
+  STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS,
 } from '../storage';
 import type {
-  CommissionsData,
-  FinanceData,
-  DailyTotal,
-  CompletionRecord,
-  Stats,
-  Settings,
+  CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
 } from '../types';
+import { isScheduledForDay } from '../helpers';
+
+export interface WeeklySnapshotDay {
+  date: string;
+  dayName: string;
+  habitsCompleted: number;
+  habitsScheduled: number;
+  habitLabelsCompleted: string[];   // actual names, not IDs
+  spent: number;
+}
 
 export interface CoachContext {
   userName: string;
@@ -27,27 +28,28 @@ export interface CoachContext {
   habits: {
     total: number;
     completedToday: number;
-    daysFullyCompletedLast7: number;     // out of 7
+    daysFullyCompletedLast7: number;
     missedDaysLast7: number;
-    habitsMostMissed: string[];          // labels of least-completed today
+    habitsMostMissed: string[];
   };
   finance: {
     spentToday: number;
     totalSpentLast7Days: number;
     dailyAverageSpend: number;
-    busiestSpendingDay: string | null;   // date string of highest spend day
-    budgetUsedTodayPct: number;          // 0–100
+    busiestSpendingDay: string | null;
+    budgetUsedTodayPct: number;
   };
+  weeklySnapshot: WeeklySnapshotDay[];   // ← new
 }
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 function getLast7DateStrings(): string[] {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
+  return Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().split('T')[0]); // 'YYYY-MM-DD'
-  }
-  return days;
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split('T')[0];
+  });
 }
 
 export async function buildCoachContext(
@@ -56,14 +58,9 @@ export async function buildCoachContext(
 ): Promise<CoachContext> {
   const last7 = getLast7DateStrings();
 
-  // ── Fetch all keys in parallel ─────────────────────────────────────────────
   const [
-    commissionsRaw,
-    financeRaw,
-    financeHistoryRaw,
-    completionHistoryRaw,
-    statsRaw,
-    settingsRaw,
+    commissionsRaw, financeRaw, financeHistoryRaw,
+    completionHistoryRaw, statsRaw, settingsRaw,
   ] = await Promise.all([
     AsyncStorage.getItem(STORAGE_COMMISSIONS),
     AsyncStorage.getItem(STORAGE_FINANCE),
@@ -73,76 +70,70 @@ export async function buildCoachContext(
     AsyncStorage.getItem(STORAGE_SETTINGS),
   ]);
 
-  // ── Parse ──────────────────────────────────────────────────────────────────
-  const commissionsData: CommissionsData | null = commissionsRaw
-    ? JSON.parse(commissionsRaw)
-    : null;
+  const commissionsData: CommissionsData | null = commissionsRaw ? JSON.parse(commissionsRaw) : null;
+  const financeData: FinanceData | null         = financeRaw ? JSON.parse(financeRaw) : null;
+  const financeHistory: DailyTotal[]            = financeHistoryRaw ? (JSON.parse(financeHistoryRaw).dailyTotals ?? []) : [];
+  const completionHistory: CompletionRecord[]   = completionHistoryRaw ? JSON.parse(completionHistoryRaw) : [];
+  const stats: Stats | null                     = statsRaw ? JSON.parse(statsRaw) : null;
+  const settings: Settings | null               = settingsRaw ? JSON.parse(settingsRaw) : null;
 
-  const financeData: FinanceData | null = financeRaw
-    ? JSON.parse(financeRaw)
-    : null;
-
-  const financeHistory: DailyTotal[] = financeHistoryRaw
-    ? (JSON.parse(financeHistoryRaw).dailyTotals ?? [])
-    : [];
-  
-  const completionHistory: CompletionRecord[] = completionHistoryRaw
-    ? JSON.parse(completionHistoryRaw)
-    : [];
-
-  const stats: Stats | null = statsRaw ? JSON.parse(statsRaw) : null;
-  const settings: Settings | null = settingsRaw ? JSON.parse(settingsRaw) : null;
-
-  // ── Habit calculations ─────────────────────────────────────────────────────
-  const habits = commissionsData?.items ?? [];
+  const habits      = commissionsData?.items ?? [];
   const totalHabits = habits.length;
 
-  // How many are marked done today
-  const completedToday = habits.filter(h => h.completed).length;
+  // Build a label lookup so we can resolve IDs → names in weekly snapshot
+  const habitLabelById: Record<string, string> = {};
+  habits.forEach(h => { habitLabelById[h.id] = h.label; });
 
-  // Habits the user hasn't finished today (for coaching nudges)
+  const todayDow = new Date().getDay();
+  const completedToday     = habits.filter(h => h.completed).length;
   const habitsMostMissed = habits
-    .filter(h => !h.completed)
+    .filter(h => !h.completed && isScheduledForDay(h, todayDow))
     .map(h => h.label)
-    .slice(0, 3); // cap at 3 so the prompt stays short
+    .slice(0, 3);
 
-  // Use CompletionRecord[] for last-7-days overview
   const last7Set = new Set(last7);
-  const recentRecords = completionHistory.filter(r => last7Set.has(r.date));
+  const recentRecords      = completionHistory.filter(r => last7Set.has(r.date));
   const daysFullyCompletedLast7 = recentRecords.filter(r => r.completed).length;
-  const missedDaysLast7 = 7 - daysFullyCompletedLast7;
+  const missedDaysLast7    = 7 - daysFullyCompletedLast7;
 
-  // ── Finance calculations ───────────────────────────────────────────────────
-  const spentToday = financeData?.spentToday ?? 0;
+  const spentToday  = financeData?.spentToday ?? 0;
   const dailyBudget = settings?.allocatedPerDay ?? 0;
-  const currency = settings?.currency ?? 'USD';
+  const currency    = settings?.currency ?? 'USD';
 
-  // Filter finance history to last 7 days
-  const recentHistory = financeHistory.filter(d => last7Set.has(d.date));
+  const recentFinance    = financeHistory.filter(d => last7Set.has(d.date));
+  const todayStr         = last7[last7.length - 1];
+  const todayInHistory   = recentFinance.find(d => d.date === todayStr);
+  const allLast7Spending = todayInHistory
+    ? recentFinance
+    : [...recentFinance, { date: todayStr, total: spentToday }];
 
-  // Include today's spend if it isn't in history yet
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayInHistory = recentHistory.find(d => d.date === todayStr);
-  const allLast7Spending: DailyTotal[] = todayInHistory
-    ? recentHistory
-    : [...recentHistory, { date: todayStr, total: spentToday }];
+  const totalSpentLast7Days = allLast7Spending.reduce((s, d) => s + d.total, 0);
+  const dailyAverageSpend   = allLast7Spending.length > 0 ? totalSpentLast7Days / allLast7Spending.length : 0;
+  const busiestDay = [...allLast7Spending].sort((a, b) => b.total - a.total)[0];
+  const budgetUsedTodayPct  = dailyBudget > 0 ? Math.round((spentToday / dailyBudget) * 100) : 0;
 
-  const totalSpentLast7Days = allLast7Spending.reduce(
-    (sum, d) => sum + d.total,
-    0,
-  );
+  // ── Weekly snapshot: one row per day with habits + spending ───────────────
+  const weeklySnapshot: WeeklySnapshotDay[] = last7.map(date => {
+    const record  = completionHistory.find(r => r.date === date);
+    const finance = allLast7Spending.find(d => d.date === date);
+    const dow     = new Date(date + 'T00:00:00').getDay();
 
-  const dailyAverageSpend =
-    allLast7Spending.length > 0
-      ? totalSpentLast7Days / allLast7Spending.length
-      : 0;
+    const completedIds: string[]    = record?.completedIds ?? [];
+    const scheduledIds: string[]    = record?.scheduledIds ?? [];
+    const habitLabelsCompleted      = completedIds
+      .map(id => habitLabelById[id])
+      .filter(Boolean);
 
-  const busiestDay = allLast7Spending.sort((a, b) => b.total - a.total)[0];
+    return {
+      date,
+      dayName: DAY_NAMES[dow],
+      habitsCompleted: completedIds.length,
+      habitsScheduled: scheduledIds.length,
+      habitLabelsCompleted,
+      spent: finance?.total ?? (date === todayStr ? spentToday : 0),
+    };
+  });
 
-  const budgetUsedTodayPct =
-    dailyBudget > 0 ? Math.round((spentToday / dailyBudget) * 100) : 0;
-
-  // ── Assemble ───────────────────────────────────────────────────────────────
   return {
     userName: name || settings?.name || 'there',
     streak,
@@ -163,5 +154,6 @@ export async function buildCoachContext(
       busiestSpendingDay: busiestDay?.date ?? null,
       budgetUsedTodayPct,
     },
+    weeklySnapshot,
   };
 }

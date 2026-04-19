@@ -110,3 +110,16 @@ export const defaultStats = () => ({currentStreak:0,bestStreak:0,totalCompleted:
 
 export const currencyStr = (currency: string, amount: string) =>
   currency === '__carrot__' ? `🥕 ${amount}` : `${currency}${amount}`;
+
+export const getLast7DayKeys = (): string[] => {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+  });
+};
+
+export const getDayName = (dateKey: string): string => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[new Date(dateKey + 'T00:00:00').getDay()];
+};
