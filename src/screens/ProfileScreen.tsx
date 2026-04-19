@@ -51,9 +51,9 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
     ]);
   };
 
-  const StatCard = ({ emoji, label, value, showDaysSuffix = false, accent = false }: { emoji: string; label: string; value: number | string; showDaysSuffix?: boolean; accent?: boolean }) => (
+  const StatCard = ({ emoji, label, value, showDaysSuffix = false, accent = false }: { emoji: any; label: string; value: number | string; showDaysSuffix?: boolean; accent?: boolean }) => (
     <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: accent ? 'rgba(212,149,106,0.4)' : 'rgba(212,149,106,0.15)' }}>
-      <Text style={{ fontSize: 28, marginBottom: 6 }}>{emoji}</Text>
+      <Image source={emoji} style={{ width: 50, height: 50, marginBottom: 6 }} resizeMode="contain" />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
         <Text style={{ fontFamily: 'DynaPuff', fontSize: 32, color: accent ? '#D4956A' : '#e8d5c0', lineHeight: 36 }}>{value}</Text>
         {showDaysSuffix && <Text style={{ fontFamily: 'Jua', fontSize: 12, color: accent ? 'rgba(212,149,106,0.7)' : 'rgba(232,213,192,0.5)', marginBottom: 4 }}>days</Text>}
@@ -181,8 +181,8 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
 
         <SectionDivider title="✦ Your Stats ✦" />
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-          <StatCard emoji="🔥" label="Current Streak" value={stats.currentStreak} showDaysSuffix accent={stats.currentStreak > 0} />
-          <StatCard emoji="⭐" label="Best Streak" value={stats.bestStreak} showDaysSuffix />
+          <StatCard emoji={require('./../../assets/emojis/Fire.png')} label="Current Streak" value={stats.currentStreak} showDaysSuffix accent={stats.currentStreak > 0} />
+          <StatCard emoji={require('./../../assets/emojis/Star.png')} label="Best Streak" value={stats.bestStreak} showDaysSuffix />
         </View>
         <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)', marginBottom: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

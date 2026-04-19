@@ -38,6 +38,7 @@ const IMAGES = {
   idle:     require('../../assets/bonbon/idle.png'),
   thinking: require('../../assets/bonbon/thinking.png'),
   talking:  require('../../assets/bonbon/talking.png'),
+  talking2:  require('../../assets/bonbon/talking-2.png'),
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
-  <View style={{ paddingBottom: 12, gap: 8 }}>
+  <View style={{ paddingHorizontal:16, paddingTop: 8, paddingBottom: 12, gap: 8 }}>
     {SUGGESTED_PROMPTS.map(p => (
       <TouchableOpacity
         key={p}
@@ -83,6 +84,7 @@ const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
           borderRadius: 12,
           borderWidth: 1,
           borderColor: 'rgba(212,149,106,0.22)',
+          backgroundColor: '#2A1A18', 
         }}
       >
         <Text style={{ fontFamily: JUA, fontSize: 13, color: 'rgba(232,213,192,0.75)' }}>
@@ -141,13 +143,15 @@ async function sendMessage(
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const BunnyAvatar = ({ state }: { state: BunnyState }) => (
-  <Image
-    source={IMAGES[state]}
-    style={{ width: 52, height: 52 }}
-    resizeMode="contain"
-  />
-);
+const BunnyAvatar = ({ state, frame = 0 }: { state: BunnyState; frame?: number }) => {
+  const source = state === 'talking'
+    ? (frame === 0 ? IMAGES.talking : IMAGES.talking2)
+    : IMAGES[state];
+
+  return (
+    <Image source={source} style={{ width: 52, height: 52 }} resizeMode="contain" />
+  );
+};
 
 const ThinkingBubble = () => (
   <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, gap: 8 }}>
@@ -168,23 +172,42 @@ const ThinkingBubble = () => (
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
+  const [talkFrame, setTalkFrame]   = useState(0);
+  const talkCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { isPro } = useProStatus();
   const [messages, setMessages]       = useState<Message[]>([]);
   const [remaining, setRemaining]     = useState<number | null>(null);
   const [input, setInput]             = useState('');
   const [bunnyState, setBunnyState]   = useState<BunnyState>('idle');
   const [isReplying, setIsReplying]   = useState(false);
-  const [hasLoaded, setHasLoaded]     = useState(false);   // ← fix #4: moved inside component
+  const [hasLoaded, setHasLoaded]     = useState(false);  
   const scrollRef                     = useRef<ScrollView>(null);
   const navHeight                     = useNavHeight();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fs                            = useFontSize();
 
-  // ── fix #5: cache context so we don't do 6 AsyncStorage reads per message ─
   const contextRef = useRef<CoachContext | null>(null);
 
-  const isTypingRef   = useRef(false);
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+
+  useEffect(() => {
+    if (bunnyState === 'talking') {
+      talkCycleRef.current = setInterval(() => {
+        setTalkFrame(f => (f === 0 ? 1 : 0));
+      }, 280); // ms per frame — adjust to taste
+    } else {
+      if (talkCycleRef.current) {
+        clearInterval(talkCycleRef.current);
+        talkCycleRef.current = null;
+      }
+      setTalkFrame(0);
+    }
+    return () => {
+      if (talkCycleRef.current) clearInterval(talkCycleRef.current);
+      
+    };
+  }, [bunnyState]);
 
   // ── Greeting helper ───────────────────────────────────────────────────────
   const getGreeting = () => name
@@ -199,10 +222,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
   // ── Typewriter effect ─────────────────────────────────────────────────────
   const startTypewriter = (msgId: string, fullText: string, onDone: () => void) => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
+    if (talkCycleRef.current)  clearInterval(talkCycleRef.current); 
 
     let i = 0;
     const SPEED_MS = 18;
-    isTypingRef.current = true;
 
     typewriterRef.current = setInterval(() => {
       i += 1;
@@ -214,7 +237,6 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
       if (i >= fullText.length) {
         clearInterval(typewriterRef.current!);
         typewriterRef.current = null;
-        isTypingRef.current   = false;
 
         setMessages(prev => {
           const final = prev.map(m => m.id === msgId ? { ...m, text: fullText } : m);
@@ -231,6 +253,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
   useEffect(() => {
     return () => {
       if (typewriterRef.current) clearInterval(typewriterRef.current);
+      if (talkCycleRef.current)  clearInterval(talkCycleRef.current);
     };
   }, []);
 
@@ -247,7 +270,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         const raw = await AsyncStorage.getItem(STORAGE_COACH_MESSAGES);
         if (raw) {
           setMessages(JSON.parse(raw));
-          setHasLoaded(true);   // ← fix #4: set inside async after data loads
+          setHasLoaded(true);   
           return;
         }
       } catch {}
@@ -256,10 +279,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
       setTimeout(() => {
         setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
         setBunnyState('idle');
-        setHasLoaded(true);     // ← also set after greeting
+        setHasLoaded(true); 
       }, 500);
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); 
 
   // ── Keyboard listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -314,6 +337,8 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           ? `You've hit your ${limit} message limit for today — I'll be back tomorrow! 🐰`
           : `You've used your ${limit} free messages for today! Upgrade for up to ${MESSAGE_LIMITS.pro} messages/day. 🐰`,
       }]);
+      setBunnyState('idle');   
+      setIsReplying(false);  
       return;
     }
 
@@ -325,7 +350,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     haptic.light();
 
     try {
-      // ── fix #5: build context once, reuse for entire conversation ──────────
+
       if (!contextRef.current) {
         contextRef.current = await buildCoachContext(name, streak);
       }
@@ -368,7 +393,6 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     return last;
   })();
 
-  // ── fix #4: blank screen while AsyncStorage loads ─────────────────────────
   if (!hasLoaded) return <View style={{ flex: 1, backgroundColor: '#2A1A18' }} />;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -413,10 +437,14 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
       </View>
 
       {/* ── Message list ───────────────────────────────────────────────────── */}
+
+      <View style={{ flex: 1 }}>
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: messages.length === 1 
+          && messages[0]?.from === 'bunny' 
+          && !isReplying && !input.trim() ? 140 : 8, }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -431,7 +459,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
             }}
           >
             {msg.from === 'bunny' && (
-              <BunnyAvatar state={index === lastBunnyIndex ? bunnyState : 'idle'} />
+              <BunnyAvatar
+                state={index === lastBunnyIndex ? bunnyState : 'idle'}
+                frame={talkFrame}
+              />
             )}
 
             <View style={{
@@ -460,23 +491,23 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         ))}
 
         {isReplying && bunnyState === 'thinking' && <ThinkingBubble />}
-
-        {/* ── fix #2: suggested prompts after every bunny reply ──────────────── */}
-      {messages.length > 0 &&
-        messages[messages.length - 1]?.from === 'bunny' &&
-        !isReplying &&
-        !input.trim() && (
-        <SuggestedPrompts
-          onSelect={(text) => {
-            haptic.light();
-            setInput(text);
-          }}
-        />
-      )}
-      
       </ScrollView>
 
-      {/* ── fix #3: quota counter always visible for free users ────────────── */}
+      {messages.length === 1 &&
+        messages[0]?.from === 'bunny' &&
+        !isReplying &&
+        !input.trim() && (
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+          <SuggestedPrompts
+            onSelect={(text) => {
+              haptic.light();
+              setInput(text);
+            }}
+          />
+        </View>
+      )}
+      </View>
+
       {!isPro && remaining !== null && (
         <Text style={{
           fontFamily: JUA, fontSize: 11, textAlign: 'center', paddingBottom: 4,
@@ -511,7 +542,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           onSubmitEditing={handleSend}
           editable={!isReplying}
           multiline
-          onContentSizeChange={() =>           // ← fix #6: scroll when input grows
+          onContentSizeChange={() =>          
             scrollRef.current?.scrollToEnd({ animated: true })
           }
           style={{

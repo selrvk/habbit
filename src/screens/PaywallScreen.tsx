@@ -88,8 +88,8 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
       {/* Features */}
       {[
         '🥕  50 daily Bonbon messages',
-        '📜  Longer chat history',
-        '📊  More finance history',
+        '📜  Longer AI chat memory',
+        '📊  Monthly habits & finance reports',
       ].map(f => (
         <Text key={f} style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, marginBottom: 12 }}>
           {f}

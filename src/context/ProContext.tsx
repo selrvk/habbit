@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { CustomerInfo } from 'react-native-purchases';
 
-const PRO_ENTITLEMENT = 'pro_access'; 
+const PRO_ENTITLEMENT = 'Habbit: Habits & Finance Pro'; 
 
 interface ProContextValue {
   isPro: boolean;
@@ -14,6 +14,7 @@ interface ProContextValue {
   restorePurchases: () => Promise<void>;
   purchasePro: (period: 'monthly' | 'yearly') => Promise<void>; 
 }
+
 
 const ProContext = createContext<ProContextValue>({
   isPro: false,
@@ -60,6 +61,7 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }).catch(() => {});
 
     Purchases.addCustomerInfoUpdateListener(checkStatus);
+    return () => { Purchases.removeCustomerInfoUpdateListener(checkStatus); };
   }, []);
 
   const restorePurchases = async () => {
