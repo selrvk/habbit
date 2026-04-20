@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -14,9 +14,36 @@
 		65669CB4BB8444B684F4CAD3 /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		B7EBDC2A2F95C725008FDBCF /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7EBDC292F95C724008FDBCF /* WidgetKit.framework */; };
+		B7EBDC2C2F95C725008FDBCF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7EBDC2B2F95C725008FDBCF /* SwiftUI.framework */; };
+		B7EBDC3D2F95C727008FDBCF /* HabbitWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B7EBDC282F95C724008FDBCF /* HabbitWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		DBB4CF2054119AAF8B387047 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B7EBDC3B2F95C727008FDBCF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B7EBDC272F95C724008FDBCF;
+			remoteInfo = HabbitWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B7EBDC3E2F95C727008FDBCF /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B7EBDC3D2F95C727008FDBCF /* HabbitWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		039E1AFEDC7248EF83A282B7 /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = DailyTracker/Colors.xcassets; sourceTree = "<group>"; };
@@ -31,9 +58,39 @@
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DailyTracker/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A845F56D9BA283A1510D92A1 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
+		B7EBDC282F95C724008FDBCF /* HabbitWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HabbitWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7EBDC292F95C724008FDBCF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		B7EBDC2B2F95C725008FDBCF /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		B7EBDC432F95C809008FDBCF /* DailyTracker.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = DailyTracker.entitlements; path = DailyTracker/DailyTracker.entitlements; sourceTree = "<group>"; };
+		B7EBDC442F95C846008FDBCF /* HabbitWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HabbitWidgetExtension.entitlements; sourceTree = "<group>"; };
 		D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = DailyTracker/BootSplash.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B7EBDC272F95C724008FDBCF /* HabbitWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B7EBDC2D2F95C725008FDBCF /* HabbitWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = HabbitWidget;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
@@ -44,12 +101,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B7EBDC252F95C724008FDBCF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7EBDC2C2F95C725008FDBCF /* SwiftUI.framework in Frameworks */,
+				B7EBDC2A2F95C725008FDBCF /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		13B07FAE1A68108700A75B9A /* DailyTracker */ = {
 			isa = PBXGroup;
 			children = (
+				B7EBDC432F95C809008FDBCF /* DailyTracker.entitlements */,
 				56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */,
 				56086F6B2F6C04470005F64D /* Jua-Regular.ttf */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -68,6 +135,8 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */,
+				B7EBDC292F95C724008FDBCF /* WidgetKit.framework */,
+				B7EBDC2B2F95C725008FDBCF /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -82,8 +151,10 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				B7EBDC442F95C846008FDBCF /* HabbitWidgetExtension.entitlements */,
 				13B07FAE1A68108700A75B9A /* DailyTracker */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
+				B7EBDC2D2F95C725008FDBCF /* HabbitWidget */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
@@ -97,6 +168,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* DailyTracker.app */,
+				B7EBDC282F95C724008FDBCF /* HabbitWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -124,15 +196,37 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				A159D841C7557358132DB7CF /* [CP] Embed Pods Frameworks */,
 				D6D93CB1F181F988659519FC /* [CP] Copy Pods Resources */,
+				B7EBDC3E2F95C727008FDBCF /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B7EBDC3C2F95C727008FDBCF /* PBXTargetDependency */,
 			);
 			name = DailyTracker;
 			productName = DailyTracker;
 			productReference = 13B07F961A680F5B00A75B9A /* DailyTracker.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B7EBDC272F95C724008FDBCF /* HabbitWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7EBDC422F95C727008FDBCF /* Build configuration list for PBXNativeTarget "HabbitWidgetExtension" */;
+			buildPhases = (
+				B7EBDC242F95C724008FDBCF /* Sources */,
+				B7EBDC252F95C724008FDBCF /* Frameworks */,
+				B7EBDC262F95C724008FDBCF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B7EBDC2D2F95C725008FDBCF /* HabbitWidget */,
+			);
+			name = HabbitWidgetExtension;
+			productName = HabbitWidgetExtension;
+			productReference = B7EBDC282F95C724008FDBCF /* HabbitWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -140,10 +234,14 @@
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1120;
+					};
+					B7EBDC272F95C724008FDBCF = {
+						CreatedOnToolsVersion = 26.4.1;
 					};
 				};
 			};
@@ -161,6 +259,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* DailyTracker */,
+				B7EBDC272F95C724008FDBCF /* HabbitWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -177,6 +276,13 @@
 				CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */,
 				65669CB4BB8444B684F4CAD3 /* BootSplash.storyboard in Resources */,
 				048017149498471C9589DF09 /* Colors.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7EBDC262F95C724008FDBCF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -229,13 +335,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -250,13 +352,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -274,7 +372,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B7EBDC242F95C724008FDBCF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B7EBDC3C2F95C727008FDBCF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B7EBDC272F95C724008FDBCF /* HabbitWidgetExtension */;
+			targetProxy = B7EBDC3B2F95C727008FDBCF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -283,18 +396,19 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CODE_SIGN_ENTITLEMENTS = DailyTracker/DailyTracker.entitlements;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 4G2WGN67KA;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = DailyTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Habbit;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -319,17 +433,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CODE_SIGN_ENTITLEMENTS = DailyTracker/DailyTracker.entitlements;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 4G2WGN67KA;
 				INFOPLIST_FILE = DailyTracker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Habbit;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9;
+				MARKETING_VERSION = 2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -503,6 +618,107 @@
 			};
 			name = Release;
 		};
+		B7EBDC3F2F95C727008FDBCF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = HabbitWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 4G2WGN67KA;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HabbitWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HabbitWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.selrvk.habbit.HabbitWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B7EBDC402F95C727008FDBCF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = HabbitWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 4G2WGN67KA;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HabbitWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HabbitWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.selrvk.habbit.HabbitWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -520,6 +736,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B7EBDC422F95C727008FDBCF /* Build configuration list for PBXNativeTarget "HabbitWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7EBDC3F2F95C727008FDBCF /* Debug */,
+				B7EBDC402F95C727008FDBCF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,3 +1,4 @@
+// app.tsx
 import "./global.css";
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, StatusBar, Platform, Image } from 'react-native';
@@ -6,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ProProvider } from './src/context/ProContext';
+import { syncWidgetData } from "./src/utils/syncWidget";
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
@@ -54,9 +56,33 @@ export default function App() {
   const saveStats             = useCallback((s: Stats) => AsyncStorage.setItem(STORAGE_STATS, JSON.stringify(s)).catch(() => {}), []);
   const saveCompletionHistory = useCallback((r: CompletionRecord[]) => AsyncStorage.setItem(STORAGE_COMPLETION_HISTORY, JSON.stringify(r)).catch(() => {}), []);
 
+  const updateWidget = useCallback(() => {
+          const todayDow = new Date().getDay();
+          const todaysScheduled = commissions.filter(c => isScheduledForDay(c, todayDow));
+
+          syncWidgetData({
+            name,
+            completedCount: todaysScheduled.filter(c => c.completed).length,
+            totalCount: todaysScheduled.length,
+            spentToday,
+            allocatedPerDay,
+            currency,
+            streak: stats.currentStreak,
+          });
+        }, [commissions, spentToday, stats, name, allocatedPerDay, currency]);
+
   useEffect(() => {
     const load = async () => {
+
+      let loadedName = 'Friend';
+      let loadedCurrency = DEFAULT_CURRENCY;
+      let loadedBudget = DEFAULT_BUDGET;
+      let loadedSpent = 0;
+      let migrated: Commission[] = [];
+      let loadedStats = defaultStats(); 
+
       try {
+        
         await initNotifications();
         const onboarded = await AsyncStorage.getItem(STORAGE_ONBOARDED);
         if (!onboarded) { setIsOnboarded(false); return; }
@@ -64,23 +90,24 @@ export default function App() {
         const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
         if (storedS) {
           const s: Settings = JSON.parse(storedS);
-          if (s.allocatedPerDay) setAllocatedPerDay(s.allocatedPerDay);
-          if (s.currency)        setCurrency(s.currency);
-          if (s.name)            setName(s.name);
+          if (s.name)            { setName(s.name); loadedName = s.name; }
+          if (s.currency)        { setCurrency(s.currency); loadedCurrency = s.currency; }
+          if (s.allocatedPerDay) { setAllocatedPerDay(s.allocatedPerDay); loadedBudget = s.allocatedPerDay; }
           if (s.avatar)          setAvatar(s.avatar);
           if (s.midnightNotifEnabled !== undefined) setMidnightNotifEnabled(s.midnightNotifEnabled);
         }
+
         const storedCH = await AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY);
         let loadedHistory: CompletionRecord[] = storedCH ? JSON.parse(storedCH) : [];
         const storedSt = await AsyncStorage.getItem(STORAGE_STATS);
-        let loadedStats = defaultStats();
+        loadedStats = defaultStats();
         if (storedSt) loadedStats = JSON.parse(storedSt);
         const storedH = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
         let existingTotals: DailyTotal[] = storedH ? JSON.parse(storedH).dailyTotals ?? [] : [];
         const storedF = await AsyncStorage.getItem(STORAGE_FINANCE);
         if (storedF) {
           const parsed: FinanceData = JSON.parse(storedF);
-          if (parsed.date === todayKey) { setSpentToday(parsed.spentToday); setTodayHistory(parsed.history ?? []); }
+          if (parsed.date === todayKey) { setSpentToday(parsed.spentToday); loadedSpent = parsed.spentToday; setTodayHistory(parsed.history ?? []); }
           else {
             if (parsed.spentToday > 0) {
               existingTotals = [...existingTotals.filter(t => t.date !== parsed.date), { date: parsed.date, total: parsed.spentToday, entries: parsed.history ?? [] }].sort((a, b) => a.date.localeCompare(b.date)).slice(-6);
@@ -94,7 +121,7 @@ export default function App() {
         const storedC = await AsyncStorage.getItem(STORAGE_COMMISSIONS);
         if (storedC) {
           const parsed: CommissionsData = JSON.parse(storedC);
-          const migrated = migrateCommissions(parsed.items);
+          migrated = migrateCommissions(parsed.items);
           if (parsed.date === todayKey) {
             setCommissions(migrated);
           } else {
@@ -119,6 +146,7 @@ export default function App() {
             }
             // Reset completed + completionCount for the new day
             const reset = migrated.map(c => ({ ...c, completed: false, completionCount: 0 }));
+            migrated = reset;
             setCommissions(reset);
             await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: reset, date: todayKey }));
           }
@@ -127,7 +155,20 @@ export default function App() {
         setStats(loadedStats); saveStats(loadedStats);
         setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
       } catch { setIsOnboarded(true); }
-      finally { hasLoaded.current = true; }
+      finally { 
+        hasLoaded.current = true; 
+        const todayDow = new Date().getDay();
+        const todaysScheduled = migrated.filter(c => isScheduledForDay(c, todayDow));
+        syncWidgetData({
+          name: loadedName,         // use local variables, not state
+          completedCount: todaysScheduled.filter(c => c.completed).length,
+          totalCount: todaysScheduled.length,
+          spentToday: loadedSpent,
+          allocatedPerDay: loadedBudget,
+          currency: loadedCurrency,
+          streak: loadedStats.currentStreak,
+        });
+      }
     };
     load();
   }, []);
@@ -178,6 +219,7 @@ export default function App() {
       }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
       saveCompletionHistory(updated); return updated;
     });
+    updateWidget();
   }, [commissions]);
 
   const saveSettings = useCallback((partial: Partial<Settings>) => {
@@ -205,6 +247,7 @@ export default function App() {
       const newCount = (c.completionCount ?? 0) + 1;
       return { ...c, completionCount: newCount, completed: newCount >= tpd };
     }));
+    updateWidget()
     setStats(prev => { const updated = { ...prev, totalCompleted: prev.totalCompleted + 1 }; saveStats(updated); return updated; });
   }, []);
 
@@ -283,6 +326,7 @@ export default function App() {
     setSpentToday(newSpent);
     setTodayHistory(newHistory);
     AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: newSpent, date: todayKey, history: newHistory })).catch(() => {});
+    updateWidget();
   }, [spentToday, todayHistory, todayKey]);
 
   // ── Reset: also zeroes out completionCount ────────────────────────────────
@@ -294,6 +338,7 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: 0, date: todayKey, history: [] })).catch(() => {});
     setCompletionHistory(prev => { const updated = prev.filter(r => r.date !== todayKey); saveCompletionHistory(updated); return updated; });
     setStats(prev => { if (prev.lastFullDate !== todayKey) return prev; const updated = { ...prev, currentStreak: Math.max(prev.currentStreak - 1, 0), lastFullDate: yesterdayKey }; saveStats(updated); return updated; });
+    updateWidget();
   }, [commissions, todayKey]);
 
 const handleDeleteAllData = useCallback(async () => {
@@ -325,6 +370,8 @@ const handleDeleteAllData = useCallback(async () => {
   );
 
   if (!isOnboarded) return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+
+  
 
   const renderScreen = () => {
     switch (activeTab) {
