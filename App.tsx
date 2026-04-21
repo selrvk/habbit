@@ -68,8 +68,14 @@ export default function App() {
             allocatedPerDay,
             currency,
             streak: stats.currentStreak,
+            upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
           });
         }, [commissions, spentToday, stats, name, allocatedPerDay, currency]);
+
+  useEffect(() => {
+    if (!hasLoaded.current) return;
+    updateWidget();
+  }, [updateWidget]);
 
   useEffect(() => {
     const load = async () => {
@@ -160,13 +166,14 @@ export default function App() {
         const todayDow = new Date().getDay();
         const todaysScheduled = migrated.filter(c => isScheduledForDay(c, todayDow));
         syncWidgetData({
-          name: loadedName,         // use local variables, not state
+          name: loadedName,
           completedCount: todaysScheduled.filter(c => c.completed).length,
           totalCount: todaysScheduled.length,
           spentToday: loadedSpent,
           allocatedPerDay: loadedBudget,
           currency: loadedCurrency,
           streak: loadedStats.currentStreak,
+          upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
         });
       }
     };
