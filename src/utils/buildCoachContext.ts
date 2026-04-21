@@ -15,8 +15,16 @@ export interface WeeklySnapshotDay {
   dayName: string;
   habitsCompleted: number;
   habitsScheduled: number;
-  habitLabelsCompleted: string[];   // actual names, not IDs
+  habitLabelsCompleted: string[];
   spent: number;
+}
+
+// A single spending entry surfaced to the coach
+export interface SpendingEntryContext {
+  date: string;       // YYYY-MM-DD
+  amount: number;
+  note?: string;
+  time?: string;      // HH:MM if available
 }
 
 export interface CoachContext {
@@ -39,7 +47,9 @@ export interface CoachContext {
     busiestSpendingDay: string | null;
     budgetUsedTodayPct: number;
   };
-  weeklySnapshot: WeeklySnapshotDay[];   // ← new
+  weeklySnapshot: WeeklySnapshotDay[];
+  // NEW: individual entries with notes for the last 7 days
+  recentSpendingEntries: SpendingEntryContext[];
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -80,47 +90,81 @@ export async function buildCoachContext(
   const habits      = commissionsData?.items ?? [];
   const totalHabits = habits.length;
 
-  // Build a label lookup so we can resolve IDs → names in weekly snapshot
   const habitLabelById: Record<string, string> = {};
   habits.forEach(h => { habitLabelById[h.id] = h.label; });
 
   const todayDow = new Date().getDay();
-  const completedToday     = habits.filter(h => h.completed).length;
+  const completedToday = habits.filter(h => h.completed).length;
   const habitsMostMissed = habits
     .filter(h => !h.completed && isScheduledForDay(h, todayDow))
     .map(h => h.label)
     .slice(0, 3);
 
   const last7Set = new Set(last7);
-  const recentRecords      = completionHistory.filter(r => last7Set.has(r.date));
+  const recentRecords           = completionHistory.filter(r => last7Set.has(r.date));
   const daysFullyCompletedLast7 = recentRecords.filter(r => r.completed).length;
-  const missedDaysLast7    = 7 - daysFullyCompletedLast7;
+  const missedDaysLast7         = 7 - daysFullyCompletedLast7;
 
   const spentToday  = financeData?.spentToday ?? 0;
   const dailyBudget = settings?.allocatedPerDay ?? 0;
   const currency    = settings?.currency ?? 'USD';
 
-  const recentFinance    = financeHistory.filter(d => last7Set.has(d.date));
-  const todayStr         = last7[last7.length - 1];
-  const todayInHistory   = recentFinance.find(d => d.date === todayStr);
+  const recentFinance  = financeHistory.filter(d => last7Set.has(d.date));
+  const todayStr       = last7[last7.length - 1];
+  const todayInHistory = recentFinance.find(d => d.date === todayStr);
   const allLast7Spending = todayInHistory
     ? recentFinance
-    : [...recentFinance, { date: todayStr, total: spentToday }];
+    : [...recentFinance, { date: todayStr, total: spentToday, entries: financeData?.history ?? [] }];
 
   const totalSpentLast7Days = allLast7Spending.reduce((s, d) => s + d.total, 0);
   const dailyAverageSpend   = allLast7Spending.length > 0 ? totalSpentLast7Days / allLast7Spending.length : 0;
-  const busiestDay = [...allLast7Spending].sort((a, b) => b.total - a.total)[0];
+  const busiestDay          = [...allLast7Spending].sort((a, b) => b.total - a.total)[0];
   const budgetUsedTodayPct  = dailyBudget > 0 ? Math.round((spentToday / dailyBudget) * 100) : 0;
 
-  // ── Weekly snapshot: one row per day with habits + spending ───────────────
+  // ── Collect individual spending entries for the last 7 days ───────────────
+  const recentSpendingEntries: SpendingEntryContext[] = [];
+
+  // Today's entries come from financeData.history (always fresh)
+  if (financeData?.history) {
+    for (const entry of financeData.history) {
+      recentSpendingEntries.push({
+        date: todayStr,
+        amount: entry.amount,
+        note: entry.note,
+        time: entry.time,
+      });
+    }
+  }
+
+  // Past days' entries come from financeHistory[].entries
+  for (const day of financeHistory) {
+    if (!last7Set.has(day.date) || day.date === todayStr) continue;
+    if (!day.entries) continue;
+    for (const entry of day.entries) {
+      recentSpendingEntries.push({
+        date: day.date,
+        amount: entry.amount,
+        note: entry.note,
+        time: entry.time,
+      });
+    }
+  }
+
+  // Sort chronologically (oldest first)
+  recentSpendingEntries.sort((a, b) => {
+    const dateCmp = a.date.localeCompare(b.date);
+    return dateCmp !== 0 ? dateCmp : (a.time ?? '').localeCompare(b.time ?? '');
+  });
+
+  // ── Weekly snapshot ────────────────────────────────────────────────────────
   const weeklySnapshot: WeeklySnapshotDay[] = last7.map(date => {
     const record  = completionHistory.find(r => r.date === date);
     const finance = allLast7Spending.find(d => d.date === date);
     const dow     = new Date(date + 'T00:00:00').getDay();
 
-    const completedIds: string[]    = record?.completedIds ?? [];
-    const scheduledIds: string[]    = record?.scheduledIds ?? [];
-    const habitLabelsCompleted      = completedIds
+    const completedIds: string[] = record?.completedIds ?? [];
+    const scheduledIds: string[] = record?.scheduledIds ?? [];
+    const habitLabelsCompleted   = completedIds
       .map(id => habitLabelById[id])
       .filter(Boolean);
 
@@ -155,5 +199,6 @@ export async function buildCoachContext(
       budgetUsedTodayPct,
     },
     weeklySnapshot,
+    recentSpendingEntries,
   };
 }

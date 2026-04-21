@@ -4,7 +4,7 @@ import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { daysLabel, formatTime12, getLast7DayKeys, getDayName } from '../helpers';
+import { daysLabel, formatTime12, getLast7DayKeys, getDayName, isScheduledForDay } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { SectionDivider } from '../components/SectionDivider';
 import { WeeklyHabitChart } from '../components/WeeklyHabitChart';
@@ -51,7 +51,7 @@ export const TasksScreen = ({
     setSelectedDay(day);
   };
 
-  // ── Bottom sheet pan responder (mirrors FinanceScreen) ────────────────────
+  // ── Bottom sheet pan responder ─────────────────────────────────────────────
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const sheetPanResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
@@ -69,13 +69,30 @@ export const TasksScreen = ({
       Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start(),
   })).current;
 
-  // ── Derive chart data ─────────────────────────────────────────────────────
+  // ── Derive chart data ──────────────────────────────────────────────────────
+  // Today uses live commission state so the bar reflects real-time completions
+  // and correctly reverts when a habit is un-checked.
+  // Past days still come from completionHistory (persisted records).
+  const todayDow = new Date().getDay();
+
   const habitChartDays: HabitChartDay[] = getLast7DayKeys().map(date => {
+    if (date === todayKey) {
+      const scheduledToday = commissions.filter(c => isScheduledForDay(c, todayDow));
+      const completedToday = scheduledToday.filter(c => c.completed);
+      return {
+        date,
+        dayName: getDayName(date),
+        isToday: true,
+        completed: completedToday.length,
+        scheduled: scheduledToday.length,
+        completedIds: completedToday.map(c => c.id),
+      };
+    }
     const record = completionHistory.find(r => r.date === date);
     return {
       date,
       dayName: getDayName(date),
-      isToday: date === todayKey,
+      isToday: false,
       completed: record?.completedIds?.length ?? 0,
       scheduled: record?.scheduledIds?.length ?? 0,
       completedIds: record?.completedIds ?? [],
@@ -91,10 +108,17 @@ export const TasksScreen = ({
         .filter((l): l is string => !!l)
     : [];
 
-  // IDs that were completed but the habit has since been deleted
   const deletedCount = selectedDay
     ? selectedDay.completedIds.length - selectedLabels.length
     : 0;
+
+  // For today's sheet, show all scheduled habits with their live status
+  const todayScheduledForSheet: { id: string; label: string; completed: boolean }[] =
+    selectedDay?.isToday
+      ? commissions
+          .filter(c => isScheduledForDay(c, todayDow))
+          .map(c => ({ id: c.id, label: c.label, completed: c.completed }))
+      : [];
 
   return (
     <>
@@ -142,44 +166,82 @@ export const TasksScreen = ({
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
-              {selectedDay?.completed === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                  <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(14), opacity: 0.4 }}>
-                    No habbits completed this day.
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  {selectedLabels.map((label, i) => (
-                    <View key={i} style={{
+              {/* Today: show all scheduled habits with live done/pending state */}
+              {selectedDay?.isToday ? (
+                todayScheduledForSheet.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                    <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(14), opacity: 0.4 }}>
+                      No habbits scheduled today.
+                    </Text>
+                  </View>
+                ) : (
+                  todayScheduledForSheet.map(h => (
+                    <View key={h.id} style={{
                       backgroundColor: '#5C3D2E', borderRadius: 12, marginBottom: 8,
                       flexDirection: 'row', alignItems: 'center',
                       paddingHorizontal: 16, paddingVertical: 14,
-                      borderLeftWidth: 3, borderLeftColor: '#A8D4A0',
+                      borderLeftWidth: 3,
+                      borderLeftColor: h.completed ? '#A8D4A0' : 'rgba(212,149,106,0.35)',
                     }}>
-                      <Text style={{ fontSize: 16, marginRight: 10 }}>✓</Text>
-                      <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(15), flex: 1 }}>
-                        {label}
+                      <Text style={{ fontSize: 16, marginRight: 10, opacity: h.completed ? 1 : 0.25 }}>✓</Text>
+                      <Text style={{
+                        fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(15), flex: 1,
+                        opacity: h.completed ? 1 : 0.5,
+                      }}>
+                        {h.label}
                       </Text>
+                      {!h.completed && (
+                        <View style={{
+                          backgroundColor: 'rgba(212,149,106,0.1)', borderRadius: 99,
+                          paddingHorizontal: 8, paddingVertical: 2,
+                          borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)',
+                        }}>
+                          <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(212,149,106,0.5)' }}>pending</Text>
+                        </View>
+                      )}
                     </View>
-                  ))}
-                  {/* Deleted habits placeholder */}
-                  {deletedCount > 0 && (
-                    <Text style={{
-                      fontFamily: 'Jua', fontSize: fs(11),
-                      color: 'rgba(232,213,192,0.25)', textAlign: 'center', marginTop: 4,
-                    }}>
-                      +{deletedCount} removed habbit{deletedCount > 1 ? 's' : ''}
+                  ))
+                )
+              ) : (
+                /* Past days: completed-only list (same as before) */
+                selectedDay?.completed === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                    <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(14), opacity: 0.4 }}>
+                      No habbits completed this day.
                     </Text>
-                  )}
-                </>
+                  </View>
+                ) : (
+                  <>
+                    {selectedLabels.map((label, i) => (
+                      <View key={i} style={{
+                        backgroundColor: '#5C3D2E', borderRadius: 12, marginBottom: 8,
+                        flexDirection: 'row', alignItems: 'center',
+                        paddingHorizontal: 16, paddingVertical: 14,
+                        borderLeftWidth: 3, borderLeftColor: '#A8D4A0',
+                      }}>
+                        <Text style={{ fontSize: 16, marginRight: 10 }}>✓</Text>
+                        <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(15), flex: 1 }}>
+                          {label}
+                        </Text>
+                      </View>
+                    ))}
+                    {deletedCount > 0 && (
+                      <Text style={{
+                        fontFamily: 'Jua', fontSize: fs(11),
+                        color: 'rgba(232,213,192,0.25)', textAlign: 'center', marginTop: 4,
+                      }}>
+                        +{deletedCount} removed habbit{deletedCount > 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </>
+                )
               )}
             </ScrollView>
           </Animated.View>
         </View>
       </Modal>
 
-      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }}
         showsVerticalScrollIndicator={false}
@@ -194,29 +256,6 @@ export const TasksScreen = ({
           <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
             <Image source={IMAGES.tasks} style={{ width: 28, height: 28 }} resizeMode="contain" />
           </View>
-        </View>
-
-        <SectionDivider title="✦ Your Habbits ✦" />
-
-        {/* ── Weekly habit chart ── */}
-        <View style={{
-          backgroundColor: '#3B2220', borderRadius: 16, padding: 16, marginBottom: 16,
-          borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
-        }}>
-          <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.5)', fontSize: 11, marginBottom: 10 }}>
-            Last 7 days
-          </Text>
-          {hasAnyData
-            ? <>
-                <WeeklyHabitChart days={habitChartDays} onDayPress={handleDayPress} />
-                <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(212,149,106,0.4)', textAlign: 'center', marginTop: 10 }}>
-                  Tap a bar to see details
-                </Text>
-              </>
-            : <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.25)', fontSize: 12, textAlign: 'center', paddingVertical: 18 }}>
-                available after your first day 🐰
-              </Text>
-          }
         </View>
 
         <SectionDivider title={`✦ ${commissions.length} Habbit${commissions.length !== 1 ? 's' : ''} ✦`} />
@@ -259,6 +298,8 @@ export const TasksScreen = ({
             });
           }
 
+          
+
           return (
             <View
               key={item.id}
@@ -281,7 +322,6 @@ export const TasksScreen = ({
                         <Text style={{ fontFamily: 'Jua', fontSize: 10, color: '#A8D4A0' }}>✓ done</Text>
                       </View>
                     )}
-
                     {isMulti && !item.completed && (item.completionCount ?? 0) > 0 && (
                       <View style={{
                         backgroundColor: 'rgba(212,149,106,0.12)',
@@ -326,6 +366,30 @@ export const TasksScreen = ({
             </View>
           );
         })}
+
+        <SectionDivider title="✦ This Week ✦" />
+
+        {/* ── Weekly habit chart ── */}
+        <View style={{
+          backgroundColor: '#3B2220', borderRadius: 16, padding: 16, marginBottom: 16,
+          borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
+        }}>
+          <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.5)', fontSize: 11, marginBottom: 10 }}>
+            Last 7 days
+          </Text>
+          {hasAnyData
+            ? <>
+                <WeeklyHabitChart days={habitChartDays} onDayPress={handleDayPress} />
+                <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(212,149,106,0.4)', textAlign: 'center', marginTop: 10 }}>
+                  Tap a bar to see details
+                </Text>
+              </>
+            : <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.25)', fontSize: 12, textAlign: 'center', paddingVertical: 18 }}>
+                available after your first day 🐰
+              </Text>
+          }
+        </View>
+
       </ScrollView>
     </>
   );
