@@ -1,13 +1,13 @@
 // app.tsx
 import "./global.css";
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StatusBar, Platform, Image } from 'react-native';
+import { View, StatusBar, Platform, Image, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ProProvider } from './src/context/ProContext';
-import { syncWidgetData } from "./src/utils/syncWidget";
+import { syncWidgetData, flushWidgetData } from "./src/utils/syncWidget";
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, getYesterdayKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
@@ -68,13 +68,26 @@ export default function App() {
             allocatedPerDay,
             currency,
             streak: stats.currentStreak,
+            avatar,
             upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
           });
-        }, [commissions, spentToday, stats, name, allocatedPerDay, currency]);
+        }, [commissions, spentToday, stats, name, allocatedPerDay, currency, avatar]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
     updateWidget();
+  }, [updateWidget]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        flushWidgetData();
+      } else if (state === 'active' && hasLoaded.current) {
+        updateWidget();
+        flushWidgetData();
+      }
+    });
+    return () => sub.remove();
   }, [updateWidget]);
 
   useEffect(() => {
@@ -84,8 +97,9 @@ export default function App() {
       let loadedCurrency = DEFAULT_CURRENCY;
       let loadedBudget = DEFAULT_BUDGET;
       let loadedSpent = 0;
+      let loadedAvatar: string = DEFAULT_AVATAR;
       let migrated: Commission[] = [];
-      let loadedStats = defaultStats(); 
+      let loadedStats = defaultStats();
 
       try {
         
@@ -99,7 +113,7 @@ export default function App() {
           if (s.name)            { setName(s.name); loadedName = s.name; }
           if (s.currency)        { setCurrency(s.currency); loadedCurrency = s.currency; }
           if (s.allocatedPerDay) { setAllocatedPerDay(s.allocatedPerDay); loadedBudget = s.allocatedPerDay; }
-          if (s.avatar)          setAvatar(s.avatar);
+          if (s.avatar)          { setAvatar(s.avatar); loadedAvatar = s.avatar; }
           if (s.midnightNotifEnabled !== undefined) setMidnightNotifEnabled(s.midnightNotifEnabled);
         }
 
@@ -173,6 +187,7 @@ export default function App() {
           allocatedPerDay: loadedBudget,
           currency: loadedCurrency,
           streak: loadedStats.currentStreak,
+          avatar: loadedAvatar,
           upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
         });
       }

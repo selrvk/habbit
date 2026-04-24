@@ -385,7 +385,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             icon="📤"
             label="Export Data"
             sublabel="Coming soon — export your history as CSV"
-            last
             rightEl={
               <View style={{
                 backgroundColor: 'rgba(212,149,106,0.1)',
@@ -396,6 +395,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </View>
             }
           />
+          <Row
+            icon="📄"
+            label="Terms of Use"
+            sublabel="EULA · opens in browser"
+            onPress={() => {
+              haptic.light();
+              Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');
+            }}
+            rightEl={<Text style={{ fontSize: 13, color: C.muted }}>›</Text>}
+          />
+          <Row
+            icon="🔒"
+            label="Privacy Policy"
+            sublabel="How your data is handled"
+            last
+            onPress={() => {
+              haptic.light();
+              Linking.openURL('https://docs.google.com/document/d/e/2PACX-1vS6O5IJ28VMu6mbxgFHUhSFA-qbGt76PgLwlp4yLztI8l1AP3cKXaUZhlHAdPcQkvH7VHxDithqqFFa/pub');
+            }}
+            rightEl={<Text style={{ fontSize: 13, color: C.muted }}>›</Text>}
+          />
         </Section>
 
         {/* ── About ──────────────────────────────────────────────────── */}
@@ -405,7 +425,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
-              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v1.5</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v2.0</Text>
             }
           />
           <Row

@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, Linking } from 'react-native';
 import { useProStatus } from '../context/ProContext';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+
+// Legal URLs — Terms uses Apple's standard EULA (also listed in App Store Connect).
+const TERMS_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const PRIVACY_URL = 'https://docs.google.com/document/d/e/2PACX-1vS6O5IJ28VMu6mbxgFHUhSFA-qbGt76PgLwlp4yLztI8l1AP3cKXaUZhlHAdPcQkvH7VHxDithqqFFa/pub';
 
 const JUA = 'Jua';
 const DYNAPUFF = 'DynaPuff';
@@ -78,9 +82,16 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#2A1A18', padding: 24, justifyContent: 'center' }}>
-      <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 28, textAlign: 'center', marginBottom: 8 }}>
-        Habbit Pro 🐰
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 28 }}>
+          Habbit Pro
+        </Text>
+        <Image
+          source={require('../../assets/bonbon/idle.png')}
+          style={{ width: 36, height: 36, marginLeft: 8 }}
+          resizeMode="contain"
+        />
+      </View>
       <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.6)', fontSize: 13, textAlign: 'center', marginBottom: 28 }}>
         Unlock everything Bonbon has to offer
       </Text>
@@ -89,7 +100,7 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
       {[
         '🥕  50 daily Bonbon messages',
         '📜  Longer AI chat memory',
-        '📊  Monthly habits & finance reports',
+        '📊  & more soon!',
       ].map(f => (
         <Text key={f} style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, marginBottom: 12 }}>
           {f}
@@ -132,7 +143,11 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
         }
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={handleRestore} disabled={loading} style={{ marginTop: 16, alignItems: 'center' }}>
+      <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.45)', fontSize: 11, textAlign: 'center', marginTop: 16, lineHeight: 16 }}>
+        All proceeds go toward keeping Habbit alive and in active development :D
+      </Text>
+
+      <TouchableOpacity onPress={handleRestore} disabled={loading} style={{ marginTop: 12, alignItems: 'center' }}>
         <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.4)', fontSize: 12 }}>
           Restore purchases
         </Text>
@@ -143,6 +158,37 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
           Not now
         </Text>
       </TouchableOpacity>
+
+      {/* Subscription disclosure — required by App Store Guideline 3.1.2 */}
+      <Text style={{
+        fontFamily: 'Jua',
+        color: 'rgba(232,213,192,0.4)',
+        fontSize: 10,
+        textAlign: 'center',
+        marginTop: 20,
+        lineHeight: 14,
+        paddingHorizontal: 8,
+      }}>
+        Habbit Pro — {monthlyPrice ?? '...'}/month or {yearlyPrice ?? '...'}/year.
+        Payment is charged to your Apple ID. Subscription auto-renews unless cancelled
+        at least 24 hours before the end of the current period. Manage or cancel anytime
+        in your App Store account settings.
+      </Text>
+
+      {/* Legal links — required by App Store Guideline 3.1.2 */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+        <TouchableOpacity onPress={() => { haptic.light(); Linking.openURL(TERMS_URL); }}>
+          <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.55)', fontSize: 11, textDecorationLine: 'underline' }}>
+            Terms of Use
+          </Text>
+        </TouchableOpacity>
+        <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.3)', fontSize: 11, marginHorizontal: 8 }}>•</Text>
+        <TouchableOpacity onPress={() => { haptic.light(); Linking.openURL(PRIVACY_URL); }}>
+          <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.55)', fontSize: 11, textDecorationLine: 'underline' }}>
+            Privacy Policy
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
