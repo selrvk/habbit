@@ -14,10 +14,15 @@ const SERVICE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
-// Server-side ceilings. The app enforces the smaller free limit itself; this is the
-// hard stop no client can get around.
-const PER_USER_DAILY_LIMIT = Number(Deno.env.get('COACH_PER_USER_DAILY_LIMIT') ?? 50);
-const GLOBAL_DAILY_LIMIT   = Number(Deno.env.get('COACH_GLOBAL_DAILY_LIMIT') ?? 5000);
+// Daily message limits (match MESSAGE_LIMITS in src/utils/messageQuota.ts).
+const FREE_DAILY_LIMIT   = Number(Deno.env.get('COACH_FREE_DAILY_LIMIT') ?? 10);
+const PRO_DAILY_LIMIT    = Number(Deno.env.get('COACH_PRO_DAILY_LIMIT') ?? 50);
+const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('COACH_GLOBAL_DAILY_LIMIT') ?? 5000);
+
+// Pro is verified with RevenueCat. The app logs into RevenueCat with the Supabase user id,
+// so the (verified) JWT subject is the RevenueCat app user id.
+const REVENUECAT_SECRET_KEY = Deno.env.get('REVENUECAT_SECRET_KEY');
+const PRO_ENTITLEMENT       = Deno.env.get('REVENUECAT_ENTITLEMENT') ?? 'Habbit: Habits & Finance Pro';
 // Bucket for the global counter in the same table.
 const GLOBAL_BUCKET = '00000000-0000-0000-0000-000000000000';
 
@@ -60,6 +65,37 @@ const incrementUsage = async (userId: string, day: string): Promise<number> => {
   return await res.json();
 };
 
+/**
+ * Whether the user has an active Pro entitlement in RevenueCat. Fails open (true) when
+ * RevenueCat can't be asked, so a misconfiguration or outage never locks out paying users;
+ * the worst case is the Pro ceiling for everyone.
+ */
+const hasPro = async (userId: string): Promise<boolean> => {
+  if (!REVENUECAT_SECRET_KEY) {
+    console.warn('REVENUECAT_SECRET_KEY not set; treating user as Pro');
+    return true;
+  }
+  try {
+    const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${REVENUECAT_SECRET_KEY}` },
+    });
+    if (!res.ok) {
+      console.error('revenuecat error', res.status, await res.text());
+      return true;
+    }
+    const data = await res.json();
+    const ent = data.subscriber?.entitlements?.[PRO_ENTITLEMENT];
+    if (!ent) return false;
+    const now = Date.now();
+    const activeUntil = (d: string | null | undefined) => d === null || (d !== undefined && Date.parse(d) > now);
+    // expires_date is null for lifetime purchases; grace periods count as active.
+    return activeUntil(ent.expires_date) || activeUntil(ent.grace_period_expires_date ?? undefined);
+  } catch (e) {
+    console.error('revenuecat request failed', e);
+    return true;
+  }
+};
+
 const isString = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
 
 const parseBody = (body: any): { system: string; history: HistoryItem[]; message: string } | null => {
@@ -94,7 +130,11 @@ Deno.serve(async (req) => {
     const globalCount = await incrementUsage(GLOBAL_BUCKET, day);
     if (globalCount > GLOBAL_DAILY_LIMIT) return json({ error: 'busy' }, 503);
     const userCount = await incrementUsage(userId, day);
-    if (userCount > PER_USER_DAILY_LIMIT) return json({ error: 'daily_limit' }, 429);
+    // Only past the free limit do we need to know about Pro (keeps RevenueCat calls rare).
+    if (userCount > FREE_DAILY_LIMIT) {
+      const limit = (await hasPro(userId)) ? PRO_DAILY_LIMIT : FREE_DAILY_LIMIT;
+      if (userCount > limit) return json({ error: 'daily_limit' }, 429);
+    }
   } catch (e) {
     console.error('usage check failed', e);
     return json({ error: 'server_error' }, 500);

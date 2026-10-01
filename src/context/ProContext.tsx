@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { CustomerInfo } from 'react-native-purchases';
+import { getUserId } from '../utils/supabaseAuth';
 
 const PRO_ENTITLEMENT = 'Habbit: Habits & Finance Pro'; 
 
@@ -47,12 +48,20 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     checkStatus().finally(() => setIsLoading(false));
 
+    // Use the Supabase user id as the RevenueCat app user id, so the coach backend can
+    // verify Pro for the signed-in user. RevenueCat carries existing purchases over from
+    // the anonymous id. Offline? Skip; it retries on the next launch.
+    (async () => {
+      try {
+        const userId = await getUserId();
+        if ((await Purchases.getAppUserID()) === userId) return;
+        const { customerInfo } = await Purchases.logIn(userId);
+        await checkStatus(customerInfo);
+      } catch {}
+    })();
+
       Purchases.getOfferings().then(offerings => {
         const packages = offerings.current?.availablePackages ?? [];
-        console.log('Current offering:', offerings.current?.identifier);
-          packages.forEach(pkg => {
-            console.log('Package:', pkg.identifier, '| Type:', pkg.packageType, '| Price:', pkg.product.priceString);
-          });
         packages.forEach(pkg => {
           // RevenueCat identifies these by packageType
           if (pkg.packageType === 'MONTHLY') setMonthlyPrice(pkg.product.priceString);

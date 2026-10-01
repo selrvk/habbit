@@ -7,6 +7,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 
+// Provided by Hermes (RN 0.74+) but missing from React Native's type definitions.
+declare function atob(data: string): string;
+
 // Deliberately not part of "Delete All Data": wiping it would reset the daily message count.
 const STORAGE_SESSION = '@habbit_rabbit_coach_session';
 
@@ -51,6 +54,13 @@ export const getAccessToken = (): Promise<string> => {
     })().finally(() => { inFlight = null; });
   }
   return inFlight;
+};
+
+/** This install's Supabase user id (the `sub` claim of the access token). */
+export const getUserId = async (): Promise<string> => {
+  const token = await getAccessToken();
+  const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(payload)).sub;
 };
 
 /** Drop the cached session (e.g. after the server rejects the token). */
