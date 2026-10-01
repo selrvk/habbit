@@ -58,6 +58,33 @@ describe('rolloverHabits', () => {
     expect(r.history).toEqual([{ date: MON, completed: false, completedIds: [], scheduledIds: ['h1'] }]);
   });
 
+  it('records skipped habits, counts the day as done if the rest were, and clears skips', () => {
+    const r = rolloverHabits({
+      date: MON,
+      commissions: [habit({ completed: true }), habit({ id: 'h2', skipped: true })],
+      stats: stats(), history: [],
+    }, TUE);
+    expect(r.history).toEqual([{ date: MON, completed: true, completedIds: ['h1'], scheduledIds: ['h1', 'h2'], skippedIds: ['h2'] }]);
+    expect(r.commissions.map(c => c.skipped)).toEqual([false, false]);
+  });
+
+  it('keeps the streak across a day where everything was skipped', () => {
+    const r = rolloverHabits({
+      date: TUE, commissions: [habit({ skipped: true })],
+      stats: stats({ currentStreak: 3, lastFullDate: MON }), history: [],
+    }, '2026-09-30');
+    expect(r.stats.currentStreak).toBe(3);
+    expect(r.history[0]).toMatchObject({ date: TUE, completed: false, skippedIds: ['h1'] });
+  });
+
+  it('still breaks the streak when only some habits were skipped and the rest missed', () => {
+    const r = rolloverHabits({
+      date: TUE, commissions: [habit({ skipped: true }), habit({ id: 'h2' })],
+      stats: stats({ currentStreak: 3, lastFullDate: MON }), history: [],
+    }, '2026-09-30');
+    expect(r.stats.currentStreak).toBe(0);
+  });
+
   it('is a no-op on the same day', () => {
     const input = { date: MON, commissions: [habit({ completed: true })], stats: stats(), history: [] };
     expect(rolloverHabits(input, MON).changed).toBe(false);
@@ -74,6 +101,11 @@ describe('streakContinues', () => {
     expect(streakContinues(stats({ currentStreak: 2, lastFullDate: MON }), '2026-09-30', weekdays)).toBe(false));
   it('restarts with no previous full day', () =>
     expect(streakContinues(stats(), TUE, weekdays)).toBe(false));
+  it('continues over skipped days, however many', () => {
+    const sickWeek = ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08']
+      .map(date => ({ date, completed: false, completedIds: [], scheduledIds: ['h1'], skippedIds: ['h1'] }));
+    expect(streakContinues(stats({ currentStreak: 2, lastFullDate: MON }), '2026-10-09', weekdays, sickWeek)).toBe(true);
+  });
   it('handles long gaps', () =>
     expect(onlyRestDaysBetween(MON, '2026-12-01', weekdays)).toBe(false));
 });

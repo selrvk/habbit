@@ -12,7 +12,7 @@ import { applyBackup, backUpToICloud, getCloudBackupStatus, loadICloudBackup, ma
 import { describeBackupContents, describeBackupTime, summarizeBackup, type BackupFile } from './src/backupFormat';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
-import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
+import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime } from './src/helpers';
 import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitStats } from './src/habitStats';
@@ -100,7 +100,7 @@ export default function App() {
   const saveCompletionHistory = useCallback((r: CompletionRecord[]) => AsyncStorage.setItem(STORAGE_COMPLETION_HISTORY, JSON.stringify(r)).catch(() => {}), []);
 
   const updateWidget = useCallback(() => {
-          const todaysScheduled = commissions.filter(c => isScheduledForDay(c, dayDow));
+          const todaysScheduled = commissions.filter(c => countsToday(c, dayDow));
 
           syncWidgetData({
             name,
@@ -248,7 +248,7 @@ export default function App() {
     finally { 
       hasLoaded.current = true; 
       const todayDow = new Date().getDay();
-      const todaysScheduled = migrated.filter(c => isScheduledForDay(c, todayDow));
+      const todaysScheduled = migrated.filter(c => countsToday(c, todayDow));
       syncWidgetData({
         name: loadedName,
         date: todayKey,
@@ -411,10 +411,11 @@ export default function App() {
   useEffect(() => {
     if (!hasLoaded.current) return;
     const todaysScheduled = commissions.filter(c => isScheduledForDay(c, dayDow));
-    if (todaysScheduled.length === 0) return;
-    const allDone = todaysScheduled.every(c => c.completed);
+    // Skipped habits are taken out of the day; if everything is skipped it's a rest day.
+    const counted = todaysScheduled.filter(c => !c.skipped);
+    const allDone = counted.length > 0 && counted.every(c => c.completed);
 
-    // A habit was un-completed after today's streak credit: revert the credit.
+    // A habit was un-completed (or everything skipped) after today's credit: revert it.
     if (!allDone && stats.lastFullDate === todayKey) {
       setStats(prev => {
         if (prev.lastFullDate !== todayKey || !prev.beforeToday) return prev;
@@ -431,7 +432,7 @@ export default function App() {
     if (!allDone || stats.lastFullDate === todayKey) return;
     setStats(prev => {
       if (prev.lastFullDate === todayKey) return prev;
-      const newStreak = streakContinues(prev, todayKey, commissions) ? prev.currentStreak + 1 : 1;
+      const newStreak = streakContinues(prev, todayKey, commissions, completionHistory) ? prev.currentStreak + 1 : 1;
       const updated = {
         ...prev,
         currentStreak: newStreak, bestStreak: Math.max(newStreak, prev.bestStreak), lastFullDate: todayKey,
@@ -444,8 +445,9 @@ export default function App() {
       const updated = [...prev, {
         date: todayKey,
         completed: true,
-        completedIds: commissions.filter(c => c.completed).map(c => c.id),
+        completedIds: todaysScheduled.filter(c => c.completed).map(c => c.id),
         scheduledIds: todaysScheduled.map(c => c.id),
+        skippedIds:   todaysScheduled.filter(c => c.skipped).map(c => c.id),
       }].sort((a, b) => a.date.localeCompare(b.date));
       saveCompletionHistory(updated); return updated;
     });
@@ -508,9 +510,9 @@ export default function App() {
     setCommissions(p => p.map(c => {
       if (c.id !== id) return c;
       const tpd = c.timesPerDay ?? 1;
-      if (tpd === 1) return { ...c, completed: true };
+      if (tpd === 1) return { ...c, completed: true, skipped: false };
       const newCount = (c.completionCount ?? 0) + 1;
-      return { ...c, completionCount: newCount, completed: newCount >= tpd };
+      return { ...c, completionCount: newCount, completed: newCount >= tpd, skipped: false };
     }));
     if (finishes) setStats(prev => { const updated = { ...prev, totalCompleted: prev.totalCompleted + 1 }; saveStats(updated); return updated; });
   }, [saveStats]);
@@ -527,6 +529,19 @@ export default function App() {
     }));
     if (wasDone) setStats(prev => { const updated = { ...prev, totalCompleted: Math.max(prev.totalCompleted - 1, 0) }; saveStats(updated); return updated; });
   }, [saveStats]);
+
+  // ── Skip: take habits out of today without breaking any streak ───────────
+  const setSkipped = useCallback((ids: string[], skipped: boolean) => {
+    if (ids.length === 0) return;
+    setCommissions(p => p.map(c => (ids.includes(c.id) ? { ...c, skipped } : c)));
+  }, []);
+  const handleSkip   = useCallback((id: string) => setSkipped([id], true),  [setSkipped]);
+  const handleUnskip = useCallback((id: string) => setSkipped([id], false), [setSkipped]);
+  // "Skip the rest of today": everything scheduled that isn't done yet.
+  const handleSkipRest = useCallback(() => {
+    const dow = parseDateKey(liveState.current.dayKey).getDay();
+    setSkipped(liveState.current.commissions.filter(c => countsToday(c, dow) && !c.completed).map(c => c.id), true);
+  }, [setSkipped]);
 
   // ── Add: receives full HabbitFormData, closes sub-screen ─────────────────
   const handleAdd = useCallback((data: HabbitFormData) => {
@@ -595,7 +610,7 @@ export default function App() {
 
   // ── Reset: also zeroes out completionCount ────────────────────────────────
   const handleResetToday = useCallback(() => {
-    const reset = commissions.map(c => ({ ...c, completed: false, completionCount: 0 }));
+    const reset = commissions.map(c => ({ ...c, completed: false, completionCount: 0, skipped: false }));
     setCommissions(reset);
     AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: reset, date: todayKey })).catch(() => {});
     setSpentToday(0); setTodayHistory([]);
@@ -662,6 +677,9 @@ export default function App() {
             onAddSpending={handleFinanceAddSpend}
             onCommissionComplete={handleCommissionComplete}
             onCommissionUncomplete={handleCommissionUncomplete}
+            onSkip={handleSkip}
+            onUnskip={handleUnskip}
+            onSkipRest={handleSkipRest}
           />
         );
 
@@ -675,6 +693,8 @@ export default function App() {
               todayKey={todayKey}
               onBack={() => setTasksSubScreen(null)}
               onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
+              onSkip={() => handleSkip(detailHabit.id)}
+              onUnskip={() => handleUnskip(detailHabit.id)}
             />
           );
         }

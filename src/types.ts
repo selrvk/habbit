@@ -8,6 +8,8 @@ export type Commission      = {
   id: string;
   label: string;
   completed: boolean;
+  /** Skipped for today: counts neither for nor against any streak. Cleared at midnight. */
+  skipped?: boolean;
   days: number[];
   // Single reminder (timesPerDay === 1)
   reminderTime: ReminderTime | null;
@@ -58,14 +60,18 @@ export type HabitChartDay = {
   scheduled: number;   
   completedIds: string[];
   scheduledIds?: string[];
+  skippedIds?: string[];
 };
 
 export type TabKey          = 'home' | 'tasks' | 'finance' | 'profile' | 'settings' | 'chat';
-export type CompletionRecord = { 
-  date: string; 
+export type CompletionRecord = {
+  date: string;
+  /** Every scheduled habit that wasn't skipped was done (and at least one was). */
   completed: boolean;
-  completedIds: string[]; 
-  scheduledIds: string[];  
+  completedIds: string[];
+  scheduledIds: string[];
+  /** Scheduled habits skipped that day. A day with all of them skipped is a rest day. */
+  skippedIds?: string[];
 };
 export type OnboardingResult = { name: string; firstHabbit: string | null; budget: number; budgetPeriod: 'daily' | 'weekly' | 'monthly'; currency: string };
 export type AvatarKey = 'avatar_bunny' | 'avatar_hamster' | 'avatar_bear' | 'avatar_panda' | 'avatar_fox';

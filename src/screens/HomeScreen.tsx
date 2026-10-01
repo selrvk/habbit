@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { getFormattedDate, isScheduledForDay, avatarImage, currencyStr } from '../helpers';
@@ -51,6 +51,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStreaks, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
+  onSkip, onUnskip, onSkipRest,
 }: {
   commissions: Commission[];
   /** Each habit's current streak, by id. */
@@ -60,6 +61,7 @@ export const HomeScreen = ({
   onAddHabit: () => void; onGoToFinance: () => void;
   onAddSpending: (amount: string, note?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
+  onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipRest: () => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -71,11 +73,23 @@ export const HomeScreen = ({
   const today = getFormattedDate();
 
   const todays         = commissions.filter(c => isScheduledForDay(c, today.dow));
-  const activeTasks    = todays.filter(c => !c.completed);
-  const completedTasks = todays.filter(c => c.completed);
-  const totalCount     = todays.length;
+  // Skipped habits are taken out of today's count.
+  const skippedTasks   = todays.filter(c => c.skipped);
+  const counted        = todays.filter(c => !c.skipped);
+  const activeTasks    = counted.filter(c => !c.completed);
+  const completedTasks = counted.filter(c => c.completed);
+  const totalCount     = counted.length;
   const allDone        = totalCount > 0 && completedTasks.length === totalCount;
-  const habitPct       = totalCount > 0 ? todays.reduce((s, c) => s + habitProgress(c), 0) / totalCount : 0;
+  const habitPct       = totalCount > 0 ? counted.reduce((s, c) => s + habitProgress(c), 0) / totalCount : 0;
+
+  const confirmSkipRest = () => {
+    haptic.light();
+    const n = activeTasks.length;
+    Alert.alert('Skip the rest of today?', `${n} Habbit${n === 1 ? '' : 's'} left. Skipped Habbits don’t count for or against your streaks.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Skip', onPress: onSkipRest },
+    ]);
+  };
 
   const remaining    = allocatedPerDay - spentToday;
   const isOverBudget = remaining < 0;
@@ -92,6 +106,7 @@ export const HomeScreen = ({
   const renderItem = (item: Commission) => (
     <SwipeableTaskItem key={item.id} item={item} streak={habitStreaks[item.id] ?? 0}
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
+      onSkip={onSkip} onUnskip={onUnskip}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />
   );
 
@@ -160,7 +175,7 @@ export const HomeScreen = ({
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
           <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17) }}>Today's Habbits</Text>
           {totalCount > 0 && !allDone && (
-            <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12) }}>Tap to check off</Text>
+            <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12) }}>Tap to check off · hold to skip</Text>
           )}
         </View>
 
@@ -174,7 +189,7 @@ export const HomeScreen = ({
               <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(14) }}>+ Add your first Habbit</Text>
             </TouchableOpacity>
           </View>
-        ) : totalCount === 0 ? (
+        ) : todays.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 28, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: fs(40), marginBottom: 8 }}>😴</Text>
             <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 4 }}>Rest day!</Text>
@@ -182,6 +197,13 @@ export const HomeScreen = ({
           </View>
         ) : (
           <>
+            {totalCount === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 22, paddingHorizontal: 16, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, marginBottom: 12 }}>
+                <Text style={{ fontSize: fs(36), marginBottom: 6 }}>😴</Text>
+                <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 4 }}>Taking it easy today</Text>
+                <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), textAlign: 'center' }}>Everything's skipped, so your streaks are safe. Feel better 🐰</Text>
+              </View>
+            )}
             {allDone && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(100,160,90,0.14)', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(157,224,135,0.3)' }}>
                 <Image source={IMAGES.carrots} style={{ width: 32, height: 32 }} resizeMode="contain" />
@@ -194,6 +216,21 @@ export const HomeScreen = ({
               </View>
             )}
             {activeTasks.map(renderItem)}
+            {activeTasks.length > 0 && (
+              <TouchableOpacity onPress={confirmSkipRest} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12 }}>
+                <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.4)', fontSize: fs(12) }}>
+                  Need a break? <Text style={{ textDecorationLine: 'underline' }}>Skip the rest of today</Text>
+                </Text>
+              </TouchableOpacity>
+            )}
+            {skippedTasks.length > 0 && (
+              <>
+                <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(13), textAlign: 'center', paddingVertical: 8 }}>
+                  Skipped today · tap one to undo
+                </Text>
+                {skippedTasks.map(renderItem)}
+              </>
+            )}
             {completedTasks.length > 0 && (
               <>
                 <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 }}

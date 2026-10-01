@@ -16,15 +16,16 @@ const haptic = {
   light: () => ReactNativeHapticFeedback.trigger('impactLight', HAPTIC_OPTIONS),
 };
 
-type DotState = 'done' | 'missed' | 'pending' | 'none';
+type DotState = 'done' | 'missed' | 'skipped' | 'pending' | 'none';
 
 /** One habbit's status on one day of the last-7-days strip. */
 const dayStateFor = (c: Commission, day: HabitChartDay): DotState => {
   if (day.isToday) {
     if (!isScheduledForDay(c, parseDateKey(day.date).getDay())) return 'none';
-    return c.completed ? 'done' : 'pending';
+    return c.completed ? 'done' : c.skipped ? 'skipped' : 'pending';
   }
   if (day.completedIds.includes(c.id)) return 'done';
+  if (day.skippedIds?.includes(c.id)) return 'skipped';
   return day.scheduledIds?.includes(c.id) ? 'missed' : 'none';
 };
 
@@ -80,7 +81,8 @@ export const TasksScreen = ({
   // Local-date keys ending at todayKey (toISOString would give UTC dates).
   const habitChartDays: HabitChartDay[] = Array.from({ length: 7 }, (_, i) => addDaysToKey(todayKey, i - 6)).map(date => {
     if (date === todayKey) {
-      const scheduledToday = commissions.filter(c => isScheduledForDay(c, todayDow));
+      // Skipped habits are left out of the day's count.
+      const scheduledToday = commissions.filter(c => isScheduledForDay(c, todayDow) && !c.skipped);
       const completedToday = scheduledToday.filter(c => c.completed);
       return {
         date,
@@ -90,17 +92,20 @@ export const TasksScreen = ({
         scheduled: scheduledToday.length,
         completedIds: completedToday.map(c => c.id),
         scheduledIds: scheduledToday.map(c => c.id),
+        skippedIds: commissions.filter(c => isScheduledForDay(c, todayDow) && c.skipped).map(c => c.id),
       };
     }
-    const record = completionHistory.find(r => r.date === date);
+    const record  = completionHistory.find(r => r.date === date);
+    const skipped = record?.skippedIds ?? [];
     return {
       date,
       dayName: getDayName(date),
       isToday: false,
       completed: record?.completedIds?.length ?? 0,
-      scheduled: record?.scheduledIds?.length ?? 0,
+      scheduled: (record?.scheduledIds ?? []).filter(id => !skipped.includes(id)).length,
       completedIds: record?.completedIds ?? [],
       scheduledIds: record?.scheduledIds ?? [],
+      skippedIds: skipped,
     };
   });
 
@@ -118,11 +123,11 @@ export const TasksScreen = ({
     : 0;
 
   // For today's sheet, show all scheduled habits with their live status
-  const todayScheduledForSheet: { id: string; label: string; completed: boolean }[] =
+  const todayScheduledForSheet: { id: string; label: string; completed: boolean; skipped: boolean }[] =
     selectedDay?.isToday
       ? commissions
           .filter(c => isScheduledForDay(c, todayDow))
-          .map(c => ({ id: c.id, label: c.label, completed: c.completed }))
+          .map(c => ({ id: c.id, label: c.label, completed: c.completed, skipped: !!c.skipped }))
       : [];
 
   return (
@@ -201,7 +206,7 @@ export const TasksScreen = ({
                           paddingHorizontal: 8, paddingVertical: 2,
                           borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)',
                         }}>
-                          <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(212,149,106,0.5)' }}>pending</Text>
+                          <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(212,149,106,0.5)' }}>{h.skipped ? 'skipped' : 'pending'}</Text>
                         </View>
                       )}
                     </View>
@@ -321,7 +326,7 @@ export const TasksScreen = ({
                     <View key={day.date} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
                       <View style={{
                         width: 16, height: 16, borderRadius: 8,
-                        backgroundColor: state === 'done' ? '#9de087' : state === 'missed' ? 'rgba(240,144,144,0.4)' : 'transparent',
+                        backgroundColor: state === 'done' ? '#9de087' : state === 'missed' ? 'rgba(240,144,144,0.4)' : state === 'skipped' ? 'rgba(232,213,192,0.2)' : 'transparent',
                         borderWidth: state === 'pending' || state === 'none' ? 1.5 : 0,
                         borderColor: state === 'pending' ? '#D4956A' : 'rgba(212,149,106,0.18)',
                       }} />

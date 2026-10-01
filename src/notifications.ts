@@ -133,7 +133,7 @@ export const scheduleEveningCheckins = async (
 
       let body = "Evening check-in — how did your Habbits go today? 🐰";
       if (i === 0) {
-        const left = scheduled.filter(c => !c.completed).length;
+        const left = scheduled.filter(c => !c.completed && !c.skipped).length;
         if (left === 0) continue;
         body = `${left} Habbit${left === 1 ? '' : 's'} left today — you've still got time 🐰`;
       }

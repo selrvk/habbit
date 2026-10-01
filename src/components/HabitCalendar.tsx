@@ -1,6 +1,6 @@
 // src/components/HabitCalendar.tsx
 //
-// Month calendar of one habit's days: done, missed, rest (not scheduled) and today.
+// Month calendar of one habit's days: done, missed, skipped, rest (not scheduled) and today.
 
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
@@ -13,7 +13,7 @@ import type { HabitDay, HabitDayState } from '../habitStats';
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const STATE_LABEL: Record<HabitDayState | 'outside', string> = {
-  done: 'done', missed: 'missed', rest: 'rest day', pending: 'not done yet', outside: '',
+  done: 'done', missed: 'missed', rest: 'rest day', skipped: 'skipped', pending: 'not done yet', outside: '',
 };
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
@@ -76,7 +76,7 @@ export const HabitCalendar = ({ days, todayKey }: { days: HabitDay[]; todayKey: 
                 accessible accessibilityLabel={`${MONTHS[m]} ${day}${isToday ? ', today' : ''}${STATE_LABEL[state] ? `, ${STATE_LABEL[state]}` : ''}`}>
                 <View style={{
                   width: '78%', aspectRatio: 1, borderRadius: 99, alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: state === 'done' ? '#D4956A' : state === 'missed' ? 'rgba(200,80,60,0.3)' : 'transparent',
+                  backgroundColor: state === 'done' ? '#D4956A' : state === 'missed' ? 'rgba(200,80,60,0.3)' : state === 'skipped' ? 'rgba(232,213,192,0.14)' : 'transparent',
                   borderWidth: isToday ? 1.5 : 0,
                   borderColor: state === 'pending' ? '#D4956A' : '#e8d5c0',
                 }}>
@@ -85,6 +85,7 @@ export const HabitCalendar = ({ days, todayKey }: { days: HabitDay[]; todayKey: 
                     color: state === 'done'    ? '#fff'
                          : state === 'missed'  ? 'rgba(232,213,192,0.75)'
                          : state === 'pending' ? '#D4956A'
+                         : state === 'skipped' ? 'rgba(232,213,192,0.6)'
                          : state === 'rest'    ? 'rgba(232,213,192,0.3)'
                          : 'rgba(232,213,192,0.12)',
                   }}>{day}</Text>
@@ -99,6 +100,7 @@ export const HabitCalendar = ({ days, todayKey }: { days: HabitDay[]; todayKey: 
         {[
           { label: 'Done',     dot: { backgroundColor: '#D4956A' } },
           { label: 'Missed',   dot: { backgroundColor: 'rgba(200,80,60,0.3)' } },
+          { label: 'Skipped',  dot: { backgroundColor: 'rgba(232,213,192,0.14)' } },
           { label: 'Rest day', dot: { borderWidth: 1, borderColor: 'rgba(232,213,192,0.3)' } },
         ].map(({ label, dot }) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>

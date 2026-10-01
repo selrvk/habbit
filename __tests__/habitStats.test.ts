@@ -57,6 +57,15 @@ describe('habitStats', () => {
     expect(habitDays(h, records(h.id, week, week), TODAY).at(-1)).toEqual({ date: TODAY, state: 'rest' });
   });
 
+  it('treats skipped days as neutral', () => {
+    const h = habit({ skipped: true });
+    const history = records(h.id, week, week.filter(d => d !== '2026-09-28'));
+    history[4].skippedIds = [h.id]; // 2026-09-28 skipped, every other day done
+    const s = habitStats(h, history, TODAY);
+    expect(s).toMatchObject({ current: 6, best: 6, done: 6, missed: 0, rate: 1 });
+    expect(habitDays(h, history, TODAY).map(d => d.state).slice(-4)).toEqual(['skipped', 'done', 'done', 'skipped']);
+  });
+
   it('starts at creation, but not before the oldest record', () => {
     const h = habit({ id: created('2026-09-29') });
     expect(habitStats(h, records('other', week, week), TODAY).since).toBe('2026-09-29');

@@ -2,18 +2,19 @@
 
 import React from 'react';
 import { View, Text } from 'react-native';
-import { buildCalendarGrid } from '../helpers';
+import { allSkipped, buildCalendarGrid } from '../helpers';
 import { CAL_DAY_LABELS } from '../constants';
 import type { CompletionRecord } from '../types';
 
 export const CompletionCalendar = ({ records, todayKey }: { records: CompletionRecord[]; todayKey: string }) => {
   const grid        = buildCalendarGrid(records, todayKey, 6);
   const doneCount   = records.filter(r => r.completed).length;
-  const missedCount = records.filter(r => !r.completed).length;
+  const missedCount = records.filter(r => !r.completed && !allSkipped(r)).length;
   const cellColor   = (state: string) => {
     switch (state) {
       case 'done':   return '#D4956A';
       case 'missed': return 'rgba(200,80,60,0.35)';
+      case 'skipped': return 'rgba(232,213,192,0.2)';
       case 'today':  return 'rgba(212,149,106,0.3)';
       case 'future': return 'transparent';
       default:       return 'rgba(212,149,106,0.08)';
@@ -45,7 +46,7 @@ export const CompletionCalendar = ({ records, todayKey }: { records: CompletionR
         </View>
       ))}
       <View style={{ flexDirection: 'row', gap: 14, marginTop: 10, justifyContent: 'center' }}>
-        {[{ color: '#D4956A', label: 'Completed' }, { color: 'rgba(200,80,60,0.35)', label: 'Missed' }, { color: 'rgba(212,149,106,0.08)', label: 'No data' }].map(({ color, label }) => (
+        {[{ color: '#D4956A', label: 'Completed' }, { color: 'rgba(200,80,60,0.35)', label: 'Missed' }, { color: 'rgba(232,213,192,0.2)', label: 'Skipped' }, { color: 'rgba(212,149,106,0.08)', label: 'No data' }].map(({ color, label }) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <View style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: color }} />
             <Text style={{ fontFamily: 'Jua', fontSize: 9, color: 'rgba(232,213,192,0.4)' }}>{label}</Text>

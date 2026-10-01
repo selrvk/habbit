@@ -93,7 +93,7 @@ export async function buildCoachContext(
   const todayDow = new Date().getDay();
   const completedToday = habits.filter(h => h.completed).length;
   const habitsMostMissed = habits
-    .filter(h => !h.completed && isScheduledForDay(h, todayDow))
+    .filter(h => !h.completed && !h.skipped && isScheduledForDay(h, todayDow))
     .map(h => h.label)
     .slice(0, 3);
 

@@ -48,6 +48,11 @@ export const getLast7Days = (dailyTotals: DailyTotal[], spentToday: number): Cha
 };
 export const isScheduledForDay = (c: Commission, dow: number) =>
   !c.days||c.days.length===0?true:c.days.includes(dow);
+/** Scheduled today and not skipped: the habits today's progress and streak are judged on. */
+export const countsToday = (c: Commission, dow: number) => isScheduledForDay(c, dow) && !c.skipped;
+/** Every habit scheduled that day was skipped. */
+export const allSkipped = (r: CompletionRecord) =>
+  r.scheduledIds.length > 0 && r.scheduledIds.every(id => r.skippedIds?.includes(id));
 /** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
 export const reminderSummary = (c: Commission): string | null => {
   if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
@@ -68,16 +73,17 @@ export const daysLabel = (days: number[]): string => {
 export const buildCalendarGrid = (records: CompletionRecord[], todayKey: string, weeks=6) => {
   const today=new Date();
   const sunday=new Date(today); sunday.setDate(today.getDate()-today.getDay());
-  const recordMap=new Map(records.map(r=>[r.date,r.completed]));
-  const cols: {date:string;state:'done'|'missed'|'today'|'future'|'empty'}[][]=[];
+  type CellState='done'|'missed'|'skipped'|'today'|'future'|'empty';
+  const recordMap=new Map<string,CellState>(records.map(r=>[r.date,r.completed?'done':allSkipped(r)?'skipped':'missed']));
+  const cols: {date:string;state:CellState}[][]=[];
   for (let w=-(weeks-1);w<=0;w++) {
-    const col: {date:string;state:'done'|'missed'|'today'|'future'|'empty'}[]=[];
+    const col: {date:string;state:CellState}[]=[];
     for (let dow=0;dow<7;dow++) {
       const d=new Date(sunday); d.setDate(sunday.getDate()+w*7+dow);
       const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       if (d>today)               col.push({date:key,state:'future'});
       else if (key===todayKey)   col.push({date:key,state:'today'});
-      else if (recordMap.has(key)) col.push({date:key,state:recordMap.get(key)?'done':'missed'});
+      else if (recordMap.has(key)) col.push({date:key,state:recordMap.get(key)!});
       else                         col.push({date:key,state:'empty'});
     }
     cols.push(col);

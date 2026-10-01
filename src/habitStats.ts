@@ -2,13 +2,14 @@
 //
 // Per-habit history and streaks, worked out from the daily completion records.
 // A day with no record is a day the app wasn't opened, so a scheduled habit counts as
-// missed. Days the habit isn't scheduled are rest days: they never break a streak.
+// missed. Days the habit isn't scheduled are rest days, and skipped days are neutral:
+// neither breaks a streak or counts towards it.
 
 import type { Commission, CompletionRecord } from './types';
 import { addDaysToKey, isScheduledForDay, parseDateKey, toDateKey } from './helpers';
 
 /** `pending`: today, scheduled and not done yet. It doesn't break the streak. */
-export type HabitDayState = 'done' | 'missed' | 'rest' | 'pending';
+export type HabitDayState = 'done' | 'missed' | 'rest' | 'skipped' | 'pending';
 
 export type HabitDay = { date: string; state: HabitDayState };
 
@@ -48,14 +49,15 @@ export const habitDays = (habit: Commission, history: CompletionRecord[], todayK
   for (let key = habitStartKey(habit, history, todayKey); key <= todayKey; key = addDaysToKey(key, 1)) {
     const scheduledNow = isScheduledForDay(habit, parseDateKey(key).getDay());
     if (key === todayKey) {
-      days.push({ date: key, state: !scheduledNow ? 'rest' : habit.completed ? 'done' : 'pending' });
+      days.push({ date: key, state: !scheduledNow ? 'rest' : habit.completed ? 'done' : habit.skipped ? 'skipped' : 'pending' });
       break;
     }
     // A record keeps the schedule as it was that day; without one, use today's schedule.
     const record    = byDate.get(key);
     const scheduled = record ? record.scheduledIds.includes(habit.id) : scheduledNow;
     const done      = !!record && record.completedIds.includes(habit.id);
-    days.push({ date: key, state: !scheduled ? 'rest' : done ? 'done' : 'missed' });
+    const skipped   = !!record?.skippedIds?.includes(habit.id);
+    days.push({ date: key, state: !scheduled ? 'rest' : done ? 'done' : skipped ? 'skipped' : 'missed' });
   }
   return days;
 };

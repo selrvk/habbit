@@ -26,12 +26,14 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit }: {
+export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip }: {
   habit: Commission;
   history: CompletionRecord[];
   todayKey: string;
   onBack: () => void;
   onEdit: () => void;
+  onSkip: () => void;
+  onUnskip: () => void;
 }) => {
   const fs = useFontSize();
   const days  = useMemo(() => habitDays(habit, history, todayKey), [habit, history, todayKey]);
@@ -61,6 +63,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit }: 
     today === 'pending' && stats.current > 0 ? `Check it off today to make it ${stats.current + 1} 🔥` :
     today === 'pending'                      ? 'Check it off today to start a streak 🔥' :
     today === 'done'                         ? 'Done for today — nice one! 🐰' :
+    today === 'skipped'                      ? 'Skipped today. Your streak is safe.' :
                                                'Rest day today. Your streak is safe.';
 
   return (
@@ -114,6 +117,16 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit }: 
         </View>
 
         <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, textAlign: 'center', marginTop: 16 }}>{hint}</Text>
+        {(today === 'pending' || today === 'skipped') && (
+          <TouchableOpacity
+            onPress={() => { haptic(); (today === 'pending' ? onSkip : onUnskip)(); }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityHint={today === 'pending' ? 'Takes it out of today without breaking the streak' : undefined}
+            style={{ alignSelf: 'center', marginTop: 12, borderRadius: 99, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: 'rgba(232,213,192,0.25)' }}>
+            <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.cream }}>{today === 'pending' ? 'Skip today' : 'Undo skip'}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );

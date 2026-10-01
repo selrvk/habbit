@@ -1,7 +1,7 @@
 // src/components/SwipeableTaskItem.tsx
 
 import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, PanResponder, Pressable } from 'react-native';
+import { View, Text, Animated, PanResponder, Pressable, Alert } from 'react-native';
 import { formatTime12, daysLabel } from '../helpers';
 import type { Commission } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
@@ -19,6 +19,8 @@ export const SwipeableTaskItem = ({
   streak = 0,
   onComplete,
   onUncomplete,
+  onSkip,
+  onUnskip,
   onSwipeStart,
   onSwipeEnd,
 }: {
@@ -27,6 +29,8 @@ export const SwipeableTaskItem = ({
   streak?: number;
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
+  onSkip?: (id: string) => void;
+  onUnskip?: (id: string) => void;
   onSwipeStart: () => void;
   onSwipeEnd: () => void;
 }) => {
@@ -35,9 +39,12 @@ export const SwipeableTaskItem = ({
   const count       = item.completionCount ?? 0;
   const isMulti     = timesPerDay > 1;
 
+  const isSkipped   = !!item.skipped;
   // Single: complete when not done, undo when done. Multi: +1 below target, -1 above 0.
-  const canComplete = isMulti ? count < timesPerDay : !item.completed;
-  const canUndo     = isMulti ? count > 0           : item.completed;
+  // A skipped habit does neither: tapping it un-skips it.
+  const canComplete = !isSkipped && (isMulti ? count < timesPerDay : !item.completed);
+  const canUndo     = !isSkipped && (isMulti ? count > 0           : item.completed);
+  const canSkip     = !!onSkip && !isSkipped && !item.completed;
 
   const translateX    = useRef(new Animated.Value(0)).current;
   const rightProgress = useRef(new Animated.Value(0)).current; // drives green hint
@@ -72,8 +79,8 @@ export const SwipeableTaskItem = ({
       const cur = itemRef.current;
       const tpd = cur.timesPerDay     ?? 1;
       const cnt = cur.completionCount ?? 0;
-      const canR = tpd > 1 ? cnt < tpd    : !cur.completed;
-      const canL = tpd > 1 ? cnt > 0      : cur.completed;
+      const canR = !cur.skipped && (tpd > 1 ? cnt < tpd : !cur.completed);
+      const canL = !cur.skipped && (tpd > 1 ? cnt > 0   : cur.completed);
 
       if (g.dx > 0 && canR) {
         const clamped = Math.min(g.dx, SWIPE_THRESHOLD);
@@ -92,8 +99,8 @@ export const SwipeableTaskItem = ({
       const cur = itemRef.current;
       const tpd = cur.timesPerDay     ?? 1;
       const cnt = cur.completionCount ?? 0;
-      const canR = tpd > 1 ? cnt < tpd : !cur.completed;
-      const canL = tpd > 1 ? cnt > 0   : cur.completed;
+      const canR = !cur.skipped && (tpd > 1 ? cnt < tpd : !cur.completed);
+      const canL = !cur.skipped && (tpd > 1 ? cnt > 0   : cur.completed);
 
       if (canR && g.dx > SWIPE_THRESHOLD) {
         haptic.success();
@@ -125,8 +132,10 @@ export const SwipeableTaskItem = ({
 
   const scale = useRef(new Animated.Value(1)).current;
 
-  // Tap = check off one (a rep for multi-times habits); hold = undo one.
+  // Tap = check off one (a rep for multi-times habits); hold = undo one, or offer to skip
+  // when there's nothing to undo. Tapping a skipped habit un-skips it.
   const handleTap = () => {
+    if (isSkipped) { haptic.light(); onUnskip?.(item.id); return; }
     if (!canComplete) { haptic.light(); return; }
     haptic.success();
     Animated.sequence([
@@ -141,16 +150,24 @@ export const SwipeableTaskItem = ({
   };
 
   const handleLongPress = () => {
-    if (!canUndo) return;
-    haptic.warning();
-    onUncomplete(item.id);
+    if (canUndo) {
+      haptic.warning();
+      onUncomplete(item.id);
+    } else if (canSkip) {
+      haptic.light();
+      Alert.alert(`Skip “${item.label}” today?`, 'Sick, busy or resting? It won’t count for or against your streak.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Skip today', onPress: () => onSkip?.(item.id) },
+      ]);
+    }
   };
 
   const rightHintOpacity = rightProgress.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0, 1] });
   const leftHintOpacity  = leftProgress.interpolate({  inputRange: [0, 0.15, 1], outputRange: [0, 0, 1] });
 
   const isDone     = item.completed;
-  const borderColor = isDone ? '#6B5040' : '#D4956A';
+  const isDim      = isDone || isSkipped;
+  const borderColor = isDim ? '#6B5040' : '#D4956A';
 
   // Reminder label for subtitle
   const reminderLabel = (() => {
@@ -193,8 +210,8 @@ export const SwipeableTaskItem = ({
           borderLeftWidth: 3, borderLeftColor: borderColor, borderRadius: 12,
           backgroundColor: '#5C3D2E',
           shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: isDone ? 0.08 : 0.18, shadowRadius: 4, elevation: isDone ? 1 : 3,
-          opacity: isDone ? 0.55 : 1,
+          shadowOpacity: isDim ? 0.08 : 0.18, shadowRadius: 4, elevation: isDim ? 1 : 3,
+          opacity: isDim ? 0.55 : 1,
         }}
         {...panResponder.panHandlers}>
         <Pressable
@@ -202,19 +219,25 @@ export const SwipeableTaskItem = ({
           onLongPress={handleLongPress}
           delayLongPress={450}
           accessibilityRole="button"
-          accessibilityLabel={`${item.label}${isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}${streak > 0 ? `, ${streak} day streak` : ''}`}
-          accessibilityHint={canComplete ? 'Double tap to check off' : undefined}
+          accessibilityLabel={`${item.label}${isSkipped ? ', skipped today' : isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}${streak > 0 ? `, ${streak} day streak` : ''}`}
+          accessibilityHint={isSkipped ? 'Double tap to un-skip' : canComplete ? 'Double tap to check off' : undefined}
           accessibilityActions={[
-            ...(canComplete ? [{ name: 'activate', label: 'Check off' }] : []),
+            ...(canComplete || isSkipped ? [{ name: 'activate', label: isSkipped ? 'Un-skip' : 'Check off' }] : []),
             ...(canUndo ? [{ name: 'undo', label: 'Undo' }] : []),
+            ...(canSkip ? [{ name: 'skip', label: 'Skip today' }] : []),
           ]}
-          onAccessibilityAction={e => (e.nativeEvent.actionName === 'undo' ? handleLongPress() : handleTap())}
+          onAccessibilityAction={e => {
+            const action = e.nativeEvent.actionName;
+            if (action === 'skip') onSkip?.(item.id);
+            else if (action === 'undo') handleLongPress();
+            else handleTap();
+          }}
           style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Left: label + meta */}
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{
               fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16),
-              textDecorationLine: isDone ? 'line-through' : 'none',
+              textDecorationLine: isDone && !isSkipped ? 'line-through' : 'none',
             }}>
               {item.label}
             </Text>
@@ -237,8 +260,12 @@ export const SwipeableTaskItem = ({
             )}
           </View>
 
-          {/* Right: progress or done checkmark */}
-          {isMulti ? (
+          {/* Right: skipped tag, progress or done checkmark */}
+          {isSkipped ? (
+            <View style={{ borderRadius: 99, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(232,213,192,0.3)' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(232,213,192,0.7)' }}>Skipped</Text>
+            </View>
+          ) : isMulti ? (
             <View style={{ alignItems: 'center', minWidth: 40 }}>
               <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: isDone ? 'rgba(212,149,106,0.5)' : '#D4956A' }}>
                 {count}/{timesPerDay}
