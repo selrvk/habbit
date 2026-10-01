@@ -10,6 +10,7 @@ import {
 } from './storage';
 import type { DailyTotal, FinanceData } from './types';
 import type { TopUp } from './budget';
+import { categoryOf } from './categories';
 
 export const BACKUP_VERSION = 1;
 
@@ -151,20 +152,20 @@ const csvField = (v: string | number): string => {
 export const spendingCsv = ({ dailyTotals, today, topUps }: {
   dailyTotals: DailyTotal[]; today: FinanceData | null; topUps: TopUp[];
 }): string => {
-  type Row = { date: string; time: string; type: 'Spent' | 'Added money'; amount: number; note: string };
+  type Row = { date: string; time: string; type: 'Spent' | 'Added money'; category: string; amount: number; note: string };
   const rows: Row[] = [];
   const days = today ? [...dailyTotals.filter(d => d.date !== today.date), { date: today.date, total: today.spentToday, entries: today.history }] : dailyTotals;
   for (const day of days) {
     if (day.entries && day.entries.length > 0) {
-      for (const e of day.entries) rows.push({ date: day.date, time: e.time ?? '', type: 'Spent', amount: e.amount, note: e.note ?? '' });
+      for (const e of day.entries) rows.push({ date: day.date, time: e.time ?? '', type: 'Spent', category: categoryOf(e.category)?.label ?? '', amount: e.amount, note: e.note ?? '' });
     } else if (day.total > 0) {
       // Very old history only kept the day's total.
-      rows.push({ date: day.date, time: '', type: 'Spent', amount: day.total, note: '(day total)' });
+      rows.push({ date: day.date, time: '', type: 'Spent', category: '', amount: day.total, note: '(day total)' });
     }
   }
-  for (const t of topUps) rows.push({ date: t.date, time: t.time ?? '', type: 'Added money', amount: t.amount, note: t.note ?? '' });
+  for (const t of topUps) rows.push({ date: t.date, time: t.time ?? '', type: 'Added money', category: '', amount: t.amount, note: t.note ?? '' });
 
   rows.sort((a, b) => a.date.localeCompare(b.date) || timeToMinutes(a.time) - timeToMinutes(b.time));
-  const lines = rows.map(r => [r.date, r.time, r.type, r.amount, r.note].map(csvField).join(','));
-  return ['Date,Time,Type,Amount,Note', ...lines].join('\n') + '\n';
+  const lines = rows.map(r => [r.date, r.time, r.type, r.category, r.amount, r.note].map(csvField).join(','));
+  return ['Date,Time,Type,Category,Amount,Note', ...lines].join('\n') + '\n';
 };

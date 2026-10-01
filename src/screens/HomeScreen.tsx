@@ -60,7 +60,7 @@ export const HomeScreen = ({
   spentToday: number;
   allocatedPerDay: number; budget: BudgetState; currency: string; name: string; avatar: string; streak: number;
   onAddHabit: () => void; onGoToFinance: () => void;
-  onAddSpending: (amount: string, note?: string) => void;
+  onAddSpending: (amount: string, note?: string, category?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
   onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
 }) => {
@@ -113,8 +113,8 @@ export const HomeScreen = ({
   const isOverBudget = remaining < 0;
   const budgetPct    = allocatedPerDay > 0 ? spentToday / allocatedPerDay : 0;
 
-  const handleConfirm = (note?: string) => {
-    onAddSpending(addingAmount, note);
+  const handleConfirm = (note?: string, category?: string) => {
+    onAddSpending(addingAmount, note, category);
     setAddingAmount(''); setModalVisible(false);
   };
 
@@ -134,7 +134,7 @@ export const HomeScreen = ({
 
   return (
     <>
-      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote />
+      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote withCategory notePlaceholder="Add a note (optional)" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
 
         {/* ── Header: greeting + streak ── */}

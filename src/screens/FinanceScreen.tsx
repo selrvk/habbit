@@ -2,14 +2,16 @@ import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { getLast7Days, currencyStr } from '../helpers';
+import { getLast7Days, currencyStr, addDaysToKey } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { WeeklyChart } from '../components/WeeklyChart';
 import type { SpendingEntry, DailyTotal, ChartDay } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
-import { PERIOD_LABELS, type BudgetPeriod, type BudgetState, type TopUp } from '../budget';
+import { PERIOD_LABELS, periodStart, type BudgetPeriod, type BudgetState, type TopUp } from '../budget';
+import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
+import { CategoryGrid } from '../components/CategoryGrid';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -55,12 +57,15 @@ const Bar = ({ ratio, height = 10 }: { ratio: number; height?: number }) => (
 
 // Unified row for today's activity: spending (−) and money added (+).
 type ActivityRow =
-  | { kind: 'spend'; id: string; amount: number; time: string; note?: string }
+  | { kind: 'spend'; id: string; amount: number; time: string; note?: string; category?: string }
   | { kind: 'topup'; id: string; amount: number; time?: string; note?: string };
 
+/** "Coffee" (note), else the category's name, else "Spending". */
+const entryTitle = (e: { note?: string; category?: string }) => e.note || categoryOf(e.category)?.label || 'Spending';
+
 export const FinanceScreen = ({
-  spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency,
-  onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry,
+  spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
+  onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -69,11 +74,13 @@ export const FinanceScreen = ({
   budgetAmount: number;
   topUpsToday: TopUp[];
   currency: string;
+  todayKey: string;
   onSetBudget: (period: BudgetPeriod, amount: number) => void;
   onAddMoney: (amount: string, note?: string) => void;
   onUndoTopUp: (id: string) => void;
-  onAddSpending: (amount: string, note?: string) => void;
+  onAddSpending: (amount: string, note?: string, category?: string) => void;
   onUndoEntry: (id: string) => void;
+  onSetEntryCategory: (id: string, category: string | undefined) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -87,6 +94,8 @@ export const FinanceScreen = ({
   const [moneyModal,  setMoneyModal]  = useState(false);
   const [moneyInput,  setMoneyInput]  = useState('');
   const [selectedDay, setSelectedDay] = useState<ChartDay | null>(null);
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const editing = editingId ? todayHistory.find(e => e.id === editingId) ?? null : null;
 
   // ── derived values ────────────────────────────────────────────────────────
   const period       = budget.period;
@@ -106,6 +115,11 @@ export const FinanceScreen = ({
     ...topUpsToday.map(t => ({ kind: 'topup' as const, ...t })),
   ].sort((a, b) => b.id.localeCompare(a.id)); // ids start with a timestamp → newest first
 
+  // Where the money went in this budget period (the last 7 days for daily budgets).
+  const breakdownFrom  = isDaily ? addDaysToKey(todayKey, -6) : periodStart(period, todayKey);
+  const breakdown      = spendingByCategory(dailyTotals, todayHistory, breakdownFrom, todayKey);
+  const breakdownLabel = isDaily ? 'Last 7 days' : `This ${noun}`;
+
   const selectedEntries: SpendingEntry[] = selectedDay
     ? selectedDay.isToday
       ? todayHistory
@@ -118,6 +132,16 @@ export const FinanceScreen = ({
     setEditPeriod(period);
     setBudgetInput('');
     setBudgetModal(true);
+  };
+
+  const removeEntry = (id: string) => {
+    const entry = todayHistory.find(e => e.id === id);
+    if (!entry) return;
+    haptic.warning();
+    Alert.alert('Remove entry', `Remove ${currencyStr(currency, fmt(entry.amount))} (${entryTitle(entry)}) from today?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => { haptic.error(); setEditingId(null); onUndoEntry(id); } },
+    ]);
   };
 
   const handleUndo = (row: ActivityRow) => {
@@ -195,10 +219,38 @@ export const FinanceScreen = ({
         amount={spendInput}
         currency={currency}
         onChangeAmount={setSpendInput}
-        onConfirm={note => { onAddSpending(spendInput, note); setSpendInput(''); setSpendModal(false); }}
+        onConfirm={(note, category) => { onAddSpending(spendInput, note, category); setSpendInput(''); setSpendModal(false); }}
         onClose={() => { setSpendModal(false); setSpendInput(''); }}
         withNote
+        withCategory
+        notePlaceholder="Add a note (optional)"
       />
+
+      {/* ── Edit one of today's entries: category, or remove it ── */}
+      <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={() => setEditingId(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(18,7,5,0.80)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setEditingId(null)} />
+          {editing && (
+            <View style={{ backgroundColor: '#3B2220', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1.5, borderBottomWidth: 0, borderColor: 'rgba(212,149,106,0.35)' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>{entryTitle(editing)} · {editing.time}</Text>
+                  <CurrencyAmount currency={currency} amount={fmt(editing.amount)} imageSize={fs(24)}
+                    textStyle={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(26) }} />
+                </View>
+                <TouchableOpacity onPress={() => setEditingId(null)} hitSlop={12} accessibilityLabel="Close">
+                  <Text style={{ color: 'rgba(232,213,192,0.4)', fontSize: fs(18) }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[label, { marginBottom: 8 }]}>Category</Text>
+              <CategoryGrid value={editing.category} onChange={key => { onSetEntryCategory(editing.id, key); setEditingId(null); }} />
+              <TouchableOpacity onPress={() => removeEntry(editing.id)} style={{ alignSelf: 'center', marginTop: 20, paddingVertical: 8, paddingHorizontal: 16 }}>
+                <Text style={{ fontFamily: 'Jua', color: C.red, fontSize: fs(14) }}>Remove entry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
 
       {/* ── Add money (top-up) ── */}
       <NumpadModal
@@ -252,8 +304,9 @@ export const FinanceScreen = ({
               ) : (
                 [...selectedEntries].reverse().map(entry => (
                   <View key={entry.id} style={{ backgroundColor: C.card, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 }}>
+                    <Text style={{ fontSize: fs(18), marginRight: 10, opacity: entry.category ? 1 : 0.3 }}>{categoryOf(entry.category)?.emoji ?? '•'}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{entry.note || 'Spending'}</Text>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{entryTitle(entry)}</Text>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>{entry.time}</Text>
                     </View>
                     <CurrencyAmount currency={currency} amount={fmt(entry.amount)}
@@ -336,12 +389,18 @@ export const FinanceScreen = ({
         ) : (
           <View style={{ backgroundColor: C.card, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
             {activity.map((row, i) => (
-              <TouchableOpacity key={row.id} onLongPress={() => handleUndo(row)} onPress={() => handleUndo(row)} activeOpacity={0.7}
-                accessibilityHint="Opens undo"
+              <TouchableOpacity key={row.id}
+                onPress={() => { if (row.kind === 'spend') { haptic.light(); setEditingId(row.id); } else handleUndo(row); }}
+                onLongPress={() => (row.kind === 'spend' ? removeEntry(row.id) : handleUndo(row))}
+                activeOpacity={0.7}
+                accessibilityHint={row.kind === 'spend' ? 'Change its category or remove it' : 'Opens undo'}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
+                <Text style={{ fontSize: fs(18), marginRight: 10, opacity: row.kind === 'spend' && !row.category ? 0.3 : 1 }}>
+                  {row.kind === 'topup' ? '💰' : categoryOf(row.category)?.emoji ?? '•'}
+                </Text>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>
-                    {row.note || (row.kind === 'spend' ? 'Spending' : 'Money added')}
+                    {row.kind === 'spend' ? entryTitle(row) : row.note || 'Money added'}
                   </Text>
                   {row.time ? <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{row.time}</Text> : null}
                 </View>
@@ -353,6 +412,35 @@ export const FinanceScreen = ({
               </TouchableOpacity>
             ))}
           </View>
+        )}
+
+        {/* ── Where it went: spending by category this period ── */}
+        {breakdown.length > 0 && (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 12, marginBottom: 10 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17) }}>Where it went</Text>
+              <Text style={label}>{breakdownLabel}</Text>
+            </View>
+            <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, gap: 12 }}>
+              {breakdown.map(b => {
+                const cat = b.key === 'none' ? UNCATEGORIZED : categoryOf(b.key)!;
+                return (
+                  <View key={b.key} accessible accessibilityLabel={`${cat.label}: ${currencyStr(currency, fmt(b.total))}, ${Math.round(b.share * 100)} percent`}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                      <Text style={{ fontSize: fs(15), width: 26 }}>{cat.emoji}</Text>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, flex: 1 }}>{cat.label}</Text>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginRight: 8 }}>{Math.round(b.share * 100)}%</Text>
+                      <CurrencyAmount currency={currency} amount={fmt(b.total)} imageSize={fs(13)}
+                        textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: C.cream }} />
+                    </View>
+                    <View style={{ height: 6, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.12)', overflow: 'hidden', marginLeft: 26 }}>
+                      <View style={{ height: '100%', width: `${Math.max(b.share * 100, 2)}%`, borderRadius: 99, backgroundColor: cat.color }} />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
         )}
 
         {/* ── This week ── */}

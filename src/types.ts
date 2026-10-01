@@ -40,7 +40,11 @@ export type HabbitFormData  = {
 
 
 export type CommissionsData = { items: Commission[]; date: string };
-export type SpendingEntry   = { id: string; amount: number; time: string; note?: string };
+export type SpendingEntry   = {
+  id: string; amount: number; time: string; note?: string;
+  /** A CategoryKey (see categories.ts); missing on entries logged before categories. */
+  category?: string;
+};
 export type FinanceData     = { spentToday: number; date: string; history: SpendingEntry[] };
 export type DailyTotal      = { date: string; total: number; entries?: SpendingEntry[] };
 export type Settings        = {

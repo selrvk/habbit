@@ -606,6 +606,14 @@ export default function App() {
     setTasksSubScreen(null);
   }, []);
 
+  const handleSetEntryCategory = useCallback((id: string, category: string | undefined) => {
+    setTodayHistory(prev => {
+      const updated = prev.map(e => (e.id === id ? { ...e, category } : e));
+      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: liveState.current.spentToday, date: todayKey, history: updated })).catch(() => {});
+      return updated;
+    });
+  }, [todayKey]);
+
   const handleUndoEntry = useCallback((id: string) => {
     setTodayHistory(prev => {
       const entry = prev.find(e => e.id === id); if (!entry) return prev;
@@ -617,10 +625,10 @@ export default function App() {
     });
   }, [spentToday, todayKey]);
 
-  const handleFinanceAddSpend = useCallback((amount: string, note?: string) => {
+  const handleFinanceAddSpend = useCallback((amount: string, note?: string, category?: string) => {
     const toAdd = parseFloat(amount || '0');
     if (toAdd <= 0) return;
-    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note };
+    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note, ...(category ? { category } : {}) };
     const newSpent   = spentToday + toAdd;
     const newHistory = [...todayHistory, entry];
     setSpentToday(newSpent);
@@ -759,6 +767,8 @@ export default function App() {
             onAddMoney={handleAddMoney}
             onUndoTopUp={handleUndoTopUp}
             onUndoEntry={handleUndoEntry}
+            onSetEntryCategory={handleSetEntryCategory}
+            todayKey={todayKey}
             onAddSpending={handleFinanceAddSpend}
           />
         );

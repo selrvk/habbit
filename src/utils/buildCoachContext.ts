@@ -10,6 +10,7 @@ import type {
 } from '../types';
 import { isScheduledForDay, getLast7DayKeys } from '../helpers';
 import { habitStats } from '../habitStats';
+import { categoryOf } from '../categories';
 import type { BudgetState } from '../budget';
 
 export interface WeeklySnapshotDay {
@@ -27,6 +28,7 @@ export interface SpendingEntryContext {
   amount: number;
   note?: string;
   time?: string;      // HH:MM if available
+  category?: string;  // category name, e.g. "Food"
 }
 
 export interface CoachContext {
@@ -135,6 +137,7 @@ export async function buildCoachContext(
         date: todayStr,
         amount: entry.amount,
         note: entry.note,
+        category: categoryOf(entry.category)?.label,
         time: entry.time,
       });
     }
@@ -149,6 +152,7 @@ export async function buildCoachContext(
         date: day.date,
         amount: entry.amount,
         note: entry.note,
+        category: categoryOf(entry.category)?.label,
         time: entry.time,
       });
     }

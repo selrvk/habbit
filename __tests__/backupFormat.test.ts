@@ -66,7 +66,7 @@ describe('spendingCsv', () => {
       dailyTotals: [
         { date: '2026-09-29', total: 300 }, // old history without entries
         { date: '2026-09-30', total: 80, entries: [
-          { id: '2', amount: 30, time: '1:15 PM', note: 'Lunch, "big"' },
+          { id: '2', amount: 30, time: '1:15 PM', note: 'Lunch, "big"', category: 'food' },
           { id: '1', amount: 50, time: '9:00 AM', note: '=cmd' },
         ] },
       ],
@@ -74,12 +74,12 @@ describe('spendingCsv', () => {
       topUps: [{ id: 't', amount: 1000, date: '2026-09-30', time: '12:00 PM', note: 'Allowance' }],
     });
     expect(csv.trim().split('\n')).toEqual([
-      'Date,Time,Type,Amount,Note',
-      '2026-09-29,,Spent,300,(day total)',
-      '2026-09-30,9:00 AM,Spent,50,\'=cmd',
-      '2026-09-30,12:00 PM,Added money,1000,Allowance',
-      '2026-09-30,1:15 PM,Spent,30,"Lunch, ""big"""',
-      '2026-10-01,9:05 AM,Spent,120,Coffee',
+      'Date,Time,Type,Category,Amount,Note',
+      '2026-09-29,,Spent,,300,(day total)',
+      '2026-09-30,9:00 AM,Spent,,50,\'=cmd',
+      '2026-09-30,12:00 PM,Added money,,1000,Allowance',
+      '2026-09-30,1:15 PM,Spent,Food,30,"Lunch, ""big"""',
+      '2026-10-01,9:05 AM,Spent,,120,Coffee',
     ]);
   });
 });

@@ -6,6 +6,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { applyNumpadKey } from '../helpers';
 import { CurrencyAmount } from './CurrencyAmount';
+import { CategoryGrid } from './CategoryGrid';
 
 const haptic = {
   light:   () => ReactNativeHapticFeedback.trigger('impactLight',         { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -16,11 +17,15 @@ const haptic = {
 const NUMPAD_KEYS = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
 
 const NOTE_MODAL_SHIFT = Platform.OS === 'ios' ? -130 : -110;
+// The category grid makes the note step taller, so it needs to move further for the keyboard.
+const CATEGORY_MODAL_SHIFT = Platform.OS === 'ios' ? -165 : -140;
 
-export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, notePlaceholder = 'What was this for? (optional)', headerExtra }: {
+export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra }: {
   visible: boolean; title: string; hint?: string; confirmLabel: string; amount: string; currency: string;
-  onChangeAmount: (v: string) => void; onConfirm: (note?: string) => void; onClose: () => void;
+  onChangeAmount: (v: string) => void; onConfirm: (note?: string, category?: string) => void; onClose: () => void;
   withNote?: boolean;
+  /** Spending: the second step asks for a category (one tap) as well as an optional note. */
+  withCategory?: boolean;
   notePlaceholder?: string;
   /** Rendered between the title and the amount, e.g. a period picker. */
   headerExtra?: React.ReactNode;
@@ -34,12 +39,14 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   const noteInputRef   = useRef<TextInput>(null);
   const [step, setStep] = useState<'amount' | 'note'>('amount');
   const [note, setNote] = useState('');
+  const [category, setCategory] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (visible) {
       haptic.medium();
       setStep('amount');
       setNote('');
+      setCategory(undefined);
       noteAnim.setValue(0);
       modalShiftAnim.setValue(0);
     }
@@ -53,6 +60,13 @@ const goToNote = () => {
     haptic.success();
     // 1. Set state first so the UI prepares
     setStep('note');
+
+    // With categories, a category tap is usually all that's needed: no keyboard until the
+    // note field is tapped (see shiftForKeyboard).
+    if (withCategory) {
+      Animated.spring(noteAnim, { toValue: 1, useNativeDriver: true, tension: 140, friction: 10 }).start();
+      return;
+    }
     
     // 2. Animate immediately. 
     // We use a slightly faster duration to ensure the modal is already 
@@ -76,11 +90,17 @@ const goToNote = () => {
     setTimeout(() => noteInputRef.current?.focus(), 100);
   };
 
+  const shiftForKeyboard = (up: boolean) => {
+    if (!withCategory) return;
+    Animated.spring(modalShiftAnim, { toValue: up ? CATEGORY_MODAL_SHIFT : 0, useNativeDriver: true, tension: 140, friction: 10 }).start();
+  };
+
   const handleConfirm = (skipNote = false) => {
     haptic.success();
-    onConfirm(skipNote ? undefined : note.trim() || undefined);
+    onConfirm(skipNote ? undefined : note.trim() || undefined, category);
     setStep('amount');
     setNote('');
+    setCategory(undefined);
     noteAnim.setValue(0);
     modalShiftAnim.setValue(0);
   };
@@ -116,7 +136,7 @@ const goToNote = () => {
               {/* Header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <Text style={{ fontFamily: 'Jua', color: '#D4956A', fontSize: 12, opacity: 0.7, letterSpacing: 2, textTransform: 'uppercase' }}>
-                  {step === 'note' ? 'Add a note' : title}
+                  {step === 'note' ? (withCategory ? 'What was it for?' : 'Add a note') : title}
                 </Text>
                 <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                   <Text style={{ color: 'rgba(232,213,192,0.4)', fontSize: 16 }}>✕</Text>
@@ -150,6 +170,11 @@ const goToNote = () => {
               {/* Note step */}
               {step === 'note' && (
                 <Animated.View style={{ opacity: noteOpacity, transform: [{ translateY: noteSlideY }], marginBottom: 16 }}>
+                  {withCategory && (
+                    <View style={{ marginBottom: 12 }}>
+                      <CategoryGrid value={category} onChange={setCategory} />
+                    </View>
+                  )}
                   <View style={{ backgroundColor: '#5C3D2E', borderRadius: 14, borderWidth: 1.5, borderColor: note.trim() ? '#D4956A' : 'rgba(212,149,106,0.2)', paddingHorizontal: 16, paddingVertical: 4, marginBottom: 12 }}>
                     <TextInput
                       ref={noteInputRef}
@@ -159,15 +184,17 @@ const goToNote = () => {
                       placeholderTextColor="rgba(232,213,192,0.25)"
                       returnKeyType="done"
                       onSubmitEditing={() => handleConfirm(false)}
+                      onFocus={() => shiftForKeyboard(true)}
+                      onBlur={() => shiftForKeyboard(false)}
                       maxLength={60}
                       style={{ fontFamily: 'Jua', fontSize: 15, color: '#e8d5c0', paddingVertical: 14 }}
                     />
                   </View>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity onPress={() => handleConfirm(true)} activeOpacity={0.7}
+                    {!withCategory && <TouchableOpacity onPress={() => handleConfirm(true)} activeOpacity={0.7}
                       style={{ flex: 1, backgroundColor: 'rgba(212,149,106,0.1)', borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}>
                       <Text style={{ fontFamily: 'Jua', fontSize: 14, color: 'rgba(232,213,192,0.55)' }}>Skip</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity>}
                     <TouchableOpacity onPress={() => handleConfirm(false)} activeOpacity={0.8}
                       style={{ flex: 2, backgroundColor: '#D4956A', borderRadius: 14, paddingVertical: 14, alignItems: 'center', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 }}>
                       <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 15 }}>Save</Text>

@@ -64,7 +64,8 @@ export function buildSystemPrompt(ctx: CoachContext): string {
         .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       const timeStr  = e.time ? ` at ${e.time}` : '';
       const noteStr  = e.note ? ` — "${e.note}"` : ' — (no note)';
-      return `  ${dayLabel}${timeStr}: ${sym}${e.amount.toFixed(2)}${noteStr}`;
+      const catStr   = e.category ? ` [${e.category}]` : '';
+      return `  ${dayLabel}${timeStr}: ${sym}${e.amount.toFixed(2)}${catStr}${noteStr}`;
     }).join('\n');
   }
 
