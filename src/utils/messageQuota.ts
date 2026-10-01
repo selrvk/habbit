@@ -1,5 +1,6 @@
 // src/utils/messageQuota.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTodayKey } from '../helpers';
 
 const STORAGE_QUOTA_KEY = 'coach_message_quota';
 
@@ -18,7 +19,8 @@ interface QuotaData {
   count: number;
 }
 
-const todayStr = () => new Date().toISOString().split('T')[0];
+// Local date, so the daily quota resets at the user's midnight (not UTC midnight).
+const todayStr = getTodayKey;
 
 export async function getRemainingMessages(isPro: boolean): Promise<number> {
   const limit = isPro ? MESSAGE_LIMITS.pro : MESSAGE_LIMITS.free;

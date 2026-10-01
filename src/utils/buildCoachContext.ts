@@ -8,7 +8,8 @@ import {
 import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
 } from '../types';
-import { isScheduledForDay } from '../helpers';
+import { isScheduledForDay, getLast7DayKeys } from '../helpers';
+import type { BudgetState } from '../budget';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -47,6 +48,8 @@ export interface CoachContext {
     busiestSpendingDay: string | null;
     budgetUsedTodayPct: number;
   };
+  /** Weekly/monthly budget status; null for daily budgets. */
+  budgetPeriod: { period: 'weekly' | 'monthly'; budget: number; left: number; daysLeft: number } | null;
   weeklySnapshot: WeeklySnapshotDay[];
   // NEW: individual entries with notes for the last 7 days
   recentSpendingEntries: SpendingEntryContext[];
@@ -54,19 +57,13 @@ export interface CoachContext {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function getLast7DateStrings(): string[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().split('T')[0];
-  });
-}
 
 export async function buildCoachContext(
   name: string,
   streak: number,
+  budget?: BudgetState,
 ): Promise<CoachContext> {
-  const last7 = getLast7DateStrings();
+  const last7 = getLast7DayKeys(); // local dates, matching the storage keys
 
   const [
     commissionsRaw, financeRaw, financeHistoryRaw,
@@ -106,7 +103,7 @@ export async function buildCoachContext(
   const missedDaysLast7         = 7 - daysFullyCompletedLast7;
 
   const spentToday  = financeData?.spentToday ?? 0;
-  const dailyBudget = settings?.allocatedPerDay ?? 0;
+  const dailyBudget = budget?.dailyAllowance ?? settings?.allocatedPerDay ?? 0;
   const currency    = settings?.currency ?? 'USD';
 
   const recentFinance  = financeHistory.filter(d => last7Set.has(d.date));
@@ -198,6 +195,14 @@ export async function buildCoachContext(
       busiestSpendingDay: busiestDay?.date ?? null,
       budgetUsedTodayPct,
     },
+    budgetPeriod: budget && budget.period !== 'daily'
+      ? {
+          period:   budget.period,
+          budget:   Math.round(budget.periodBudget * 100) / 100,
+          left:     Math.round(budget.periodLeft * 100) / 100,
+          daysLeft: budget.daysLeft,
+        }
+      : null,
     weeklySnapshot,
     recentSpendingEntries,
   };

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES, AVATAR_KEYS } from '../constants';
 import { avatarImage } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
-import { SectionDivider } from '../components/SectionDivider';
+import { useFontSize } from '../hooks/useFontSize';
 import { TextModal } from '../components/TextModal';
 import { CompletionCalendar } from '../components/CompletionCalendar';
 import { useProStatus } from '../context/ProContext';
@@ -13,195 +13,137 @@ import type { Stats, CompletionRecord } from '../types';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
-  light: () => ReactNativeHapticFeedback.trigger('impactLight',       HAPTIC_OPTIONS),
-  error: () => ReactNativeHapticFeedback.trigger('notificationError', HAPTIC_OPTIONS),
+  light: () => ReactNativeHapticFeedback.trigger('impactLight', HAPTIC_OPTIONS),
 };
 
-export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, midnightNotifEnabled, onSetName, onSetAvatar, onResetToday, onDeleteAllData, onToggleMidnightNotif, onOpenSettings }: {
+const C = {
+  cream:  '#e8d5c0',
+  accent: '#D4956A',
+  card:   '#5C3D2E',
+  muted:  'rgba(232,213,192,0.55)',
+  border: 'rgba(212,149,106,0.18)',
+};
+
+export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, onSetName, onSetAvatar, onOpenSettings }: {
   name: string; avatar: string; stats: Stats; completionHistory: CompletionRecord[]; todayKey: string;
-  midnightNotifEnabled: boolean;
   onSetName: (v: string) => void; onSetAvatar: (v: string) => void;
-  onResetToday: () => void; onDeleteAllData: () => void; onToggleMidnightNotif: (v: boolean) => void;
   onOpenSettings: () => void;
 }) => {
   const navHeight = useNavHeight();
-  const [nameModal, setNameModal] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
+  const fs = useFontSize();
+  const [nameModal, setNameModal]       = useState(false);
+  const [showPaywall, setShowPaywall]   = useState(false);
+  const [pickingAvatar, setPickingAvatar] = useState(false);
   const { isPro } = useProStatus();
 
-  const handleReset = () => {
-    haptic.error();
-    Alert.alert("Reset Today's Data", "This will uncheck all of today's Habbits and clear today's spending. Are you sure?", [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: () => { haptic.error(); onResetToday(); } },
-    ]);
-  };
+  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+    <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17), marginTop: 24, marginBottom: 10 }}>{children}</Text>
+  );
 
-  const handleDeleteAll = () => {
-    haptic.error();
-    Alert.alert('Delete All Data', 'This will permanently delete everything. Are you absolutely sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete Everything', style: 'destructive', onPress: () => {
-        haptic.error();
-        Alert.alert('Are you sure?', 'This cannot be undone.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes, delete everything', style: 'destructive', onPress: () => { haptic.error(); onDeleteAllData(); } },
-        ]);
-      }},
-    ]);
-  };
-
-  const StatCard = ({ emoji, label, value, showDaysSuffix = false, accent = false }: { emoji: any; label: string; value: number | string; showDaysSuffix?: boolean; accent?: boolean }) => (
-    <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: accent ? 'rgba(212,149,106,0.4)' : 'rgba(212,149,106,0.15)' }}>
-      <Image source={emoji} style={{ width: 50, height: 50, marginBottom: 6 }} resizeMode="contain" />
+  const StatCard = ({ emoji, label, value, suffix, accent = false }: { emoji: any; label: string; value: number; suffix?: string; accent?: boolean }) => (
+    <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 16, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: accent ? 'rgba(212,149,106,0.45)' : C.border }}>
+      <Image source={emoji} style={{ width: 40, height: 40, marginBottom: 4 }} resizeMode="contain" />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-        <Text style={{ fontFamily: 'DynaPuff', fontSize: 32, color: accent ? '#D4956A' : '#e8d5c0', lineHeight: 36 }}>{value}</Text>
-        {showDaysSuffix && <Text style={{ fontFamily: 'Jua', fontSize: 12, color: accent ? 'rgba(212,149,106,0.7)' : 'rgba(232,213,192,0.5)', marginBottom: 4 }}>days</Text>}
+        <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(28), color: accent ? C.accent : C.cream, lineHeight: fs(32) }}>{value}</Text>
+        {suffix && <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginBottom: 4 }}>{suffix}</Text>}
       </View>
-      <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.5)', textAlign: 'center', marginTop: 2 }}>{label}</Text>
+      <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, textAlign: 'center', marginTop: 2 }}>{label}</Text>
     </View>
-  );
-
-  const ToggleRow = ({ icon, title, subtitle, enabled, onToggle }: { icon: string; title: string; subtitle: string; enabled: boolean; onToggle: () => void }) => (
-    <TouchableOpacity onPress={onToggle} activeOpacity={0.8}
-      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#5C3D2E', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: enabled ? 'rgba(212,149,106,0.3)' : 'rgba(212,149,106,0.12)' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-        <Text style={{ fontSize: 20 }}>{icon}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Jua', fontSize: 13, color: '#e8d5c0' }}>{title}</Text>
-          <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.45)', marginTop: 1 }}>{subtitle}</Text>
-        </View>
-      </View>
-      <View style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: enabled ? '#D4956A' : 'rgba(212,149,106,0.2)', justifyContent: 'center', paddingHorizontal: 3, alignItems: enabled ? 'flex-end' : 'flex-start' }}>
-        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }} />
-      </View>
-    </TouchableOpacity>
-  );
-
-  // ── Pro badge (shown when Pro) ─────────────────────────────────────────────
-  const ProBadge = () => (
-    <View style={{
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 8, marginTop: 10,
-      backgroundColor: 'rgba(212,149,106,0.12)',
-      borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
-      borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)',
-      alignSelf: 'center',
-    }}>
-      <Text style={{ fontSize: 16 }}>🥕</Text>
-      <Text style={{ fontFamily: 'DynaPuff', fontSize: 13, color: '#D4956A' }}>
-        Habbit Pro
-      </Text>
-      <Text style={{ fontSize: 16 }}>✨</Text>
-    </View>
-  );
-
-  // ── Upgrade nudge (shown when free) ───────────────────────────────────────
-  const UpgradeNudge = () => (
-    <TouchableOpacity
-      onPress={() => { haptic.light(); setShowPaywall(true); }}
-      activeOpacity={0.8}
-      style={{
-        marginTop: 10,
-        alignSelf: 'center',
-        borderRadius: 20,
-        paddingHorizontal: 16, paddingVertical: 10,
-        borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)',
-        backgroundColor: 'rgba(212,149,106,0.07)',
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-      }}
-    >
-      <Text style={{ fontSize: 15 }}>🐰</Text>
-      <View>
-        <Text style={{ fontFamily: 'DynaPuff', fontSize: 12, color: 'rgba(232,213,192,0.85)' }}>
-          Free Plan
-        </Text>
-        <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(232,213,192,0.4)', marginTop: 1 }}>
-          Tap to unlock Pro →
-        </Text>
-      </View>
-    </TouchableOpacity>
   );
 
   return (
     <>
-      {/* Paywall modal */}
       <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet">
         <PaywallScreen onClose={() => setShowPaywall(false)} />
       </Modal>
-
       <TextModal visible={nameModal} title="Edit Name" placeholder="Your name" initialValue={name} onSave={v => { onSetName(v); setNameModal(false); }} onClose={() => setNameModal(false)} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
 
-        <View style={{ marginBottom: 8 }}>
-          {/* Gear button */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>
+
+        {/* ── Header ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(24) }}>Profile</Text>
           <TouchableOpacity
             onPress={() => { haptic.light(); onOpenSettings(); }}
             activeOpacity={0.7}
-            style={{
-              alignSelf: 'flex-end',
-              width: 38, height: 38, borderRadius: 12,
-              backgroundColor: 'rgba(212,149,106,0.12)',
-              borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)',
-              justifyContent: 'center', alignItems: 'center',
-              marginBottom: 4,
-            }}
-          >
-            <Text style={{ fontSize: 18 }}>⚙️</Text>
+            accessibilityLabel="Settings"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)' }}>
+            <Text style={{ fontSize: fs(14) }}>⚙️</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(13) }}>Settings</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Identity ── */}
+        <View style={{ alignItems: 'center', marginTop: 12 }}>
+          <TouchableOpacity
+            onPress={() => { haptic.light(); setPickingAvatar(v => !v); }}
+            activeOpacity={0.8}
+            accessibilityLabel="Change avatar"
+            style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: C.card, justifyContent: 'center', alignItems: 'center', borderWidth: 2.5, borderColor: C.accent }}>
+            <Image source={avatarImage(avatar)} style={{ width: 66, height: 66 }} resizeMode="contain" />
+            <View style={{ position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: 14, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#2A1A18' }}>
+              <Text style={{ color: '#fff', fontSize: 13 }}>✎</Text>
+            </View>
           </TouchableOpacity>
 
-          <View style={{ alignItems: 'center' }}>
-            <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2.5, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 }}>
-              <Image source={avatarImage(avatar)} style={{ width: 62, height: 62 }} resizeMode="contain" />
+          {pickingAvatar && (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              {AVATAR_KEYS.map(key => {
+                const selected = avatar === key;
+                return (
+                  <TouchableOpacity key={key}
+                    onPress={() => { haptic.light(); onSetAvatar(key); setPickingAvatar(false); }}
+                    activeOpacity={0.7}
+                    accessibilityState={{ selected }}
+                    style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: selected ? 'rgba(212,149,106,0.25)' : C.card, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: selected ? C.accent : 'transparent' }}>
+                    <Image source={avatarImage(key)} style={{ width: 36, height: 36 }} resizeMode="contain" />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <TouchableOpacity onPress={() => { haptic.light(); setNameModal(true); }} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0' }}>{name}</Text>
-              <View style={{ backgroundColor: 'rgba(212,149,106,0.15)', borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)' }}>
-                <Text style={{ fontFamily: 'Jua', fontSize: 11, color: '#D4956A' }}>Edit</Text>
-              </View>
+          )}
+
+          <TouchableOpacity onPress={() => { haptic.light(); setNameModal(true); }} activeOpacity={0.8} accessibilityLabel={`Name: ${name}. Tap to edit`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(24), color: C.cream }}>{name}</Text>
+            <Text style={{ fontSize: fs(14), color: C.muted }}>✎</Text>
+          </TouchableOpacity>
+
+          {isPro ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+              <Text style={{ fontSize: fs(14) }}>🥕</Text>
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(13), color: C.accent }}>Habbit Pro</Text>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => { haptic.light(); setShowPaywall(true); }} activeOpacity={0.8}
+              style={{ marginTop: 8, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)', backgroundColor: 'rgba(212,149,106,0.08)' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.accent }}>Free plan · Unlock Pro →</Text>
             </TouchableOpacity>
-
-            {/* ── Pro status ── */}
-            {isPro ? <ProBadge /> : <UpgradeNudge />}
-          </View>
+          )}
         </View>
 
-        <SectionDivider title="✦ Choose Avatar ✦" />
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 4 }}>
-          {AVATAR_KEYS.map(key => {
-            const isSelected = avatar === key;
-            return (
-              <TouchableOpacity key={key} onPress={() => { haptic.light(); onSetAvatar(key); }} activeOpacity={0.7}
-                style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: isSelected ? 'rgba(212,149,106,0.2)' : '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isSelected ? '#D4956A' : 'rgba(212,149,106,0.15)', shadowColor: isSelected ? '#D4956A' : 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: isSelected ? 4 : 0 }}>
-                <Image source={avatarImage(key)} style={{ width: 38, height: 38 }} resizeMode="contain" />
-              </TouchableOpacity>
-            );
-          })}
+        {/* ── Stats ── */}
+        <SectionTitle>Your stats</SectionTitle>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <StatCard emoji={require('./../../assets/emojis/Fire.png')} label="Current streak" value={stats.currentStreak} suffix="days" accent={stats.currentStreak > 0} />
+          <StatCard emoji={require('./../../assets/emojis/Star.png')} label="Best streak" value={stats.bestStreak} suffix="days" />
+          <StatCard emoji={IMAGES.carrots} label="Habbits done" value={stats.totalCompleted} />
         </View>
+        {stats.currentStreak === 0 && (
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, textAlign: 'center', marginTop: 10 }}>
+            Finish all of today's Habbits to start a streak 🔥
+          </Text>
+        )}
 
-        <SectionDivider title="✦ Your Stats ✦" />
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-          <StatCard emoji={require('./../../assets/emojis/Fire.png')} label="Current Streak" value={stats.currentStreak} showDaysSuffix accent={stats.currentStreak > 0} />
-          <StatCard emoji={require('./../../assets/emojis/Star.png')} label="Best Streak" value={stats.bestStreak} showDaysSuffix />
-        </View>
-        <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)', marginBottom: 4 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Image source={IMAGES.carrot} style={{ width: 28, height: 28 }} resizeMode="contain" />
-            <View>
-              <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.5)', marginBottom: 2 }}>Total Habbits Completed</Text>
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: 28, color: '#e8d5c0' }}>{stats.totalCompleted}</Text>
-            </View>
-          </View>
-          <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.3)' }}>all time</Text>
-        </View>
-        {stats.currentStreak === 0 && <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.3)', textAlign: 'center', marginTop: 6, marginBottom: 4 }}>Complete all Habbits today to start your streak! 🔥</Text>}
-
-        <SectionDivider title="✦ Completion History ✦" />
-        <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)' }}>
+        {/* ── History ── */}
+        <SectionTitle>History</SectionTitle>
+        <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border }}>
           {completionHistory.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-              <Image source={IMAGES.bunny} style={{ width: 40, height: 40, marginBottom: 8, opacity: 0.4 }} resizeMode="contain" />
-              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(232,213,192,0.4)', textAlign: 'center' }}>Complete all your Habbits for a day{'\n'}to start building your history!</Text>
+            <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+              <Image source={IMAGES.bunny} style={{ width: 40, height: 40, marginBottom: 8, opacity: 0.5 }} resizeMode="contain" />
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, textAlign: 'center' }}>
+                Your days will fill in here as you go.
+              </Text>
             </View>
           ) : <CompletionCalendar records={completionHistory} todayKey={todayKey} />}
         </View>

@@ -17,10 +17,13 @@ const NUMPAD_KEYS = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
 
 const NOTE_MODAL_SHIFT = Platform.OS === 'ios' ? -130 : -110;
 
-export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false }: {
+export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, notePlaceholder = 'What was this for? (optional)', headerExtra }: {
   visible: boolean; title: string; hint?: string; confirmLabel: string; amount: string; currency: string;
   onChangeAmount: (v: string) => void; onConfirm: (note?: string) => void; onClose: () => void;
   withNote?: boolean;
+  notePlaceholder?: string;
+  /** Rendered between the title and the amount, e.g. a period picker. */
+  headerExtra?: React.ReactNode;
 }) => {
   const scaleAnim      = useRef(new Animated.Value(0.88)).current;
   const opacityAnim    = useRef(new Animated.Value(0)).current;
@@ -120,6 +123,8 @@ const goToNote = () => {
                 </TouchableOpacity>
               </View>
 
+              {headerExtra && step === 'amount' && <View style={{ marginBottom: 14 }}>{headerExtra}</View>}
+
               {/* Amount display — always visible, dims on note step */}
               <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: step === 'note' ? 'rgba(212,149,106,0.15)' : (hasAmount ? '#D4956A' : 'rgba(212,149,106,0.2)'), paddingVertical: 16, paddingHorizontal: 20, marginBottom: hint && step === 'amount' ? 6 : 18, alignItems: 'center' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
@@ -133,7 +138,7 @@ const goToNote = () => {
                       textAlign: 'center',
                       color: step === 'note' ? 'rgba(232,213,192,0.3)' : (hasAmount ? '#e8d5c0' : 'rgba(232,213,192,0.25)'),
                     }}
-                    size={42}
+                    imageSize={36}
                   />
                 </View>
               </View>
@@ -150,7 +155,7 @@ const goToNote = () => {
                       ref={noteInputRef}
                       value={note}
                       onChangeText={setNote}
-                      placeholder="What was this for? (optional)"
+                      placeholder={notePlaceholder}
                       placeholderTextColor="rgba(232,213,192,0.25)"
                       returnKeyType="done"
                       onSubmitEditing={() => handleConfirm(false)}
@@ -198,7 +203,7 @@ const goToNote = () => {
                             currency={currency}
                             amount={amount}
                             textStyle={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}
-                            size={16}
+                            imageSize={16}
                           />
                         </View>
                       ) : (

@@ -1,13 +1,13 @@
-import { TurboModuleRegistry } from 'react-native';
+import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import SharedGroupPreferences from 'react-native-shared-group-preferences';
 
 const APP_GROUP = 'group.com.selrvk.habbit';
 const DEBOUNCE_MS = 1500;
 
-type WidgetReloaderModule = {
+interface WidgetReloaderModule extends TurboModule {
   setData(data: object): void;
   reloadAll(): void;
-};
+}
 
 const WidgetReloader = TurboModuleRegistry.get<WidgetReloaderModule>('WidgetReloader');
 
@@ -21,6 +21,10 @@ export type WidgetData = {
   streak: number;
   avatar: string;
   upcomingHabbit?: string;
+  /** Local 'YYYY-MM-DD' the data belongs to, so the widget can tell when it's stale. */
+  date: string;
+  /** Habits scheduled on each weekday (0 = Sunday), for the widget's fresh-day view. */
+  scheduledByDow: number[];
 };
 
 let lastSerialized: string | null = null;

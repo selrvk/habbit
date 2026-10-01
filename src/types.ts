@@ -1,6 +1,7 @@
 // src/types.ts
 
 export type ReminderTime    = { hour: number; minute: number };
+export type EveningReminder = { enabled: boolean; hour: number; minute: number };
 export type ReminderSplit   = { startHour: number; startMinute: number; endHour: number; endMinute: number };
 
 export type Commission      = {
@@ -32,8 +33,21 @@ export type CommissionsData = { items: Commission[]; date: string };
 export type SpendingEntry   = { id: string; amount: number; time: string; note?: string };
 export type FinanceData     = { spentToday: number; date: string; history: SpendingEntry[] };
 export type DailyTotal      = { date: string; total: number; entries?: SpendingEntry[] };
-export type Settings        = { allocatedPerDay: number; currency: string; name: string; avatar: string; midnightNotifEnabled: boolean };
-export type Stats           = { currentStreak: number; bestStreak: number; totalCompleted: number; lastFullDate: string };
+export type Settings        = {
+  /** Legacy daily budget. Still read as the fallback when budgetAmount is missing. */
+  allocatedPerDay: number;
+  budgetPeriod?: 'daily' | 'weekly' | 'monthly';
+  budgetAmount?: number;
+  currency: string; name: string; avatar: string;
+  /** Legacy: the old midnight "new day" notification. Migrated to eveningReminder. */
+  midnightNotifEnabled: boolean;
+  eveningReminder?: EveningReminder;
+};
+export type Stats           = {
+  currentStreak: number; bestStreak: number; totalCompleted: number; lastFullDate: string;
+  /** Values from before today's streak credit, so un-completing a habit can revert it. */
+  beforeToday?: { currentStreak: number; bestStreak: number; lastFullDate: string };
+};
 
 export type ChartDay        = { date: string; dayName: string; total: number; isToday: boolean };
 export type HabitChartDay = { 
@@ -43,6 +57,7 @@ export type HabitChartDay = {
   completed: number;   
   scheduled: number;   
   completedIds: string[];
+  scheduledIds?: string[];
 };
 
 export type TabKey          = 'home' | 'tasks' | 'finance' | 'profile' | 'settings' | 'chat';
@@ -52,5 +67,5 @@ export type CompletionRecord = {
   completedIds: string[]; 
   scheduledIds: string[];  
 };
-export type OnboardingResult = { name: string; firstHabbit: string | null; budget: number; currency: string };
+export type OnboardingResult = { name: string; firstHabbit: string | null; budget: number; budgetPeriod: 'daily' | 'weekly' | 'monthly'; currency: string };
 export type AvatarKey = 'avatar_bunny' | 'avatar_hamster' | 'avatar_bear' | 'avatar_panda' | 'avatar_fox';

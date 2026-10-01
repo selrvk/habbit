@@ -6,14 +6,16 @@ import { AVATARIMAGES, DAY_LABELS, CAL_DAY_LABELS } from './constants';
 export const avatarImage = (key: string) =>
   AVATARIMAGES[key as AvatarKey] ?? AVATARIMAGES.avatar_bunny;
 
-export const getTodayKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+/** Local-time 'YYYY-MM-DD' key. */
+export const toDateKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+export const parseDateKey = (key: string) => new Date(key + 'T00:00:00');
+export const addDaysToKey = (key: string, n: number) => {
+  const d = parseDateKey(key); d.setDate(d.getDate()+n);
+  return toDateKey(d);
 };
-export const getYesterdayKey = () => {
-  const d = new Date(); d.setDate(d.getDate()-1);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-};
+export const getTodayKey = () => toDateKey(new Date());
+export const getYesterdayKey = () => addDaysToKey(getTodayKey(), -1);
 export const getFormattedDate = () => {
   const d = new Date();
   const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -101,7 +103,8 @@ export const computeSplitTimes = (
   if (endMins <= startMins) return [{ hour: startH, minute: startM }];
   const step = (endMins - startMins) / (count - 1);
   return Array.from({ length: count }, (_, i) => {
-    const total = Math.round(startMins + step * i);
+    // Round to 5 minutes so reminders land on friendly times (9:45, not 9:43)
+    const total = Math.min(Math.round((startMins + step * i) / 5) * 5, endMins);
     return { hour: Math.floor(total / 60) % 24, minute: total % 60 };
   });
 };
@@ -111,13 +114,8 @@ export const defaultStats = () => ({currentStreak:0,bestStreak:0,totalCompleted:
 export const currencyStr = (currency: string, amount: string) =>
   currency === '__carrot__' ? `🥕 ${amount}` : `${currency}${amount}`;
 
-export const getLast7DayKeys = (): string[] => {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().split('T')[0]; // 'YYYY-MM-DD'
-  });
-};
+export const getLast7DayKeys = (): string[] =>
+  Array.from({ length: 7 }, (_, i) => addDaysToKey(getTodayKey(), i - 6));
 
 export const getDayName = (dateKey: string): string => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

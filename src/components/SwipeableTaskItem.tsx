@@ -1,15 +1,17 @@
 // src/components/SwipeableTaskItem.tsx
 
 import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, PanResponder } from 'react-native';
+import { View, Text, Animated, PanResponder, Pressable } from 'react-native';
 import { formatTime12, daysLabel } from '../helpers';
 import type { Commission } from '../types';
+import { useFontSize } from '../hooks/useFontSize';
 
 const SWIPE_THRESHOLD = 60;
 
 const haptic = {
   success: () => require('react-native-haptic-feedback').default.trigger('notificationSuccess', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
   warning: () => require('react-native-haptic-feedback').default.trigger('notificationWarning', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
+  light:   () => require('react-native-haptic-feedback').default.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
 };
 
 export const SwipeableTaskItem = ({
@@ -25,15 +27,14 @@ export const SwipeableTaskItem = ({
   onSwipeStart: () => void;
   onSwipeEnd: () => void;
 }) => {
+  const fs          = useFontSize();
   const timesPerDay = item.timesPerDay ?? 1;
   const count       = item.completionCount ?? 0;
   const isMulti     = timesPerDay > 1;
 
-  // Swipe direction availability
-  // Single: right = not completed | left = completed
-  // Multi:  right = count < target | left = count > 0
-  const canSwipeRight = isMulti ? count < timesPerDay : !item.completed;
-  const canSwipeLeft  = isMulti ? count > 0           : item.completed;
+  // Single: complete when not done, undo when done. Multi: +1 below target, -1 above 0.
+  const canComplete = isMulti ? count < timesPerDay : !item.completed;
+  const canUndo     = isMulti ? count > 0           : item.completed;
 
   const translateX    = useRef(new Animated.Value(0)).current;
   const rightProgress = useRef(new Animated.Value(0)).current; // drives green hint
@@ -119,6 +120,29 @@ export const SwipeableTaskItem = ({
     },
   })).current;
 
+  const scale = useRef(new Animated.Value(1)).current;
+
+  // Tap = check off one (a rep for multi-times habits); hold = undo one.
+  const handleTap = () => {
+    if (!canComplete) { haptic.light(); return; }
+    haptic.success();
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.97, duration: 80, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 8 }),
+    ]).start();
+    Animated.sequence([
+      Animated.timing(rightProgress, { toValue: 1, duration: 90, useNativeDriver: false }),
+      Animated.timing(rightProgress, { toValue: 0, duration: 380, useNativeDriver: false }),
+    ]).start();
+    onComplete(item.id);
+  };
+
+  const handleLongPress = () => {
+    if (!canUndo) return;
+    haptic.warning();
+    onUncomplete(item.id);
+  };
+
   const rightHintOpacity = rightProgress.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0, 1] });
   const leftHintOpacity  = leftProgress.interpolate({  inputRange: [0, 0.15, 1], outputRange: [0, 0, 1] });
 
@@ -162,7 +186,7 @@ export const SwipeableTaskItem = ({
       {/* ── Card ── */}
       <Animated.View
         style={{
-          transform: [{ translateX }],
+          transform: [{ translateX }, { scale }],
           borderLeftWidth: 3, borderLeftColor: borderColor, borderRadius: 12,
           backgroundColor: '#5C3D2E',
           shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 },
@@ -170,11 +194,23 @@ export const SwipeableTaskItem = ({
           opacity: isDone ? 0.55 : 1,
         }}
         {...panResponder.panHandlers}>
-        <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Pressable
+          onPress={handleTap}
+          onLongPress={handleLongPress}
+          delayLongPress={450}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.label}${isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}`}
+          accessibilityHint={canComplete ? 'Double tap to check off' : undefined}
+          accessibilityActions={[
+            ...(canComplete ? [{ name: 'activate', label: 'Check off' }] : []),
+            ...(canUndo ? [{ name: 'undo', label: 'Undo' }] : []),
+          ]}
+          onAccessibilityAction={e => (e.nativeEvent.actionName === 'undo' ? handleLongPress() : handleTap())}
+          style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Left: label + meta */}
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{
-              fontFamily: 'Jua', color: '#e8d5c0', fontSize: 16,
+              fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16),
               textDecorationLine: isDone ? 'line-through' : 'none',
             }}>
               {item.label}
@@ -182,12 +218,12 @@ export const SwipeableTaskItem = ({
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                 {item.days && item.days.length > 0 && item.days.length < 7 && (
-                  <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(212,149,106,0.65)' }}>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
                     {daysLabel(item.days)}
                   </Text>
                 )}
                 {reminderLabel && (
-                  <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(212,149,106,0.65)' }}>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
                     {reminderLabel}
                   </Text>
                 )}
@@ -198,7 +234,7 @@ export const SwipeableTaskItem = ({
           {/* Right: progress or done checkmark */}
           {isMulti ? (
             <View style={{ alignItems: 'center', minWidth: 40 }}>
-              <Text style={{ fontFamily: 'DynaPuff', fontSize: 13, color: isDone ? 'rgba(212,149,106,0.5)' : '#D4956A' }}>
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: isDone ? 'rgba(212,149,106,0.5)' : '#D4956A' }}>
                 {count}/{timesPerDay}
               </Text>
               {/* Mini progress bar */}
@@ -212,11 +248,15 @@ export const SwipeableTaskItem = ({
               </View>
             </View>
           ) : (
-            isDone && (
-              <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(212,149,106,0.55)' }}>✓</Text>
-            )
+            <View style={{
+              width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
+              borderWidth: 2, borderColor: isDone ? 'rgba(212,149,106,0.5)' : '#D4956A',
+              backgroundColor: isDone ? 'rgba(212,149,106,0.35)' : 'transparent',
+            }}>
+              {isDone && <Text style={{ fontFamily: 'DynaPuff', fontSize: 14, color: '#e8d5c0' }}>✓</Text>}
+            </View>
           )}
-        </View>
+        </Pressable>
       </Animated.View>
     </View>
   );

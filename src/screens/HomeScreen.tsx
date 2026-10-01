@@ -1,18 +1,15 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { getFormattedDate, getTodayKey, generateId, formatTime, isScheduledForDay } from '../helpers';
-import { STORAGE_FINANCE } from '../storage';
+import { getFormattedDate, isScheduledForDay, avatarImage, currencyStr } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
-import { SectionDivider } from '../components/SectionDivider';
 import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
-import { avatarImage } from '../helpers';
-import type { Commission, SpendingEntry } from '../types';
+import type { Commission } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
+import { PERIOD_LABELS, type BudgetState } from '../budget';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -20,12 +17,47 @@ const haptic = {
   medium: () => ReactNativeHapticFeedback.trigger('impactMedium', HAPTIC_OPTIONS),
 };
 
-export const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentToday, todayHistory, setTodayHistory, allocatedPerDay, currency, name, avatar, onGoToTasks, onCommissionComplete, onCommissionUncomplete }: {
-  commissions: Commission[]; setCommissions: React.Dispatch<React.SetStateAction<Commission[]>>;
-  spentToday: number; setSpentToday: React.Dispatch<React.SetStateAction<number>>;
-  todayHistory: SpendingEntry[]; setTodayHistory: React.Dispatch<React.SetStateAction<SpendingEntry[]>>;
-  allocatedPerDay: number; currency: string; name: string; avatar: string;
-  onGoToTasks: () => void; onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
+const C = {
+  cream:  '#e8d5c0',
+  accent: '#D4956A',
+  card:   '#5C3D2E',
+  green:  '#9de087',
+  red:    '#f09090',
+  muted:  'rgba(232,213,192,0.55)',
+  border: 'rgba(212,149,106,0.18)',
+};
+
+const money = (n: number, decimals = 0) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+};
+
+/** 0..1 progress for a habit, counting partial reps of multi-times habits. */
+const habitProgress = (c: Commission) => {
+  const tpd = c.timesPerDay ?? 1;
+  if (c.completed) return 1;
+  return tpd > 1 ? Math.min((c.completionCount ?? 0) / tpd, 1) : 0;
+};
+
+const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; height?: number }) => (
+  <View style={{ height, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.14)', overflow: 'hidden' }}>
+    <View style={{ height: '100%', width: `${Math.max(0, Math.min(pct, 1)) * 100}%`, borderRadius: 99, backgroundColor: color }} />
+  </View>
+);
+
+export const HomeScreen = ({
+  commissions, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
+  onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
+}: {
+  commissions: Commission[];
+  spentToday: number;
+  allocatedPerDay: number; budget: BudgetState; currency: string; name: string; avatar: string; streak: number;
+  onAddHabit: () => void; onGoToFinance: () => void;
+  onAddSpending: (amount: string, note?: string) => void;
+  onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -34,161 +66,153 @@ export const HomeScreen = ({ commissions, setCommissions, spentToday, setSpentTo
   const [modalVisible, setModalVisible]   = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
-  const today    = getFormattedDate();
-  const todayKey = getTodayKey();
+  const today = getFormattedDate();
 
-  const todaysCommissions   = commissions.filter(c => isScheduledForDay(c, today.dow));
-  const completedCount      = todaysCommissions.filter(c => c.completed).length;
-  const totalCount          = todaysCommissions.length;
-  const activeTasks         = todaysCommissions.filter(c => !c.completed);
-  const completedTasks      = todaysCommissions.filter(c => c.completed);
-  const allDone             = totalCount > 0 && completedCount === totalCount;
-  const isOverBudget        = spentToday > allocatedPerDay;
-  const budgetPct           = Math.min((spentToday / allocatedPerDay) * 100, 100);
-  const hasCommissions      = commissions.length > 0;
-  const hasTodayCommissions = todaysCommissions.length > 0;
-  const commissionsGood     = allDone && hasTodayCommissions;
-  const financeGood         = !isOverBudget;
+  const todays         = commissions.filter(c => isScheduledForDay(c, today.dow));
+  const activeTasks    = todays.filter(c => !c.completed);
+  const completedTasks = todays.filter(c => c.completed);
+  const totalCount     = todays.length;
+  const allDone        = totalCount > 0 && completedTasks.length === totalCount;
+  const habitPct       = totalCount > 0 ? todays.reduce((s, c) => s + habitProgress(c), 0) / totalCount : 0;
 
-  const saveFinance = useCallback((amount: number, history: SpendingEntry[]) => {
-    AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: amount, date: todayKey, history })).catch(() => {});
-  }, [todayKey]);
+  const remaining    = allocatedPerDay - spentToday;
+  const isOverBudget = remaining < 0;
+  const budgetPct    = allocatedPerDay > 0 ? spentToday / allocatedPerDay : 0;
 
   const handleConfirm = (note?: string) => {
-    const toAdd = parseFloat(addingAmount || '0');
-    if (toAdd <= 0) return;
-    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note };
-    const newSpent = spentToday + toAdd;
-    const newHistory = [...todayHistory, entry];
-    setSpentToday(newSpent); setTodayHistory(newHistory);
-    saveFinance(newSpent, newHistory);
+    onAddSpending(addingAmount, note);
     setAddingAmount(''); setModalVisible(false);
   };
 
   const handleSwipeStart = useCallback(() => setScrollEnabled(false), []);
   const handleSwipeEnd   = useCallback(() => setScrollEnabled(true),  []);
 
+  const renderItem = (item: Commission) => (
+    <SwipeableTaskItem key={item.id} item={item}
+      onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
+      onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />
+  );
+
+  const tile = { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: C.border } as const;
+  const tileLabel = { fontFamily: 'Jua', fontSize: fs(12), color: C.muted } as const;
+
   return (
     <>
       <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEnabled={scrollEnabled}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
 
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 24 }}>
-          <View style={{ padding: 2, borderRadius: 99, borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center' }}>
-              <Image source={avatarImage(avatar)} style={{ width: 36, height: 36 }} resizeMode="contain" />
-            </View>
+        {/* ── Header: greeting + streak ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.card, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: C.accent }}>
+            <Image source={avatarImage(avatar)} style={{ width: 34, height: 34 }} resizeMode="contain" />
           </View>
-          <View>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.7 }}>Welcome back,</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 24 }}>{name}</Text>
-          </View>
-        </View>
-
-        {/* Today's Performance */}
-        <Text style={{ fontFamily: 'Jua', color: '#D4956A', fontSize: fs(12), letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10 }}>Today's Performance</Text>
-        <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 20, shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7 }}>{today.dayName}</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16), lineHeight: fs(20) }}>{today.month} {today.date}</Text>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7 }}>{today.year}</Text>
+            <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(20) }} numberOfLines={1}>{greeting()}, {name}</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13) }}>{today.dayName}, {today.month} {today.date}</Text>
           </View>
-          <View style={{ width: 1, height: 48, backgroundColor: '#D4956A', opacity: 0.3, marginHorizontal: 12 }} />
-          <View style={{ flex: 1, alignItems: 'center', borderRadius: 12, paddingVertical: 8, backgroundColor: commissionsGood ? 'rgba(100,160,90,0.12)' : 'rgba(212,149,106,0.08)' }}>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.75 }}>Habbits</Text>
-            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), marginTop: 2, color: commissionsGood ? '#9de087' : '#D4956A' }}>
-              {!hasCommissions ? 'Not set' : !hasTodayCommissions ? 'Rest day!' : allDone ? 'Nice one!' : `${completedCount}/${totalCount}`}
-            </Text>
-            <Image source={commissionsGood ? IMAGES.carrots : IMAGES.carrot} style={{ width: 28, height: 28, marginTop: 4 }} resizeMode="contain" />
-          </View>
-          <View style={{ width: 1, height: 48, backgroundColor: '#D4956A', opacity: 0.3, marginHorizontal: 12 }} />
-          <View style={{ flex: 1, alignItems: 'center', borderRadius: 12, paddingVertical: 8, backgroundColor: financeGood ? 'rgba(100,160,90,0.12)' : 'rgba(200,80,60,0.12)' }}>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.75 }}>Finance</Text>
-            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), marginTop: 2, color: financeGood ? '#9de087' : '#f09090' }}>{financeGood ? 'On track!' : 'Oh no...'}</Text>
-            <Image source={financeGood ? IMAGES.carrots : IMAGES.carrot} style={{ width: 28, height: 28, marginTop: 4 }} resizeMode="contain" />
-          </View>
+          {streak > 0 && (
+            <View accessibilityLabel={`${streak} day streak`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(212,149,106,0.15)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+              <Image source={require('../../assets/emojis/Fire.png')} style={{ width: 18, height: 18 }} resizeMode="contain" />
+              <Text style={{ fontFamily: 'DynaPuff', color: C.accent, fontSize: fs(15) }}>{streak}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Habbits */}
-        <SectionDivider title="✦ Habbits ✦" />
-        {!hasCommissions ? (
-          <View style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 16 }}>
-            <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 12, opacity: 0.7 }} resizeMode="contain" />
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16), marginBottom: 8 }}>No Habbits set!</Text>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.5, textAlign: 'center', marginBottom: 20 }}>Head over to the Habbits tab to{'\n'}add your daily Habbits.</Text>
-            <TouchableOpacity onPress={() => { haptic.light(); onGoToTasks(); }} activeOpacity={0.8}
-              style={{ backgroundColor: 'rgba(212,149,106,0.15)', borderRadius: 99, paddingVertical: 10, paddingHorizontal: 24, borderWidth: 1, borderColor: 'rgba(212,149,106,0.4)' }}>
-              <Text style={{ fontFamily: 'Jua', color: '#D4956A', fontSize: fs(14) }}>Go to Habbits →</Text>
+        {/* ── Today at a glance ── */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+          <View style={tile}>
+            <Text style={tileLabel}>Habbits</Text>
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(22), color: allDone ? C.green : C.cream, marginVertical: 4 }}>
+              {totalCount === 0 ? '—' : `${completedTasks.length}/${totalCount}`}
+            </Text>
+            <ProgressBar pct={habitPct} color={allDone ? C.green : C.accent} />
+            <Text style={[tileLabel, { marginTop: 6 }]}>
+              {commissions.length === 0 ? 'None yet' : totalCount === 0 ? 'Rest day' : allDone ? 'All done! 🎉' : `${activeTasks.length} to go`}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={tile} activeOpacity={0.8} onPress={() => { haptic.light(); onGoToFinance(); }}
+            accessibilityLabel={`${isOverBudget ? 'Over budget' : 'Left today'}. Opens Finance`}>
+            <Text style={tileLabel}>{isOverBudget ? 'Over budget' : 'Left today'}</Text>
+            <CurrencyAmount currency={currency} amount={money(Math.abs(remaining), 2)}
+              imageSize={fs(20)}
+              textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(22), color: isOverBudget ? C.red : C.cream, marginVertical: 4 }} />
+            <ProgressBar pct={budgetPct} color={isOverBudget ? C.red : budgetPct > 0.8 ? '#f5c26b' : C.accent} />
+            <Text style={[tileLabel, { marginTop: 6 }]} numberOfLines={1}>
+              {budget.period === 'daily'
+                ? `of ${currencyStr(currency, money(allocatedPerDay))}`
+                : `${currencyStr(currency, money(Math.max(budget.periodLeft, 0)))} left this ${PERIOD_LABELS[budget.period].noun}`}
+            </Text>
+            {/* Add spending — always above the fold */}
+            <TouchableOpacity
+              onPress={() => { haptic.medium(); setModalVisible(true); }}
+              activeOpacity={0.8} hitSlop={8}
+              accessibilityLabel="Add spending"
+              style={{ position: 'absolute', right: 10, top: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 20, lineHeight: 24 }}>+</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Today's habbits ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17) }}>Today's Habbits</Text>
+          {totalCount > 0 && !allDone && (
+            <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12) }}>Tap to check off</Text>
+          )}
+        </View>
+
+        {commissions.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border }}>
+            <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 10 }} resizeMode="contain" />
+            <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 6 }}>No Habbits yet</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), textAlign: 'center', marginBottom: 16 }}>Start with something small you want to do every day.</Text>
+            <TouchableOpacity onPress={() => { haptic.light(); onAddHabit(); }} activeOpacity={0.8}
+              style={{ backgroundColor: C.accent, borderRadius: 99, paddingVertical: 11, paddingHorizontal: 24 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(14) }}>+ Add your first Habbit</Text>
             </TouchableOpacity>
           </View>
-        ) : !hasTodayCommissions ? (
-          <View style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 16 }}>
-            <Text style={{ fontSize: fs(44), marginBottom: 12 }}>😴</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16), marginBottom: 8 }}>Rest day!</Text>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.5, textAlign: 'center' }}>No Habbits scheduled for {today.dayName}.{'\n'}Enjoy your break! 🐰</Text>
+        ) : totalCount === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 28, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: fs(40), marginBottom: 8 }}>😴</Text>
+            <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 4 }}>Rest day!</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), textAlign: 'center' }}>Nothing scheduled for {today.dayName}. Your streak is safe 🐰</Text>
           </View>
         ) : (
           <>
-            <View style={{ alignItems: 'center', marginBottom: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
-                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(36), color: allDone ? '#9de087' : '#D4956A' }}>{completedCount}</Text>
-                <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(20), opacity: 0.6, marginBottom: 2 }}>/{totalCount}</Text>
-                <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16), opacity: 0.7, marginBottom: 2, marginLeft: 4 }}>finished</Text>
+            {allDone && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(100,160,90,0.14)', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(157,224,135,0.3)' }}>
+                <Image source={IMAGES.carrots} style={{ width: 32, height: 32 }} resizeMode="contain" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(15) }}>All done for today!</Text>
+                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>
+                    {streak > 1 ? `${streak} days in a row — keep it hopping.` : 'Come back tomorrow to build your streak.'}
+                  </Text>
+                </View>
               </View>
-              <View style={{ width: 192, height: 6, backgroundColor: '#5C3D2E', borderRadius: 99, marginTop: 8, marginBottom: 4, overflow: 'hidden' }}>
-                <View style={{ height: '100%', borderRadius: 99, width: totalCount > 0 ? `${(completedCount / totalCount) * 100}%` : '0%', backgroundColor: allDone ? '#9de087' : '#D4956A' }} />
-              </View>
-            </View>
-            <Text style={{ fontFamily: 'Jua', color: '#D4956A', fontSize: fs(14), textAlign: 'center', marginBottom: 16, opacity: 0.7 }}>{allDone ? '🎉 All done for today!' : 'Swipe right to complete · left to undo'}</Text>
-            {activeTasks.map(item => <SwipeableTaskItem key={item.id} item={item} onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete} onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />)}
+            )}
+            {activeTasks.map(renderItem)}
             {completedTasks.length > 0 && (
               <>
-                <TouchableOpacity style={{ alignItems: 'center', marginTop: 4, marginBottom: 4, paddingVertical: 8 }} onPress={() => { haptic.light(); setShowCompleted(v => !v); }}>
-                  <Text style={{ fontFamily: 'Jua', color: '#D4956A', fontSize: fs(14), opacity: 0.8 }}>Completed ({completedTasks.length}) {showCompleted ? '∧' : '›'}</Text>
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 }}
+                  onPress={() => { haptic.light(); setShowCompleted(v => !v); }}
+                  accessibilityRole="button" accessibilityState={{ expanded: showCompleted }}>
+                  <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(13) }}>
+                    {showCompleted ? 'Hide' : 'Show'} completed ({completedTasks.length})
+                  </Text>
                 </TouchableOpacity>
-                {showCompleted && completedTasks.map(item => <SwipeableTaskItem key={item.id} item={item} onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete} onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />)}
+                {showCompleted && (
+                  <>
+                    {completedTasks.map(renderItem)}
+                    <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.35)', fontSize: fs(11), textAlign: 'center', marginTop: 2 }}>
+                      Swipe left or hold to undo
+                    </Text>
+                  </>
+                )}
               </>
             )}
           </>
         )}
-
-        {/* Finance summary */}
-        <SectionDivider title="✦ Finance ✦" />
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-          <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: isOverBudget ? 'rgba(200,80,60,0.4)' : 'rgba(212,149,106,0.2)' }}>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7, marginBottom: 8 }}>Spent Today</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Image source={IMAGES.carrot} style={{ width: 22, height: 22 }} resizeMode="contain" />
-              <CurrencyAmount currency={currency} amount={spentToday.toFixed(2)}
-                textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(18), color: isOverBudget ? '#f09090' : '#e8d5c0' }} />
-            </View>
-          </View>
-          <View style={{ flex: 1, backgroundColor: '#5C3D2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)' }}>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(12), opacity: 0.7, marginBottom: 8 }}>Allocated a Day</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Image source={IMAGES.carrots} style={{ width: 22, height: 22 }} resizeMode="contain" />
-              <CurrencyAmount currency={currency} amount={allocatedPerDay.toFixed(2)}
-                textStyle={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18) }} />
-            </View>
-          </View>
-        </View>
-        <View style={{ marginBottom: 20 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-            <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(232,213,192,0.55)' }}>Budget used today</Text>
-            <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: isOverBudget ? '#f09090' : 'rgba(212,149,106,0.8)' }}>{budgetPct.toFixed(0)}%{isOverBudget ? ' — over!' : ' of daily'}</Text>
-          </View>
-          <View style={{ width: '100%', height: 14, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(212,149,106,0.22)' }}>
-            <View style={{ height: '100%', borderRadius: 8, width: `${budgetPct}%`, backgroundColor: isOverBudget ? '#f09090' : '#D4956A' }} />
-          </View>
-        </View>
-        <TouchableOpacity style={{ backgroundColor: '#D4956A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }}
-          onPress={() => { haptic.medium(); setModalVisible(true); }} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Image source={IMAGES.carrot} style={{ width: 20, height: 20 }} resizeMode="contain" />
-            <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(16) }}>Add to Spent Today</Text>
-          </View>
-        </TouchableOpacity>
       </ScrollView>
     </>
   );

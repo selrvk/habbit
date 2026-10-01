@@ -1,6 +1,7 @@
 // src/utils/coachPrompt.ts
 
 import type { CoachContext } from './buildCoachContext';
+import { getTodayKey } from '../helpers';
 
 export function buildSystemPrompt(ctx: CoachContext): string {
   const sym = ctx.currency === 'USD' ? '$'
@@ -18,18 +19,24 @@ export function buildSystemPrompt(ctx: CoachContext): string {
         ? ` Still pending today: ${ctx.habits.habitsMostMissed.join(', ')}.`
         : ' All habits done today!');
 
-  const financeStatus = ctx.dailyBudget === 0
+  const periodStatus = ctx.budgetPeriod
+    ? `The user budgets ${ctx.budgetPeriod.period}: ${sym}${ctx.budgetPeriod.budget} this ${ctx.budgetPeriod.period === 'weekly' ? 'week' : 'month'}, `
+      + `${sym}${ctx.budgetPeriod.left} left with ${ctx.budgetPeriod.daysLeft} day(s) to go. `
+      + `Today's allowance adapts to what's left. `
+    : '';
+
+  const financeStatus = periodStatus + (ctx.dailyBudget === 0
     ? `Spent ${sym}${ctx.finance.spentToday} today. No daily budget set.`
-    : `Spent ${sym}${ctx.finance.spentToday} of ${sym}${ctx.dailyBudget} today `
+    : `Spent ${sym}${ctx.finance.spentToday} of ${sym}${Math.round(ctx.dailyBudget * 100) / 100} allowed today `
     + `(${ctx.finance.budgetUsedTodayPct}% of budget). `
     + `Weekly average: ${sym}${ctx.finance.dailyAverageSpend}/day. `
-    + `Total this week: ${sym}${ctx.finance.totalSpentLast7Days}.`;
+    + `Total this week: ${sym}${ctx.finance.totalSpentLast7Days}.`);
 
   // ── Weekly snapshot table ──────────────────────────────────────────────────
   const snapshotLines = ctx.weeklySnapshot
     .filter(day => day.habitsScheduled > 0 || day.spent > 0)
     .map(day => {
-      const isToday  = day.date === new Date().toISOString().split('T')[0];
+      const isToday  = day.date === getTodayKey();
       const label    = isToday ? 'Today' : day.dayName;
       const habStr   = day.habitsScheduled > 0
         ? `${day.habitsCompleted}/${day.habitsScheduled} habits`
@@ -47,7 +54,7 @@ export function buildSystemPrompt(ctx: CoachContext): string {
   if (ctx.recentSpendingEntries.length === 0) {
     spendingEntriesBlock = '  No individual spending entries recorded this week.';
   } else {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayKey();
     spendingEntriesBlock = ctx.recentSpendingEntries.map(e => {
       const isToday  = e.date === todayStr;
       const dayLabel = isToday ? 'Today' : new Date(e.date + 'T00:00:00')

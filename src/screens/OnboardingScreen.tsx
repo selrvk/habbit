@@ -1,8 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform, Animated, Image, KeyboardAvoidingView } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import { JUA, DYNAPUFF, DEFAULT_BUDGET, DEFAULT_CURRENCY, CURRENCIES, IMAGES } from '../constants';
+import { DEFAULT_BUDGET, DEFAULT_CURRENCY, CURRENCIES, IMAGES } from '../constants';
 import type { OnboardingResult } from '../types';
+import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
+
+// Starting amounts if the user skips the budget step.
+const DEFAULT_BY_PERIOD: Record<BudgetPeriod, number> = {
+  daily:   DEFAULT_BUDGET,
+  weekly:  DEFAULT_BUDGET * 7,
+  monthly: DEFAULT_BUDGET * 30,
+};
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -18,6 +26,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
   const [habbit, setHabbit]                   = useState('');
   const [budgetInput, setBudgetInput]         = useState('');
   const [budgetCurrency, setBudgetCurrency]   = useState(DEFAULT_CURRENCY);
+  const [budgetPeriod, setBudgetPeriod]       = useState<BudgetPeriod>('daily');
 
   const nameRef     = useRef<TextInput>(null);
   const habbitRef   = useRef<TextInput>(null);
@@ -49,7 +58,8 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
     onComplete({
       name: name.trim() || 'Friend',
       firstHabbit: habbit.trim() || null,
-      budget: parsedBudget > 0 ? parsedBudget : DEFAULT_BUDGET,
+      budget: parsedBudget > 0 ? parsedBudget : DEFAULT_BY_PERIOD[budgetPeriod],
+      budgetPeriod,
       currency: budgetCurrency,
     });
   };
@@ -95,7 +105,7 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
             <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 8, textAlign: 'center' }}>What's your name?</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.5)', marginBottom: 32, textAlign: 'center' }}>This will appear on your home screen.</Text>
             <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: canProceedStep1 ? '#D4956A' : 'rgba(212,149,106,0.2)', paddingHorizontal: 20, paddingVertical: 4, marginBottom: 32, width: '100%' }}>
-              <TextInput ref={nameRef} value={name} onChangeText={setName} placeholder="e.g. Charles" placeholderTextColor="rgba(232,213,192,0.25)" returnKeyType="done" onSubmitEditing={() => canProceedStep1 && goNext()} maxLength={24}
+              <TextInput ref={nameRef} value={name} onChangeText={setName} placeholder="e.g. Charles" placeholderTextColor="rgba(232,213,192,0.25)" returnKeyType="done" autoCorrect={false} autoCapitalize="words" onSubmitEditing={() => canProceedStep1 && goNext()} maxLength={24}
                 style={{ fontFamily: 'DynaPuff', fontSize: 22, color: '#e8d5c0', paddingVertical: 16, textAlign: 'center' }} />
             </View>
             <TouchableOpacity onPress={canProceedStep1 ? goNext : undefined} activeOpacity={canProceedStep1 ? 0.85 : 1}
@@ -131,8 +141,21 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
             <Dots />
             <Image source={IMAGES.carrots} style={{ width: 52, height: 52, marginBottom: 16 }} resizeMode="contain" />
-            <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 8, textAlign: 'center' }}>Set a daily budget</Text>
-            <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.5)', marginBottom: 28, textAlign: 'center' }}>How much do you want to spend each day?</Text>
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 16, textAlign: 'center' }}>How do you budget?</Text>
+            <View style={{ flexDirection: 'row', backgroundColor: 'rgba(212,149,106,0.1)', borderRadius: 14, padding: 4, marginBottom: 12, width: '100%' }}>
+              {(['daily', 'weekly', 'monthly'] as const).map(p => (
+                <TouchableOpacity key={p} onPress={() => { haptic.light(); setBudgetPeriod(p); }} activeOpacity={0.8}
+                  accessibilityRole="button" accessibilityState={{ selected: budgetPeriod === p }}
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center', backgroundColor: budgetPeriod === p ? '#D4956A' : 'transparent' }}>
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: 14, color: budgetPeriod === p ? '#fff' : 'rgba(232,213,192,0.6)' }}>{PERIOD_LABELS[p].adjective}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.6)', marginBottom: 24, textAlign: 'center', minHeight: 36 }}>
+              {budgetPeriod === 'daily'
+                ? 'How much can you spend each day? It resets every midnight.'
+                : `How much do you have for the ${PERIOD_LABELS[budgetPeriod].noun}? We'll work out a daily amount that adjusts as you spend.`}
+            </Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20, justifyContent: 'center' }}>
               {CURRENCIES.map(c => (
                 <TouchableOpacity key={c} onPress={() => { haptic.light(); setBudgetCurrency(c); }} activeOpacity={0.7}
@@ -149,9 +172,9 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
             </View>
             <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(212,149,106,0.5)', marginBottom: 28, textAlign: 'center' }}>✦ You can change this anytime in the Finance tab ✦</Text>
             <TouchableOpacity onPress={goNext} activeOpacity={0.85} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 16, width: '100%', alignItems: 'center', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6, marginBottom: 12 }}>
-              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}>{budgetSet ? `Set budget to ${budgetCurrency}${budgetInput} →` : "I'll set it later →"}</Text>
+              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 16 }}>{budgetSet ? `${budgetCurrency}${budgetInput} a ${PERIOD_LABELS[budgetPeriod].noun} →` : "I'll set it later →"}</Text>
             </TouchableOpacity>
-            {!budgetSet && <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.3)', textAlign: 'center' }}>We'll start you off at {DEFAULT_CURRENCY}{DEFAULT_BUDGET} — easy to change anytime</Text>}
+            {!budgetSet && <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(232,213,192,0.3)', textAlign: 'center' }}>We'll start you off at {budgetCurrency}{DEFAULT_BY_PERIOD[budgetPeriod]} a {PERIOD_LABELS[budgetPeriod].noun} — easy to change anytime</Text>}
           </View>
         </KeyboardAvoidingView>
       );
@@ -160,7 +183,8 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
         const TAB_TOUR = [
           { image: IMAGES.home,    name: 'Home',    desc: 'Your daily dashboard — Habbits & finance at a glance' },
           { image: IMAGES.tasks,   name: 'Habbits', desc: 'Add, edit, schedule and manage your daily Habbits' },
-          { image: IMAGES.carrots, name: 'Finance', desc: 'Track your daily spending against your budget' },
+          { image: IMAGES.carrots, name: 'Finance', desc: 'Log spending and see what’s left of your budget' },
+          { image: IMAGES.chat,    name: 'Chat',    desc: 'Ask Bonbon how your week went or where your money went' },
           { image: IMAGES.bunny,   name: 'Profile', desc: 'Your stats, streak, and app preferences' },
         ];
         return (
@@ -196,6 +220,15 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
       <Animated.View style={{ flex: 1, opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}>
         {renderStep()}
       </Animated.View>
+      {step > 0 && (
+        <TouchableOpacity
+          onPress={() => { haptic.light(); animateToNext(step - 1); }}
+          hitSlop={12}
+          accessibilityLabel="Back"
+          style={{ position: 'absolute', top: Platform.OS === 'ios' ? 64 : 24, left: 20, paddingVertical: 6, paddingHorizontal: 4 }}>
+          <Text style={{ fontFamily: 'Jua', fontSize: 16, color: 'rgba(232,213,192,0.6)' }}>← Back</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

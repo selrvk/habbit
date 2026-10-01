@@ -10,6 +10,8 @@ export const STORAGE_STATS             = '@habbit_rabbit_stats';
 export const STORAGE_ONBOARDED         = '@habbit_rabbit_onboarded';
 export const STORAGE_COMPLETION_HISTORY = '@habbit_rabbit_completion_history';
 export const STORAGE_COACH_MESSAGES     = '@habbit_rabbit_coach_messages';
+export const STORAGE_NOTIF_VERSION      = '@habbit_rabbit_notif_version';
+export const STORAGE_TOPUPS             = '@habbit_rabbit_budget_topups';
 
 // ── Used by "Delete All Data" — never include ONBOARDED or SETTINGS ──────────
 export const CONTENT_STORAGE_KEYS = [
@@ -19,6 +21,7 @@ export const CONTENT_STORAGE_KEYS = [
   STORAGE_STATS,
   STORAGE_COMPLETION_HISTORY,
   STORAGE_COACH_MESSAGES,
+  STORAGE_TOPUPS,
 ];
 
 // ── Full wipe — only used if you ever need a true factory reset ───────────────

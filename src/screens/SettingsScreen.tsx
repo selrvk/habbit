@@ -1,8 +1,6 @@
 // src/screens/SettingsScreen.tsx
 //
-// Settings page — initially accessible via a gear icon on the Profile screen.
-// Later you can move the notification toggle, currency, and budget here
-// as you refactor ProfileScreen and FinanceScreen.
+// Settings page, opened from the gear icon on the Profile screen.
 
 import React from 'react';
 import {
@@ -14,11 +12,12 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useFontSize } from '../hooks/useFontSize';
 import { Linking } from 'react-native';
 import { IMAGES } from '../constants';
+import { currencyStr } from '../helpers';
+import { TimeField } from '../components/TimePicker';
+import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
+import type { EveningReminder } from '../types';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
-
-const JUA     = 'font-jua';
-const DYNAPUFF = 'font-dynapuff';
 
 const C = {
   bg:        '#2A1A18',
@@ -205,26 +204,30 @@ const CurrencyPicker = ({ currency, onSetCurrency }: { currency: string; onSetCu
 
 interface SettingsScreenProps {
   currency:              string;
-  allocatedPerDay:       number;
-  midnightNotifEnabled:  boolean;
-  onSetCurrency:         (v: string) => void;  // ← add
-  onToggleMidnightNotif: (v: boolean) => void;
+  budgetPeriod:          BudgetPeriod;
+  budgetAmount:          number;
+  eveningReminder:       EveningReminder;
+  onSetEveningReminder:  (v: EveningReminder) => void;
+  onOpenBudget:          () => void;
+  onSetCurrency:         (v: string) => void;
   onResetToday:          () => void;
   onDeleteAllData:       () => void;
   onBack:                () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  currency,           
-  onSetCurrency,      
-  midnightNotifEnabled,
-  onToggleMidnightNotif,
-  onResetToday,    
-  onDeleteAllData, 
+  currency,
+  budgetPeriod,
+  budgetAmount,
+  eveningReminder,
+  onSetEveningReminder,
+  onOpenBudget,
+  onSetCurrency,
+  onResetToday,
+  onDeleteAllData,
   onBack,
 }) => {
-  const fs = useFontSize(); 
-  const LIGHT_MODE_READY = false;
+  const fs = useFontSize();
 
   const handleReset = () => {
     haptic.light();
@@ -288,9 +291,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Appearance ─────────────────────────────────────────────── */}
         <Section title="Appearance">
           {/* Font size */}
-          <View style={{
-            borderBottomWidth: 1, borderBottomColor: C.border,
-          }}>
+          <View>
             <View style={{
               flexDirection: 'row', alignItems: 'center',
               paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8,
@@ -312,32 +313,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </View>
             <FontSizePicker />
           </View>
-
-          {/* Theme — locked until light mode tokens are ready */}
-          <Row
-            icon="🌗"
-            label="App Theme"
-            sublabel={LIGHT_MODE_READY ? 'Choose dark or light appearance' : 'Light mode coming soon'}
-            last
-            rightEl={
-              LIGHT_MODE_READY ? (
-                <Toggle enabled={false} onToggle={() => {}} />
-              ) : (
-                <View style={{
-                  backgroundColor: 'rgba(212,149,106,0.1)',
-                  borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4,
-                  borderWidth: 1, borderColor: C.border,
-                }}>
-                  <Text  style={{ fontFamily: 'Jua', fontSize: 10, color: C.muted }}>Soon</Text>
-                </View>
-              )
-            }
-          />
         </Section>
 
         {/* ── Finance ────────────────────────────────────────────────── */}
       <Section title="Finance">
-        <View style={{ borderBottomWidth: 0, borderBottomColor: C.border }}>
+        <Row
+          icon="🥕"
+          label="Budget"
+          sublabel={`${PERIOD_LABELS[budgetPeriod].adjective} · ${currencyStr(currency, budgetAmount.toLocaleString('en-US'))} — edit in Finance`}
+          onPress={() => { haptic.light(); onOpenBudget(); }}
+          rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+        />
+        <View>
           <View style={{
             flexDirection: 'row', alignItems: 'center',
             paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4,
@@ -364,37 +351,33 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <Section title="Notifications">
           <Row
             icon="🌙"
-            label="New Day Reminder"
-            sublabel="Notifies at midnight when Habbits reset"
-            last
+            label="Evening check-in"
+            sublabel={eveningReminder.enabled
+              ? 'Only on days with Habbits still left'
+              : 'A nudge in the evening if Habbits are left'}
+            last={!eveningReminder.enabled}
             rightEl={
               <Toggle
-                enabled={midnightNotifEnabled}
-                onToggle={() => {
-                  haptic.light();
-                  onToggleMidnightNotif(!midnightNotifEnabled);
-                }}
+                enabled={eveningReminder.enabled}
+                onToggle={() => onSetEveningReminder({ ...eveningReminder, enabled: !eveningReminder.enabled })}
               />
             }
           />
+          {eveningReminder.enabled && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, marginLeft: 46 }}>Remind me at</Text>
+              <TimeField
+                title="Evening check-in"
+                hour={eveningReminder.hour}
+                minute={eveningReminder.minute}
+                onChange={(hour, minute) => onSetEveningReminder({ ...eveningReminder, hour, minute })}
+              />
+            </View>
+          )}
         </Section>
 
         {/* ── Data ───────────────────────────────────────────────────── */}
         <Section title="Data & Privacy">
-          <Row
-            icon="📤"
-            label="Export Data"
-            sublabel="Coming soon — export your history as CSV"
-            rightEl={
-              <View style={{
-                backgroundColor: 'rgba(212,149,106,0.1)',
-                borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4,
-                borderWidth: 1, borderColor: C.border,
-              }}>
-                <Text style={{ fontFamily: 'Jua', fontSize: 10, color: C.muted }}>Soon</Text>
-              </View>
-            }
-          />
           <Row
             icon="📄"
             label="Terms of Use"
@@ -465,10 +448,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         />
         </Section>
 
-        {/* Footer note */}
-        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.dim, textAlign: 'center', marginTop: 8 }}>
-          More settings are on the way 🥕
-        </Text>
       </ScrollView>
     </View>
   );

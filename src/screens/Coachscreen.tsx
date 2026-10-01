@@ -6,7 +6,6 @@ import {
   View, Text, ScrollView, TouchableOpacity, Image,
   TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert,
 } from 'react-native';
-import { SectionDivider } from '../components/SectionDivider';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { STORAGE_COACH_MESSAGES } from '../storage';
 import { useFontSize } from '../hooks/useFontSize';
@@ -14,6 +13,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { buildCoachContext } from '../utils/buildCoachContext';
 import { buildSystemPrompt } from '../utils/coachPrompt';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
+import { getAccessToken, clearSession } from '../utils/supabaseAuth';
 import {
   getRemainingMessages,
   consumeMessage,
@@ -22,6 +22,7 @@ import {
 } from '../utils/messageQuota';
 import { useProStatus } from '../context/ProContext';
 import type { CoachContext } from '../utils/buildCoachContext';
+import type { BudgetState } from '../budget';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -49,11 +50,16 @@ interface Message {
   id: string;
   from: 'bunny' | 'user';
   text: string;
+  /** Shown in the chat but never sent to the model (greetings, errors, quota notices). */
+  local?: boolean;
 }
+
+const MAX_STORED_MESSAGES = 100;
 
 interface CoachScreenProps {
   name: string;
   streak: number;
+  budget?: BudgetState;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,39 +112,45 @@ async function sendMessage(
   const systemPrompt = buildSystemPrompt(cachedContext);
 
   const historyLimit  = isPro ? HISTORY_LIMITS.pro : HISTORY_LIMITS.free;
-  const recentHistory = history.slice(-historyLimit);
+  const recentHistory = history.filter(m => !m.local).slice(-historyLimit);
 
-  const geminiHistory = recentHistory
+  const history_ = recentHistory
     .slice(0, -1)
-    .map(m => ({
-      role:  m.from === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text }],
-    }))
+    .map(m => ({ role: m.from === 'user' ? 'user' : 'model', text: m.text.slice(0, 2000) }))
     .filter((_, i, arr) => !(i === 0 && arr[0].role === 'model'));
 
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [
-      ...geminiHistory,
-      { role: 'user', parts: [{ text: userText }] },
-    ],
-  };
+  // Must stay within the server's limits (see supabase/functions/gemini-proxy).
+  const body = JSON.stringify({
+    system:  systemPrompt.slice(0, 8000),
+    history: history_,
+    message: userText.slice(0, 1000),
+  });
 
-  const res = await fetch(
-    `${SUPABASE_URL}/functions/v1/gemini-proxy`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(body),
+  const post = async () => fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${await getAccessToken()}`,
     },
-  );
+    body,
+  });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  let res = await post();
+  if (res.status === 401) {
+    // Stale or revoked session: start a fresh anonymous one and try once more.
+    await clearSession();
+    res = await post();
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new CoachError(data.error ?? `http_${res.status}`);
+  return data.text ?? '';
+}
+
+/** Error codes from the gemini-proxy function: daily_limit, rate_limited, busy, … */
+class CoachError extends Error {
+  constructor(public code: string) { super(code); }
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -169,9 +181,32 @@ const ThinkingBubble = () => (
   </View>
 );
 
+// Memoized so a typewriter tick only re-renders the bubble being typed.
+const MessageBubble = React.memo(({ msg, text, avatarState, frame, fontSize }: {
+  msg: Message; text: string; avatarState: BunnyState; frame: number; fontSize: number;
+}) => (
+  <View style={{ flexDirection: msg.from === 'bunny' ? 'row' : 'row-reverse', alignItems: 'flex-end', marginBottom: 10, gap: 8 }}>
+    {msg.from === 'bunny' && <BunnyAvatar state={avatarState} frame={frame} />}
+    <View style={{
+      maxWidth: '76%',
+      backgroundColor: msg.from === 'bunny' ? '#5C3D2E' : 'rgba(212,149,106,0.18)',
+      borderRadius: 16,
+      borderBottomLeftRadius:  msg.from === 'bunny' ? 4 : 16,
+      borderBottomRightRadius: msg.from === 'user'  ? 4 : 16,
+      paddingHorizontal: 14, paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: msg.from === 'bunny' ? 'rgba(212,149,106,0.18)' : 'rgba(212,149,106,0.32)',
+    }}>
+      <Text style={{ fontFamily: JUA, color: '#e8d5c0', fontSize, lineHeight: Math.round(fontSize * 1.5) }}>
+        {formatMessageText(text)}
+      </Text>
+    </View>
+  </View>
+));
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
+export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget }) => {
   const [talkFrame, setTalkFrame]   = useState(0);
   const talkCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { isPro } = useProStatus();
@@ -220,33 +255,31 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
   }, [messages, isPro]);
 
   // ── Typewriter effect ─────────────────────────────────────────────────────
-  const startTypewriter = (msgId: string, fullText: string, onDone: () => void) => {
-    if (typewriterRef.current) clearInterval(typewriterRef.current);
-    if (talkCycleRef.current)  clearInterval(talkCycleRef.current); 
+  // The full reply goes into `messages` once (so it's saved once, complete); only the
+  // revealed portion lives in `typing`, so each tick re-renders just that one bubble.
+  const [typing, setTyping] = useState<{ id: string; text: string } | null>(null);
 
-    let i = 0;
-    const SPEED_MS = 18;
+  const startTypewriter = (msg: Message, onDone: () => void) => {
+    if (typewriterRef.current) clearInterval(typewriterRef.current);
+
+    const CHARS_PER_TICK = 3;
+    const TICK_MS        = 30;
+    let shown = 0;
+
+    setTyping({ id: msg.id, text: '' });
+    setMessages(prev => [...prev, msg]);
 
     typewriterRef.current = setInterval(() => {
-      i += 1;
-      setMessages(prev =>
-        prev.map(m => m.id === msgId ? { ...m, text: fullText.slice(0, i) } : m),
-      );
-      scrollRef.current?.scrollToEnd({ animated: false });
-
-      if (i >= fullText.length) {
+      shown += CHARS_PER_TICK;
+      if (shown >= msg.text.length) {
         clearInterval(typewriterRef.current!);
         typewriterRef.current = null;
-
-        setMessages(prev => {
-          const final = prev.map(m => m.id === msgId ? { ...m, text: fullText } : m);
-          AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(final)).catch(() => {});
-          return final;
-        });
-
+        setTyping(null);
         onDone();
+        return;
       }
-    }, SPEED_MS);
+      setTyping({ id: msg.id, text: msg.text.slice(0, shown) });
+    }, TICK_MS);
   };
 
   // ── Clean up typewriter on unmount ────────────────────────────────────────
@@ -257,10 +290,10 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     };
   }, []);
 
-  // ── Persist messages ──────────────────────────────────────────────────────
+  // ── Persist messages (only when a message is added, never per typewriter tick) ──
   useEffect(() => {
     if (messages.length === 0) return;
-    AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(messages)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_COACH_MESSAGES, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES))).catch(() => {});
   }, [messages]);
 
   // ── Load or greet on mount ────────────────────────────────────────────────
@@ -277,9 +310,9 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
 
       setBunnyState('talking');
       setTimeout(() => {
-        setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
+        setMessages([{ id: uid(), from: 'bunny', text: getGreeting(), local: true }]);
         setBunnyState('idle');
-        setHasLoaded(true); 
+        setHasLoaded(true);
       }, 500);
     })();
   }, []); 
@@ -310,12 +343,13 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
       { text: 'Clear', style: 'destructive', onPress: async () => {
         if (typewriterRef.current) clearInterval(typewriterRef.current);
         typewriterRef.current = null;
+        setTyping(null);
         contextRef.current    = null;   // ← reset cached context on clear
         await AsyncStorage.removeItem(STORAGE_COACH_MESSAGES);
         setMessages([]);
         setBunnyState('talking');
         setTimeout(() => {
-          setMessages([{ id: uid(), from: 'bunny', text: getGreeting() }]);
+          setMessages([{ id: uid(), from: 'bunny', text: getGreeting(), local: true }]);
           setBunnyState('idle');
         }, 500);
       }},
@@ -323,8 +357,8 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
   };
 
   // ── Send handler ──────────────────────────────────────────────────────────
-  const handleSend = async () => {
-    const text = input.trim();
+  const handleSend = async (override?: string) => {
+    const text = (override ?? input).trim();
     if (!text || isReplying) return;
 
     const quota = await getRemainingMessages(isPro);
@@ -336,6 +370,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         text: isPro
           ? `You've hit your ${limit} message limit for today — I'll be back tomorrow! 🐰`
           : `You've used your ${limit} free messages for today! Upgrade for up to ${MESSAGE_LIMITS.pro} messages/day. 🐰`,
+        local: true,
       }]);
       setBunnyState('idle');   
       setIsReplying(false);  
@@ -352,7 +387,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
     try {
 
       if (!contextRef.current) {
-        contextRef.current = await buildCoachContext(name, streak);
+        contextRef.current = await buildCoachContext(name, streak, budget);
       }
 
       const reply = await sendMessage(
@@ -363,24 +398,24 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
       );
       await consumeMessage();
 
-      const replyId = uid();
-      setMessages(prev => [...prev, { id: replyId, from: 'bunny', text: '' }]);
       setBunnyState('talking');
-
-      startTypewriter(replyId, formatMessageText(reply), () => {
+      startTypewriter({ id: uid(), from: 'bunny', text: formatMessageText(reply) }, () => {
         setBunnyState('idle');
         setIsReplying(false);
         haptic.success();
       });
 
     } catch (e) {
-      const msg = String(e).includes('429')
+      const code = e instanceof CoachError ? e.code : '';
+      const msg = code === 'daily_limit'
+        ? "That's all the chatting I can do today — I'll be back tomorrow! 🐰"
+        : code === 'rate_limited' || code === 'busy'
         ? "I'm a little overwhelmed right now — try again in a moment! 🐰"
-        : String(e).includes('network') || String(e).includes('fetch')
+        : !code && /network|fetch|auth/i.test(String(e))
         ? "I couldn't reach my brain just now. Check your connection? 🐰"
         : "Oops, something went wrong on my end! 🐰";
 
-      setMessages(prev => [...prev, { id: uid(), from: 'bunny', text: msg }]);
+      setMessages(prev => [...prev, { id: uid(), from: 'bunny', text: msg, local: true }]);
       setBunnyState('idle');
       setIsReplying(false);
     }
@@ -433,7 +468,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           </TouchableOpacity>
         </View>
 
-        <SectionDivider title="✦ Bonbon ✦" />
+        <View style={{ height: 1, backgroundColor: 'rgba(212,149,106,0.12)', marginTop: 12, marginBottom: 12 }} />
       </View>
 
       {/* ── Message list ───────────────────────────────────────────────────── */}
@@ -447,48 +482,21 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           && !isReplying && !input.trim() ? 140 : 8, }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => { if (typing) scrollRef.current?.scrollToEnd({ animated: false }); }}
       >
-        {messages.map((msg, index) => (
-          <View
-            key={msg.id}
-            style={{
-              flexDirection: msg.from === 'bunny' ? 'row' : 'row-reverse',
-              alignItems: 'flex-end',
-              marginBottom: 10,
-              gap: 8,
-            }}
-          >
-            {msg.from === 'bunny' && (
-              <BunnyAvatar
-                state={index === lastBunnyIndex ? bunnyState : 'idle'}
-                frame={talkFrame}
-              />
-            )}
-
-            <View style={{
-              maxWidth: '76%',
-              backgroundColor: msg.from === 'bunny' ? '#5C3D2E' : 'rgba(212,149,106,0.18)',
-              borderRadius: 16,
-              borderBottomLeftRadius:  msg.from === 'bunny' ? 4 : 16,
-              borderBottomRightRadius: msg.from === 'user'  ? 4 : 16,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderWidth: 1,
-              borderColor: msg.from === 'bunny'
-                ? 'rgba(212,149,106,0.18)'
-                : 'rgba(212,149,106,0.32)',
-            }}>
-              <Text style={{
-                fontFamily: JUA,
-                color: '#e8d5c0',
-                fontSize: fs(13),
-                lineHeight: 20,
-              }}>
-                {formatMessageText(msg.text)}
-              </Text>
-            </View>
-          </View>
-        ))}
+        {messages.map((msg, index) => {
+          const isLastBunny = index === lastBunnyIndex;
+          return (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              text={typing?.id === msg.id ? typing.text : msg.text}
+              avatarState={isLastBunny ? bunnyState : 'idle'}
+              frame={isLastBunny ? talkFrame : 0}
+              fontSize={fs(13)}
+            />
+          );
+        })}
 
         {isReplying && bunnyState === 'thinking' && <ThinkingBubble />}
       </ScrollView>
@@ -501,7 +509,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           <SuggestedPrompts
             onSelect={(text) => {
               haptic.light();
-              setInput(text);
+              handleSend(text);
             }}
           />
         </View>
@@ -539,9 +547,13 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
           placeholder="Message Bonbon…"
           placeholderTextColor="rgba(232,213,192,0.28)"
           returnKeyType="send"
-          onSubmitEditing={handleSend}
+          onSubmitEditing={() => handleSend()}
+          // Return sends (keyboard stays open) instead of inserting a newline; the box still
+          // grows for long or pasted multi-line messages.
+          submitBehavior="submit"
           editable={!isReplying}
           multiline
+          maxLength={1000}
           onContentSizeChange={() =>          
             scrollRef.current?.scrollToEnd({ animated: true })
           }
@@ -562,7 +574,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak }) => {
         />
 
         <TouchableOpacity
-          onPress={handleSend}
+          onPress={() => handleSend()}
           disabled={!input.trim() || isReplying}
           activeOpacity={0.75}
           style={{

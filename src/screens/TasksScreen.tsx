@@ -1,21 +1,40 @@
 // src/screens/TasksScreen.tsx
 
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { daysLabel, formatTime12, getLast7DayKeys, getDayName, isScheduledForDay } from '../helpers';
+import { daysLabel, formatTime12, addDaysToKey, getDayName, isScheduledForDay, parseDateKey } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
-import { SectionDivider } from '../components/SectionDivider';
 import { WeeklyHabitChart } from '../components/WeeklyHabitChart';
 import type { Commission, CompletionRecord, HabitChartDay } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
-  light:   () => ReactNativeHapticFeedback.trigger('impactLight',         HAPTIC_OPTIONS),
-  warning: () => ReactNativeHapticFeedback.trigger('notificationWarning', HAPTIC_OPTIONS),
-  error:   () => ReactNativeHapticFeedback.trigger('notificationError',   HAPTIC_OPTIONS),
+  light: () => ReactNativeHapticFeedback.trigger('impactLight', HAPTIC_OPTIONS),
+};
+
+/** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
+const reminderSummary = (c: Commission): string | null => {
+  if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
+  if (c.reminderSplit) {
+    const r = c.reminderSplit;
+    return `${formatTime12(r.startHour, r.startMinute)} – ${formatTime12(r.endHour, r.endMinute)}`;
+  }
+  return c.reminderTimes?.length ? `${c.reminderTimes.length} times` : null;
+};
+
+type DotState = 'done' | 'missed' | 'pending' | 'none';
+
+/** One habbit's status on one day of the last-7-days strip. */
+const dayStateFor = (c: Commission, day: HabitChartDay): DotState => {
+  if (day.isToday) {
+    if (!isScheduledForDay(c, parseDateKey(day.date).getDay())) return 'none';
+    return c.completed ? 'done' : 'pending';
+  }
+  if (day.completedIds.includes(c.id)) return 'done';
+  return day.scheduledIds?.includes(c.id) ? 'missed' : 'none';
 };
 
 export const TasksScreen = ({
@@ -24,27 +43,17 @@ export const TasksScreen = ({
   todayKey,
   onNavigateAdd,
   onNavigateEdit,
-  onDelete,
 }: {
   commissions: Commission[];
   completionHistory: CompletionRecord[];
   todayKey: string;
   onNavigateAdd: () => void;
   onNavigateEdit: (item: Commission) => void;
-  onDelete: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
 
   const [selectedDay, setSelectedDay] = useState<HabitChartDay | null>(null);
-
-  const handleDelete = (item: Commission) => {
-    haptic.warning();
-    Alert.alert('Remove Habbit', `Remove "${item.label}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => { haptic.error(); onDelete(item.id); } },
-    ]);
-  };
 
   const handleDayPress = (day: HabitChartDay) => {
     haptic.light();
@@ -73,9 +82,10 @@ export const TasksScreen = ({
   // Today uses live commission state so the bar reflects real-time completions
   // and correctly reverts when a habit is un-checked.
   // Past days still come from completionHistory (persisted records).
-  const todayDow = new Date().getDay();
+  const todayDow = parseDateKey(todayKey).getDay();
 
-  const habitChartDays: HabitChartDay[] = getLast7DayKeys().map(date => {
+  // Local-date keys ending at todayKey (toISOString would give UTC dates).
+  const habitChartDays: HabitChartDay[] = Array.from({ length: 7 }, (_, i) => addDaysToKey(todayKey, i - 6)).map(date => {
     if (date === todayKey) {
       const scheduledToday = commissions.filter(c => isScheduledForDay(c, todayDow));
       const completedToday = scheduledToday.filter(c => c.completed);
@@ -86,6 +96,7 @@ export const TasksScreen = ({
         completed: completedToday.length,
         scheduled: scheduledToday.length,
         completedIds: completedToday.map(c => c.id),
+        scheduledIds: scheduledToday.map(c => c.id),
       };
     }
     const record = completionHistory.find(r => r.date === date);
@@ -96,6 +107,7 @@ export const TasksScreen = ({
       completed: record?.completedIds?.length ?? 0,
       scheduled: record?.scheduledIds?.length ?? 0,
       completedIds: record?.completedIds ?? [],
+      scheduledIds: record?.scheduledIds ?? [],
     };
   });
 
@@ -241,155 +253,101 @@ export const TasksScreen = ({
         </View>
       </Modal>
 
-      {/* ════════════════════════════════════════════════════════════════════ */}
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: navHeight }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
         {/* ── Header ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <View>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, opacity: 0.7 }}>Manage your</Text>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 24 }}>Habbits</Text>
+            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(24) }}>Habbits</Text>
+            <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.55)', fontSize: fs(13) }}>
+              {commissions.length === 0 ? 'Nothing here yet' : `${commissions.length} habbit${commissions.length !== 1 ? 's' : ''} · tap one to edit`}
+            </Text>
           </View>
-          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#5C3D2E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#D4956A', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}>
-            <Image source={IMAGES.tasks} style={{ width: 28, height: 28 }} resizeMode="contain" />
-          </View>
+          <TouchableOpacity
+            onPress={() => { haptic.light(); onNavigateAdd(); }}
+            activeOpacity={0.8}
+            accessibilityLabel="Add habbit"
+            style={{ backgroundColor: '#D4956A', borderRadius: 99, paddingVertical: 9, paddingHorizontal: 16 }}>
+            <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(14) }}>+ New</Text>
+          </TouchableOpacity>
         </View>
-
-        <SectionDivider title={`✦ ${commissions.length} Habbit${commissions.length !== 1 ? 's' : ''} ✦`} />
-
-        {/* ── Add button ── */}
-        <TouchableOpacity
-          onPress={onNavigateAdd}
-          activeOpacity={0.8}
-          style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 15, alignItems: 'center', marginBottom: 16, shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }}>
-          <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(16) }}>+ Add Habbit</Text>
-        </TouchableOpacity>
 
         {/* ── Empty state ── */}
         {commissions.length === 0 && (
-          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 10, opacity: 0.6 }} resizeMode="contain" />
-            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(18), marginBottom: 8 }}>No Habbits yet!</Text>
-            <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(14), opacity: 0.5, textAlign: 'center' }}>
-              Tap the button above to add{'\n'}your first daily Habbit.
+          <View style={{ alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, backgroundColor: '#5C3D2E', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(212,149,106,0.18)', marginBottom: 16 }}>
+            <Image source={IMAGES.bunny} style={{ width: 52, height: 52, marginBottom: 10 }} resizeMode="contain" />
+            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(16), marginBottom: 6 }}>No Habbits yet</Text>
+            <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.55)', fontSize: fs(13), textAlign: 'center', marginBottom: 16 }}>
+              Pick one small thing you want to do regularly.
             </Text>
+            <TouchableOpacity onPress={() => { haptic.light(); onNavigateAdd(); }} activeOpacity={0.8}
+              style={{ backgroundColor: '#D4956A', borderRadius: 99, paddingVertical: 11, paddingHorizontal: 24 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(14) }}>+ Add your first Habbit</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* ── Habbit list ── */}
         {commissions.map(item => {
-          const timesPerDay = item.timesPerDay ?? 1;
-          const isMulti = timesPerDay > 1;
-
-          const reminderChips: { key: string; label: string }[] = [];
-          if (item.reminderTime) {
-            reminderChips.push({ key: 'single', label: `🔔 ${formatTime12(item.reminderTime.hour, item.reminderTime.minute)}` });
-          }
-          if (item.reminderTimes && item.reminderTimes.length > 0) {
-            reminderChips.push({ key: 'manual', label: `🔔 ×${item.reminderTimes.length} manual` });
-          }
-          if (item.reminderSplit) {
-            reminderChips.push({
-              key: 'split',
-              label: `🔔 ${formatTime12(item.reminderSplit.startHour, item.reminderSplit.startMinute)} – ${formatTime12(item.reminderSplit.endHour, item.reminderSplit.endMinute)}`,
-            });
-          }
-
-          
-
+          const tpd      = item.timesPerDay ?? 1;
+          const meta     = [daysLabel(item.days ?? []), tpd > 1 ? `${tpd}× a day` : null].filter(Boolean).join(' · ');
+          const reminder = reminderSummary(item);
           return (
-            <View
+            <TouchableOpacity
               key={item.id}
-              style={{ backgroundColor: '#5C3D2E', borderRadius: 12, marginBottom: 10, overflow: 'hidden', borderLeftWidth: 3, borderLeftColor: item.completed ? '#A8D4A0' : '#D4956A', shadowColor: '#1a0a08', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 }}>
+              onPress={() => { haptic.light(); onNavigateEdit(item); }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.label}. ${meta}${reminder ? `. Reminder ${reminder}` : ''}`}
+              accessibilityHint="Opens the editor"
+              style={{ backgroundColor: '#5C3D2E', borderRadius: 16, marginBottom: 10, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.18)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ paddingHorizontal: 12, paddingVertical: 16, opacity: 0.3 }}>
-                  <Text style={{ color: '#D4956A', fontSize: fs(14) }}>☰</Text>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16) }} numberOfLines={1}>{item.label}</Text>
+                  <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(12), marginTop: 3 }} numberOfLines={1}>
+                    {meta}{reminder ? `  ·  🔔 ${reminder}` : ''}
+                  </Text>
                 </View>
-                <View style={{ flex: 1, paddingVertical: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16) }} numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                    {item.completed && (
+                <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.35)', fontSize: fs(22) }}>›</Text>
+              </View>
+
+              {/* This habbit's last 7 days */}
+              <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                {habitChartDays.map(day => {
+                  const state = dayStateFor(item, day);
+                  return (
+                    <View key={day.date} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
                       <View style={{
-                        backgroundColor: 'rgba(168,212,160,0.15)',
-                        borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2,
-                        borderWidth: 1, borderColor: 'rgba(168,212,160,0.4)',
-                      }}>
-                        <Text style={{ fontFamily: 'Jua', fontSize: 10, color: '#A8D4A0' }}>✓ done</Text>
-                      </View>
-                    )}
-                    {isMulti && !item.completed && (item.completionCount ?? 0) > 0 && (
-                      <View style={{
-                        backgroundColor: 'rgba(212,149,106,0.12)',
-                        borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2,
-                        borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)',
-                      }}>
-                        <Text style={{ fontFamily: 'Jua', fontSize: 10, color: 'rgba(212,149,106,0.8)' }}>
-                          {item.completionCount}/{item.timesPerDay}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                    <View style={{ backgroundColor: 'rgba(212,149,106,0.18)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
-                      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.9)' }}>
-                        {daysLabel(item.days ?? [])}
+                        width: 16, height: 16, borderRadius: 8,
+                        backgroundColor: state === 'done' ? '#9de087' : state === 'missed' ? 'rgba(240,144,144,0.4)' : 'transparent',
+                        borderWidth: state === 'pending' || state === 'none' ? 1.5 : 0,
+                        borderColor: state === 'pending' ? '#D4956A' : 'rgba(212,149,106,0.18)',
+                      }} />
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: day.isToday ? '#D4956A' : 'rgba(232,213,192,0.35)' }}>
+                        {day.isToday ? 'Today' : day.dayName.charAt(0)}
                       </Text>
                     </View>
-                    {reminderChips.map(chip => (
-                      <View key={chip.key} style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(212,149,106,0.28)' }}>
-                        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(212,149,106,0.8)' }}>{chip.label}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 12, gap: 4 }}>
-                  <TouchableOpacity
-                    onPress={() => onNavigateEdit(item)}
-                    activeOpacity={0.7}
-                    style={{ backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)' }}>
-                    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDelete(item)}
-                    activeOpacity={0.7}
-                    style={{ backgroundColor: 'rgba(200,80,60,0.1)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(200,80,60,0.25)' }}>
-                    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#f09090' }}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+                  );
+                })}
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })}
 
-        <SectionDivider title="✦ This Week ✦" />
-
-        {/* ── Weekly habit chart ── */}
-        <View style={{
-          backgroundColor: '#3B2220', borderRadius: 16, padding: 16, marginBottom: 16,
-          borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)',
-        }}>
-          <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.5)', fontSize: 11, marginBottom: 10 }}>
-            Last 7 days
-          </Text>
-          {hasAnyData
-            ? <>
-                <WeeklyHabitChart days={habitChartDays} onDayPress={handleDayPress} />
-                <Text style={{ fontFamily: 'Jua', fontSize: 11, color: 'rgba(212,149,106,0.4)', textAlign: 'center', marginTop: 10 }}>
-                  Tap a bar to see details
-                </Text>
-              </>
-            : <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.25)', fontSize: 12, textAlign: 'center', paddingVertical: 18 }}>
-                available after your first day 🐰
+        {/* ── Weekly overview (hidden until there's something to show) ── */}
+        {hasAnyData && (
+          <>
+            <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(17), marginTop: 14, marginBottom: 10 }}>This week</Text>
+            <View style={{ backgroundColor: '#3B2220', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.15)' }}>
+              <WeeklyHabitChart days={habitChartDays} onDayPress={handleDayPress} />
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(212,149,106,0.5)', textAlign: 'center', marginTop: 10 }}>
+                Tap a bar to see that day
               </Text>
-          }
-        </View>
-
+            </View>
+          </>
+        )}
       </ScrollView>
     </>
   );
