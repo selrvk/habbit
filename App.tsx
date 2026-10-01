@@ -15,12 +15,14 @@ import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/
 import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
 import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
+import { habitStats, type HabitStats } from './src/habitStats';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
 import { AddHabbitScreen } from './src/screens/AddHabbitScreen';
+import { HabitDetailScreen } from './src/screens/HabitDetailScreen';
 import { BottomNav } from './src/components/BottomNav';
 import { CoachScreen } from "./src/screens/Coachscreen";
 
@@ -42,7 +44,13 @@ const haptic = {
 // Sub-screen state for the tasks tab
 type TasksSubScreen =
   | { mode: 'add' }
-  | { mode: 'edit'; item: Commission };
+  | { mode: 'detail'; id: string }
+  /** fromDetail: closing the editor goes back to the habit's page. */
+  | { mode: 'edit'; item: Commission; fromDetail?: boolean };
+
+/** Where the add/edit screen goes when it closes. */
+const afterEditor = (prev: TasksSubScreen | null): TasksSubScreen | null =>
+  prev?.mode === 'edit' && prev.fromDetail ? { mode: 'detail', id: prev.item.id } : null;
 
 export default function App() {
   const [isOnboarded, setIsOnboarded]             = useState<boolean | null>(null);
@@ -76,6 +84,17 @@ export default function App() {
   );
   // What can be spent today. For weekly/monthly budgets this adapts to the rest of the period.
   const allocatedPerDay = budget.dailyAllowance;
+
+  // Each habit's streak and history, worked out from the daily records.
+  const habitStatsById = useMemo(() => {
+    const byId: Record<string, HabitStats> = {};
+    for (const c of commissions) byId[c.id] = habitStats(c, completionHistory, dayKey);
+    return byId;
+  }, [commissions, completionHistory, dayKey]);
+  const habitStreaks = useMemo(
+    () => Object.fromEntries(Object.entries(habitStatsById).map(([id, s]) => [id, s.current])),
+    [habitStatsById],
+  );
 
   const saveStats             = useCallback((s: Stats) => AsyncStorage.setItem(STORAGE_STATS, JSON.stringify(s)).catch(() => {}), []);
   const saveCompletionHistory = useCallback((r: CompletionRecord[]) => AsyncStorage.setItem(STORAGE_COMPLETION_HISTORY, JSON.stringify(r)).catch(() => {}), []);
@@ -543,7 +562,7 @@ export default function App() {
       scheduleHabitNotifs(updated);
       return updated;
     }));
-    setTasksSubScreen(null);
+    setTasksSubScreen(afterEditor);
   }, []);
 
   const handleDelete = useCallback((id: string) => {
@@ -630,6 +649,7 @@ export default function App() {
         return (
           <HomeScreen
             commissions={commissions}
+            habitStreaks={habitStreaks}
             spentToday={spentToday}
             allocatedPerDay={allocatedPerDay}
             budget={budget}
@@ -645,9 +665,21 @@ export default function App() {
           />
         );
 
-      case 'tasks':
+      case 'tasks': {
+        const detailHabit = tasksSubScreen?.mode === 'detail' ? commissions.find(c => c.id === tasksSubScreen.id) : undefined;
+        if (detailHabit) {
+          return (
+            <HabitDetailScreen
+              habit={detailHabit}
+              history={completionHistory}
+              todayKey={todayKey}
+              onBack={() => setTasksSubScreen(null)}
+              onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
+            />
+          );
+        }
         // Sub-screen: add or edit
-        if (tasksSubScreen !== null) {
+        if (tasksSubScreen?.mode === 'add' || tasksSubScreen?.mode === 'edit') {
           return (
             <AddHabbitScreen
               initialValue={tasksSubScreen.mode === 'edit' ? tasksSubScreen.item : undefined}
@@ -656,7 +688,7 @@ export default function App() {
                   ? (data) => handleEdit(tasksSubScreen.item.id, data)
                   : handleAdd
               }
-              onClose={() => setTasksSubScreen(null)}
+              onClose={() => setTasksSubScreen(afterEditor)}
               onDelete={tasksSubScreen.mode === 'edit' ? () => handleDelete(tasksSubScreen.item.id) : undefined}
             />
           );
@@ -664,12 +696,14 @@ export default function App() {
         return (
           <TasksScreen
             commissions={commissions}
-            completionHistory={completionHistory} 
-            todayKey={todayKey}                   
+            completionHistory={completionHistory}
+            habitStats={habitStatsById}
+            todayKey={todayKey}
             onNavigateAdd={() => setTasksSubScreen({ mode: 'add' })}
-            onNavigateEdit={(item) => setTasksSubScreen({ mode: 'edit', item })}
+            onOpenHabit={(item) => setTasksSubScreen({ mode: 'detail', id: item.id })}
           />
         );
+      }
 
       case 'finance':
         return (

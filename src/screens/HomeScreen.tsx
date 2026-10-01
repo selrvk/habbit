@@ -49,10 +49,12 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 );
 
 export const HomeScreen = ({
-  commissions, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
+  commissions, habitStreaks, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
 }: {
   commissions: Commission[];
+  /** Each habit's current streak, by id. */
+  habitStreaks: Record<string, number>;
   spentToday: number;
   allocatedPerDay: number; budget: BudgetState; currency: string; name: string; avatar: string; streak: number;
   onAddHabit: () => void; onGoToFinance: () => void;
@@ -88,7 +90,7 @@ export const HomeScreen = ({
   const handleSwipeEnd   = useCallback(() => setScrollEnabled(true),  []);
 
   const renderItem = (item: Commission) => (
-    <SwipeableTaskItem key={item.id} item={item}
+    <SwipeableTaskItem key={item.id} item={item} streak={habitStreaks[item.id] ?? 0}
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />
   );

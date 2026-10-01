@@ -16,12 +16,15 @@ const haptic = {
 
 export const SwipeableTaskItem = ({
   item,
+  streak = 0,
   onComplete,
   onUncomplete,
   onSwipeStart,
   onSwipeEnd,
 }: {
   item: Commission;
+  /** This habit's current streak; shown once it's running. */
+  streak?: number;
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onSwipeStart: () => void;
@@ -157,7 +160,7 @@ export const SwipeableTaskItem = ({
     return null;
   })();
 
-  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel;
+  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0;
 
   return (
     <View style={{ marginBottom: 10 }}>
@@ -199,7 +202,7 @@ export const SwipeableTaskItem = ({
           onLongPress={handleLongPress}
           delayLongPress={450}
           accessibilityRole="button"
-          accessibilityLabel={`${item.label}${isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}`}
+          accessibilityLabel={`${item.label}${isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}${streak > 0 ? `, ${streak} day streak` : ''}`}
           accessibilityHint={canComplete ? 'Double tap to check off' : undefined}
           accessibilityActions={[
             ...(canComplete ? [{ name: 'activate', label: 'Check off' }] : []),
@@ -217,6 +220,9 @@ export const SwipeableTaskItem = ({
             </Text>
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                {streak > 0 && (
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}</Text>
+                )}
                 {item.days && item.days.length > 0 && item.days.length < 7 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
                     {daysLabel(item.days)}

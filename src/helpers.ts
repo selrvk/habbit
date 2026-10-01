@@ -48,6 +48,16 @@ export const getLast7Days = (dailyTotals: DailyTotal[], spentToday: number): Cha
 };
 export const isScheduledForDay = (c: Commission, dow: number) =>
   !c.days||c.days.length===0?true:c.days.includes(dow);
+/** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
+export const reminderSummary = (c: Commission): string | null => {
+  if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
+  if (c.reminderSplit) {
+    const r = c.reminderSplit;
+    return `${formatTime12(r.startHour, r.startMinute)} – ${formatTime12(r.endHour, r.endMinute)}`;
+  }
+  return c.reminderTimes?.length ? `${c.reminderTimes.length} times` : null;
+};
+
 export const daysLabel = (days: number[]): string => {
   if (!days||days.length===0) return 'Every day';
   if (days.length===7) return 'Every day';

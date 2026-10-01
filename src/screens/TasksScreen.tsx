@@ -4,25 +4,16 @@ import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { daysLabel, formatTime12, addDaysToKey, getDayName, isScheduledForDay, parseDateKey } from '../helpers';
+import { daysLabel, reminderSummary, addDaysToKey, getDayName, isScheduledForDay, parseDateKey } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { WeeklyHabitChart } from '../components/WeeklyHabitChart';
 import type { Commission, CompletionRecord, HabitChartDay } from '../types';
+import type { HabitStats } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
   light: () => ReactNativeHapticFeedback.trigger('impactLight', HAPTIC_OPTIONS),
-};
-
-/** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
-const reminderSummary = (c: Commission): string | null => {
-  if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
-  if (c.reminderSplit) {
-    const r = c.reminderSplit;
-    return `${formatTime12(r.startHour, r.startMinute)} – ${formatTime12(r.endHour, r.endMinute)}`;
-  }
-  return c.reminderTimes?.length ? `${c.reminderTimes.length} times` : null;
 };
 
 type DotState = 'done' | 'missed' | 'pending' | 'none';
@@ -40,15 +31,17 @@ const dayStateFor = (c: Commission, day: HabitChartDay): DotState => {
 export const TasksScreen = ({
   commissions,
   completionHistory,
+  habitStats,
   todayKey,
   onNavigateAdd,
-  onNavigateEdit,
+  onOpenHabit,
 }: {
   commissions: Commission[];
   completionHistory: CompletionRecord[];
+  habitStats: Record<string, HabitStats>;
   todayKey: string;
   onNavigateAdd: () => void;
-  onNavigateEdit: (item: Commission) => void;
+  onOpenHabit: (item: Commission) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -262,7 +255,7 @@ export const TasksScreen = ({
           <View>
             <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: fs(24) }}>Habbits</Text>
             <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.55)', fontSize: fs(13) }}>
-              {commissions.length === 0 ? 'Nothing here yet' : `${commissions.length} habbit${commissions.length !== 1 ? 's' : ''} · tap one to edit`}
+              {commissions.length === 0 ? 'Nothing here yet' : `${commissions.length} habbit${commissions.length !== 1 ? 's' : ''} · tap one for its streak`}
             </Text>
           </View>
           <TouchableOpacity
@@ -294,14 +287,15 @@ export const TasksScreen = ({
           const tpd      = item.timesPerDay ?? 1;
           const meta     = [daysLabel(item.days ?? []), tpd > 1 ? `${tpd}× a day` : null].filter(Boolean).join(' · ');
           const reminder = reminderSummary(item);
+          const streak   = habitStats[item.id]?.current ?? 0;
           return (
             <TouchableOpacity
               key={item.id}
-              onPress={() => { haptic.light(); onNavigateEdit(item); }}
+              onPress={() => { haptic.light(); onOpenHabit(item); }}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={`${item.label}. ${meta}${reminder ? `. Reminder ${reminder}` : ''}`}
-              accessibilityHint="Opens the editor"
+              accessibilityLabel={`${item.label}. ${meta}${reminder ? `. Reminder ${reminder}` : ''}${streak > 0 ? `. ${streak} day streak` : ''}`}
+              accessibilityHint="Shows its streak and calendar"
               style={{ backgroundColor: '#5C3D2E', borderRadius: 16, marginBottom: 10, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.18)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -310,6 +304,12 @@ export const TasksScreen = ({
                     {meta}{reminder ? `  ·  🔔 ${reminder}` : ''}
                   </Text>
                 </View>
+                {streak > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(212,149,106,0.14)', borderRadius: 99, paddingVertical: 4, paddingHorizontal: 9, marginRight: 8 }}>
+                    <Image source={require('./../../assets/emojis/Fire.png')} style={{ width: 14, height: 14 }} resizeMode="contain" />
+                    <Text style={{ fontFamily: 'DynaPuff', color: '#D4956A', fontSize: fs(13) }}>{streak}</Text>
+                  </View>
+                )}
                 <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.35)', fontSize: fs(22) }}>›</Text>
               </View>
 
