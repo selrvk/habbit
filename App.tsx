@@ -15,7 +15,7 @@ import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/
 import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime } from './src/helpers';
 import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
-import { habitStats, type HabitStats } from './src/habitStats';
+import { habitStats, type HabitSummary } from './src/habitStats';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
@@ -28,6 +28,9 @@ import { CoachScreen } from "./src/screens/Coachscreen";
 
 const scheduledByDow = (items: Commission[]) =>
   [0, 1, 2, 3, 4, 5, 6].map(dow => items.filter(c => isScheduledForDay(c, dow)).length);
+
+/** Each habit's "done or skipped today" state: its reminders are quiet until tomorrow. */
+const quietMap = (items: Commission[]) => new Map(items.map(c => [c.id, c.completed || !!c.skipped]));
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
 
@@ -74,6 +77,8 @@ export default function App() {
   // never written under a new date before the previous day has been rolled over.
   const [dayKey, setDayKey] = useState(getTodayKey);
   const hasLoaded    = useRef(false);
+  // Each habit's "done or skipped today" state as of the last reminder planning.
+  const quietById    = useRef<Map<string, boolean>>(new Map());
   const todayKey     = dayKey;
   const yesterdayKey = addDaysToKey(dayKey, -1);
   const dayDow       = parseDateKey(dayKey).getDay();
@@ -87,14 +92,10 @@ export default function App() {
 
   // Each habit's streak and history, worked out from the daily records.
   const habitStatsById = useMemo(() => {
-    const byId: Record<string, HabitStats> = {};
+    const byId: Record<string, HabitSummary> = {};
     for (const c of commissions) byId[c.id] = habitStats(c, completionHistory, dayKey);
     return byId;
   }, [commissions, completionHistory, dayKey]);
-  const habitStreaks = useMemo(
-    () => Object.fromEntries(Object.entries(habitStatsById).map(([id, s]) => [id, s.current])),
-    [habitStatsById],
-  );
 
   const saveStats             = useCallback((s: Stats) => AsyncStorage.setItem(STORAGE_STATS, JSON.stringify(s)).catch(() => {}), []);
   const saveCompletionHistory = useCallback((r: CompletionRecord[]) => AsyncStorage.setItem(STORAGE_COMPLETION_HISTORY, JSON.stringify(r)).catch(() => {}), []);
@@ -180,6 +181,7 @@ export default function App() {
     let loadedAvatar: string = DEFAULT_AVATAR;
     let migrated: Commission[] = [];
     let loadedStats = defaultStats();
+    let newDay = false;
 
     try {
       
@@ -233,15 +235,18 @@ export default function App() {
           todayKey,
         );
         migrated = r.commissions; loadedStats = r.stats; loadedHistory = r.history;
+        newDay = r.changed;
         setCommissions(migrated);
         if (r.changed) await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: migrated, date: todayKey }));
       }
-      // One-time reschedule: split-evenly reminders were never scheduled before v2,
-      // and every-day habits now use a single daily trigger.
-      if ((await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '2') {
+      // Re-plan every habit's reminders on a new day, so habits that were done or skipped
+      // (and so quiet) yesterday get their repeating reminders back. v3 re-plans once for
+      // everyone: quiet reminders are new, and older versions never scheduled split ones.
+      if (newDay || (await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '3') {
         for (const c of migrated) await scheduleHabitNotifs(c);
-        await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '2');
+        await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '3');
       }
+      quietById.current = quietMap(migrated);
       setStats(loadedStats); saveStats(loadedStats);
       setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
     } catch { setIsOnboarded(true); }
@@ -408,6 +413,19 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: commissions, date: todayKey })).catch(() => {});
   }, [commissions]);
 
+  // A habit that's done or skipped goes quiet until tomorrow; un-doing it (or a new day
+  // resetting it) brings its reminders back. Only habits whose state changed are re-planned;
+  // loadAll sets the starting point after planning everything itself.
+  useEffect(() => {
+    if (!hasLoaded.current) return;
+    const quiet = quietMap(commissions);
+    const prev  = quietById.current;
+    quietById.current = quiet;
+    for (const c of commissions) {
+      if ((prev.get(c.id) ?? false) !== quiet.get(c.id)) scheduleHabitNotifs(c);
+    }
+  }, [commissions]);
+
   useEffect(() => {
     if (!hasLoaded.current) return;
     const todaysScheduled = commissions.filter(c => isScheduledForDay(c, dayDow));
@@ -535,13 +553,10 @@ export default function App() {
     if (ids.length === 0) return;
     setCommissions(p => p.map(c => (ids.includes(c.id) ? { ...c, skipped } : c)));
   }, []);
-  const handleSkip   = useCallback((id: string) => setSkipped([id], true),  [setSkipped]);
-  const handleUnskip = useCallback((id: string) => setSkipped([id], false), [setSkipped]);
-  // "Skip the rest of today": everything scheduled that isn't done yet.
-  const handleSkipRest = useCallback(() => {
-    const dow = parseDateKey(liveState.current.dayKey).getDay();
-    setSkipped(liveState.current.commissions.filter(c => countsToday(c, dow) && !c.completed).map(c => c.id), true);
-  }, [setSkipped]);
+  // Callers check the weekly skip allowance first (habitStatsById[id].skips).
+  const handleSkipMany = useCallback((ids: string[]) => setSkipped(ids, true), [setSkipped]);
+  const handleSkip     = useCallback((id: string) => setSkipped([id], true),  [setSkipped]);
+  const handleUnskip   = useCallback((id: string) => setSkipped([id], false), [setSkipped]);
 
   // ── Add: receives full HabbitFormData, closes sub-screen ─────────────────
   const handleAdd = useCallback((data: HabbitFormData) => {
@@ -664,7 +679,7 @@ export default function App() {
         return (
           <HomeScreen
             commissions={commissions}
-            habitStreaks={habitStreaks}
+            habitStats={habitStatsById}
             spentToday={spentToday}
             allocatedPerDay={allocatedPerDay}
             budget={budget}
@@ -679,7 +694,7 @@ export default function App() {
             onCommissionUncomplete={handleCommissionUncomplete}
             onSkip={handleSkip}
             onUnskip={handleUnskip}
-            onSkipRest={handleSkipRest}
+            onSkipMany={handleSkipMany}
           />
         );
 

@@ -4,6 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, Animated, PanResponder, Pressable, Alert } from 'react-native';
 import { formatTime12, daysLabel } from '../helpers';
 import type { Commission } from '../types';
+import type { SkipAllowance } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
 
 const SWIPE_THRESHOLD = 60;
@@ -17,6 +18,7 @@ const haptic = {
 export const SwipeableTaskItem = ({
   item,
   streak = 0,
+  skips,
   onComplete,
   onUncomplete,
   onSkip,
@@ -27,6 +29,8 @@ export const SwipeableTaskItem = ({
   item: Commission;
   /** This habit's current streak; shown once it's running. */
   streak?: number;
+  /** This week's skips for this habit. */
+  skips?: SkipAllowance;
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onSkip?: (id: string) => void;
@@ -45,6 +49,7 @@ export const SwipeableTaskItem = ({
   const canComplete = !isSkipped && (isMulti ? count < timesPerDay : !item.completed);
   const canUndo     = !isSkipped && (isMulti ? count > 0           : item.completed);
   const canSkip     = !!onSkip && !isSkipped && !item.completed;
+  const skipsLeft   = skips?.left ?? 1;
 
   const translateX    = useRef(new Animated.Value(0)).current;
   const rightProgress = useRef(new Animated.Value(0)).current; // drives green hint
@@ -153,12 +158,20 @@ export const SwipeableTaskItem = ({
     if (canUndo) {
       haptic.warning();
       onUncomplete(item.id);
+    } else if (canSkip && skipsLeft === 0) {
+      haptic.warning();
+      Alert.alert('No skips left this week', `You’ve used this week’s ${skips?.limit === 1 ? 'skip' : 'skips'} for “${item.label}”. They reset on Monday.`);
     } else if (canSkip) {
       haptic.light();
-      Alert.alert(`Skip “${item.label}” today?`, 'Sick, busy or resting? It won’t count for or against your streak.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Skip today', onPress: () => onSkip?.(item.id) },
-      ]);
+      Alert.alert(
+        `Skip “${item.label}” today?`,
+        `Busy, sick or something came up? It won’t count for or against your streak, and its reminders stay quiet until tomorrow.` +
+          (skips ? `\n\n${skips.limit === 1 ? 'This uses your one skip this week.' : skips.left === skips.limit ? 'This uses 1 of your 2 skips this week.' : 'This uses your last skip this week.'}` : ''),
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Skip today', onPress: () => onSkip?.(item.id) },
+        ],
+      );
     }
   };
 
@@ -224,7 +237,7 @@ export const SwipeableTaskItem = ({
           accessibilityActions={[
             ...(canComplete || isSkipped ? [{ name: 'activate', label: isSkipped ? 'Un-skip' : 'Check off' }] : []),
             ...(canUndo ? [{ name: 'undo', label: 'Undo' }] : []),
-            ...(canSkip ? [{ name: 'skip', label: 'Skip today' }] : []),
+            ...(canSkip && skipsLeft > 0 ? [{ name: 'skip', label: 'Skip today' }] : []),
           ]}
           onAccessibilityAction={e => {
             const action = e.nativeEvent.actionName;

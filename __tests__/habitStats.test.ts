@@ -1,4 +1,4 @@
-import { habitCreatedKey, habitDays, habitStats } from '../src/habitStats';
+import { habitCreatedKey, habitDays, habitStats, skipAllowance } from '../src/habitStats';
 import type { Commission, CompletionRecord } from '../src/types';
 
 // 2026-10-01 is a Thursday.
@@ -83,5 +83,27 @@ describe('habitCreatedKey', () => {
   it('reads the local creation day from the id', () => {
     expect(habitCreatedKey(created('2026-09-24'))).toBe('2026-09-24');
     expect(habitCreatedKey('custom-id')).toBeNull();
+  });
+});
+
+describe('skipAllowance', () => {
+  // TODAY is Thursday 2026-10-01; the week started Monday 2026-09-28.
+  const skippedOn = (id: string, dates: string[]): CompletionRecord[] =>
+    dates.map(date => ({ date, completed: false, scheduledIds: [id], completedIds: [], skippedIds: [id] }));
+
+  it('allows 2 a week for daily habits, counting this week only', () => {
+    const h = habit();
+    expect(skipAllowance(h, skippedOn(h.id, ['2026-09-27', '2026-09-29']), TODAY)).toEqual({ limit: 2, used: 1, left: 1 });
+  });
+
+  it('counts today once skipped, and gives it back when un-skipped', () => {
+    const h = habit({ skipped: true });
+    expect(skipAllowance(h, skippedOn(h.id, ['2026-09-29']), TODAY)).toEqual({ limit: 2, used: 2, left: 0 });
+    expect(skipAllowance({ ...h, skipped: false }, skippedOn(h.id, ['2026-09-29']), TODAY).left).toBe(1);
+  });
+
+  it('allows 1 a week for habits on 3 days or fewer', () => {
+    expect(skipAllowance(habit({ days: [1, 3, 5] }), [], TODAY).limit).toBe(1);
+    expect(skipAllowance(habit({ days: [1, 2, 3, 4, 5] }), [], TODAY).limit).toBe(2);
   });
 });

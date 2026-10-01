@@ -8,7 +8,7 @@ import { View, Text, ScrollView, TouchableOpacity, Image, Platform } from 'react
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { daysLabel, parseDateKey, reminderSummary } from '../helpers';
-import { habitDays, statsFromDays } from '../habitStats';
+import { habitDays, skipAllowance, statsFromDays } from '../habitStats';
 import { HabitCalendar } from '../components/HabitCalendar';
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, CompletionRecord } from '../types';
@@ -38,6 +38,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
   const fs = useFontSize();
   const days  = useMemo(() => habitDays(habit, history, todayKey), [habit, history, todayKey]);
   const stats = useMemo(() => statsFromDays(days, todayKey), [days, todayKey]);
+  const skips = useMemo(() => skipAllowance(habit, history, todayKey), [habit, history, todayKey]);
 
   const tpd      = habit.timesPerDay ?? 1;
   const reminder = reminderSummary(habit);
@@ -117,16 +118,21 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
         </View>
 
         <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, textAlign: 'center', marginTop: 16 }}>{hint}</Text>
-        {(today === 'pending' || today === 'skipped') && (
+        {(today === 'skipped' || (today === 'pending' && skips.left > 0)) && (
           <TouchableOpacity
             onPress={() => { haptic(); (today === 'pending' ? onSkip : onUnskip)(); }}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityHint={today === 'pending' ? 'Takes it out of today without breaking the streak' : undefined}
+            accessibilityHint={today === 'pending' ? 'Takes it out of today without breaking the streak, and quiets its reminders' : undefined}
             style={{ alignSelf: 'center', marginTop: 12, borderRadius: 99, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: 'rgba(232,213,192,0.25)' }}>
             <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.cream }}>{today === 'pending' ? 'Skip today' : 'Undo skip'}</Text>
           </TouchableOpacity>
         )}
+        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(232,213,192,0.35)', textAlign: 'center', marginTop: 8 }}>
+          {skips.left === 0
+            ? `No skips left this week · ${skips.limit === 1 ? 'it resets' : 'they reset'} on Monday`
+            : `${skips.left} of ${skips.limit} skip${skips.limit === 1 ? '' : 's'} left this week`}
+        </Text>
       </ScrollView>
     </View>
   );

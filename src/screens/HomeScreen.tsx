@@ -7,6 +7,7 @@ import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
 import type { Commission } from '../types';
+import type { HabitSummary } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
 import { PERIOD_LABELS, type BudgetState } from '../budget';
@@ -49,19 +50,19 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 );
 
 export const HomeScreen = ({
-  commissions, habitStreaks, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
+  commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipRest,
+  onSkip, onUnskip, onSkipMany,
 }: {
   commissions: Commission[];
-  /** Each habit's current streak, by id. */
-  habitStreaks: Record<string, number>;
+  /** Each habit's streak and weekly skips, by id. */
+  habitStats: Record<string, HabitSummary>;
   spentToday: number;
   allocatedPerDay: number; budget: BudgetState; currency: string; name: string; avatar: string; streak: number;
   onAddHabit: () => void; onGoToFinance: () => void;
   onAddSpending: (amount: string, note?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
-  onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipRest: () => void;
+  onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -82,13 +83,26 @@ export const HomeScreen = ({
   const allDone        = totalCount > 0 && completedTasks.length === totalCount;
   const habitPct       = totalCount > 0 ? counted.reduce((s, c) => s + habitProgress(c), 0) / totalCount : 0;
 
+  // Habits out of skips this week stay on the list.
   const confirmSkipRest = () => {
     haptic.light();
-    const n = activeTasks.length;
-    Alert.alert('Skip the rest of today?', `${n} Habbit${n === 1 ? '' : 's'} left. Skipped Habbits don’t count for or against your streaks.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Skip', onPress: onSkipRest },
-    ]);
+    const canSkip = activeTasks.filter(c => (habitStats[c.id]?.skips.left ?? 1) > 0);
+    const noSkips = activeTasks.filter(c => !canSkip.includes(c));
+    const names   = noSkips.map(c => `“${c.label}”`).join(', ');
+    if (canSkip.length === 0) {
+      Alert.alert('No skips left this week', `${names} ${noSkips.length === 1 ? 'has' : 'have'} used this week’s skips. They reset on Monday.`);
+      return;
+    }
+    const n = canSkip.length;
+    Alert.alert(
+      'Skip the rest of today?',
+      `${n} Habbit${n === 1 ? '' : 's'} will be skipped and stay quiet until tomorrow. Skips don’t count for or against your streaks.` +
+        (noSkips.length > 0 ? `\n\n${names} ${noSkips.length === 1 ? 'has' : 'have'} no skips left this week, so ${noSkips.length === 1 ? 'it stays' : 'they stay'} on.` : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Skip', onPress: () => onSkipMany(canSkip.map(c => c.id)) },
+      ],
+    );
   };
 
   const remaining    = allocatedPerDay - spentToday;
@@ -104,7 +118,7 @@ export const HomeScreen = ({
   const handleSwipeEnd   = useCallback(() => setScrollEnabled(true),  []);
 
   const renderItem = (item: Commission) => (
-    <SwipeableTaskItem key={item.id} item={item} streak={habitStreaks[item.id] ?? 0}
+    <SwipeableTaskItem key={item.id} item={item} streak={habitStats[item.id]?.current ?? 0} skips={habitStats[item.id]?.skips}
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
       onSkip={onSkip} onUnskip={onUnskip}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />

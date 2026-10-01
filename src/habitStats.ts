@@ -7,6 +7,7 @@
 
 import type { Commission, CompletionRecord } from './types';
 import { addDaysToKey, isScheduledForDay, parseDateKey, toDateKey } from './helpers';
+import { periodStart } from './budget';
 
 /** `pending`: today, scheduled and not done yet. It doesn't break the streak. */
 export type HabitDayState = 'done' | 'missed' | 'rest' | 'skipped' | 'pending';
@@ -71,5 +72,29 @@ export const statsFromDays = (days: HabitDay[], todayKey: string): HabitStats =>
   return { current: run, best, done, missed, rate: done + missed > 0 ? done / (done + missed) : null, since: days[0]?.date ?? todayKey };
 };
 
-export const habitStats = (habit: Commission, history: CompletionRecord[], todayKey: string): HabitStats =>
-  statsFromDays(habitDays(habit, history, todayKey), todayKey);
+// ── Skips ───────────────────────────────────────────────────────────────────
+// Skips are capped so a streak still means something: 2 a week for habits on 4+ days a
+// week, 1 for habits on 3 days or fewer. Weeks run Monday to Sunday, like budget weeks.
+
+export type SkipAllowance = { limit: number; used: number; left: number };
+
+export const skipLimit = (habit: Commission): number => {
+  const days = habit.days?.length ?? 0;
+  return days === 0 || days >= 4 ? 2 : 1;
+};
+
+/** Skips used this week, today's included. Un-skipping today gives it back. */
+export const skipAllowance = (habit: Commission, history: CompletionRecord[], todayKey: string): SkipAllowance => {
+  const weekStart = periodStart('weekly', todayKey);
+  const earlier   = history.filter(r => r.date >= weekStart && r.date < todayKey && r.skippedIds?.includes(habit.id)).length;
+  const used      = earlier + (habit.skipped ? 1 : 0);
+  const limit     = skipLimit(habit);
+  return { limit, used, left: Math.max(limit - used, 0) };
+};
+
+export type HabitSummary = HabitStats & { skips: SkipAllowance };
+
+export const habitStats = (habit: Commission, history: CompletionRecord[], todayKey: string): HabitSummary => ({
+  ...statsFromDays(habitDays(habit, history, todayKey), todayKey),
+  skips: skipAllowance(habit, history, todayKey),
+});

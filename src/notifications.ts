@@ -45,20 +45,56 @@ export const reminderTimesFor = (c: Commission): ReminderTime[] => {
 
 const MAX_TIMES_PER_DAY = 10; // matches the AddHabbitScreen stepper limit
 
+// Habit reminders repeat daily (or weekly on chosen days). On iOS a repeating reminder
+// can't start "tomorrow": it matches only the time of day, so it would still fire today.
+// So once a habit is done or skipped for the day, its repeating reminders are swapped for
+// one-off reminders on the next few days, and the next time the app opens on a new day
+// (see App's quiet-reminder effect and load) the repeating ones are restored.
+
+const habitNotification = (c: Commission) => ({
+  title: 'Habbit 🐰',
+  body: c.label,
+  android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } },
+  ios: { sound: 'default' },
+});
+
+/** Done or skipped today: no more reminders until tomorrow. */
+const isQuietToday = (c: Commission) => c.completed || !!c.skipped;
+
+/**
+ * How many days of one-off reminders to plan while a habit is quiet. Fewer for habits with
+ * many reminders a day: iOS keeps only the 64 soonest notifications.
+ */
+const quietDays = (timesPerDay: number) => Math.max(2, Math.min(7, Math.floor(14 / timesPerDay)));
+
+/**
+ * (Re)plans one habit's reminders from its current state. Call it whenever a habit is added,
+ * edited, completed, skipped or un-done.
+ */
 export const scheduleHabitNotifs = async (commission: Commission) => {
   try {
     await cancelHabitNotifs(commission.id);
     const times = reminderTimesFor(commission).slice(0, MAX_TIMES_PER_DAY);
     if (times.length === 0) return;
+    const notification = habitNotification(commission);
 
-    const notification = {
-      title: 'Habbit 🐰',
-      body: commission.label,
-      android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } },
-      ios: { sound: 'default' },
-    };
+    if (isQuietToday(commission)) {
+      const days = quietDays(times.length);
+      for (let d = 1; d <= days; d++) {
+        const day = new Date(); day.setDate(day.getDate() + d);
+        if (commission.days.length > 0 && !commission.days.includes(day.getDay())) continue;
+        for (const [ti, t] of times.entries()) {
+          const at = new Date(day); at.setHours(t.hour, t.minute, 0, 0);
+          await notifee.createTriggerNotification(
+            { ...notification, id: `hr-${commission.id}-later-${d}-${ti}` },
+            { type: TriggerType.TIMESTAMP, timestamp: at.getTime() },
+          );
+        }
+      }
+      return;
+    }
+
     const everyDay = commission.days.length === 0 || commission.days.length === 7;
-
     for (const [ti, t] of times.entries()) {
       if (everyDay) {
         // One daily trigger instead of 7 weekly ones — iOS only keeps 64 pending notifications.
@@ -78,14 +114,13 @@ export const scheduleHabitNotifs = async (commission: Commission) => {
   } catch {}
 };
 
+/** Cancels every pending reminder for a habit: repeating, one-off and legacy ids. */
 export const cancelHabitNotifs = async (commissionId: string) => {
-  const slots = Array.from({ length: MAX_TIMES_PER_DAY }, (_, ti) => ti);
-  const ids = [
-    ...[0,1,2,3,4,5,6].flatMap(d => slots.map(ti => `hr-${commissionId}-${d}-${ti}`)),
-    ...slots.map(ti => `hr-${commissionId}-daily-${ti}`),
-    ...[0,1,2,3,4,5,6].map(d => `hr-${commissionId}-${d}`), // legacy
-  ];
-  await Promise.all(ids.map(id => notifee.cancelNotification(id).catch(() => {})));
+  try {
+    const prefix = `hr-${commissionId}-`;
+    const ids = (await notifee.getTriggerNotificationIds()).filter(id => id.startsWith(prefix));
+    if (ids.length > 0) await notifee.cancelTriggerNotifications(ids);
+  } catch {}
 };
 
 export const scheduleMidnightNotif = async () => {
