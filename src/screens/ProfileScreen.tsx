@@ -10,6 +10,7 @@ import { CompletionCalendar } from '../components/CompletionCalendar';
 import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from './PaywallScreen';
 import type { Stats, CompletionRecord } from '../types';
+import { ACHIEVEMENTS, earnedSortKey, type Earned } from '../achievements';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -24,11 +25,13 @@ const C = {
   border: 'rgba(212,149,106,0.18)',
 };
 
-export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, onSetName, onSetAvatar, onOpenSettings, onOpenWeekRecap }: {
+export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, onSetName, onSetAvatar, onOpenSettings, onOpenWeekRecap, earned, onOpenAchievements }: {
   name: string; avatar: string; stats: Stats; completionHistory: CompletionRecord[]; todayKey: string;
   onSetName: (v: string) => void; onSetAvatar: (v: string) => void;
   onOpenSettings: () => void;
   onOpenWeekRecap: () => void;
+  earned: Earned;
+  onOpenAchievements: () => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -135,6 +138,33 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
             Finish all of today's Habbits to start a streak 🔥
           </Text>
         )}
+
+        {/* ── Achievements: the latest few, newest first ── */}
+        {(() => {
+          const got    = ACHIEVEMENTS.filter(a => earned[a.id]);
+          const recent = [...got].sort((a, b) => earnedSortKey(earned[b.id]).localeCompare(earnedSortKey(earned[a.id]))).slice(0, 6);
+          return (
+            <TouchableOpacity onPress={() => { haptic.light(); onOpenAchievements(); }} activeOpacity={0.8}
+              accessibilityLabel={`Achievements: ${got.length} of ${ACHIEVEMENTS.length} earned`}
+              style={{ backgroundColor: C.card, borderRadius: 16, padding: 14, marginTop: 12, borderWidth: 1, borderColor: C.border }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: C.cream }}>Achievements</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.accent }}>{got.length} of {ACHIEVEMENTS.length} ›</Text>
+              </View>
+              {recent.length > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  {recent.map(a => (
+                    <View key={a.id} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,149,106,0.22)', borderWidth: 1.5, borderColor: C.accent }}>
+                      <Text style={{ fontSize: fs(19) }}>{a.emoji}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginTop: 6 }}>Check off your first Habbit to earn one 🐣</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })()}
 
         <TouchableOpacity onPress={() => { haptic.light(); onOpenWeekRecap(); }} activeOpacity={0.8}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 14, marginTop: 12, borderWidth: 1, borderColor: C.border }}>

@@ -14,6 +14,8 @@ export const STORAGE_NOTIF_VERSION      = '@habbit_rabbit_notif_version';
 export const STORAGE_TOPUPS             = '@habbit_rabbit_budget_topups';
 export const STORAGE_BILLS              = '@habbit_rabbit_bills';
 export const STORAGE_SAVINGS            = '@habbit_rabbit_savings';
+/** Achievements earned: { earned: { [id]: day } }. */
+export const STORAGE_ACHIEVEMENTS       = '@habbit_rabbit_achievements';
 /** Bonbon's weekly notes, by week. Not backed up: they can be written again. */
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
 
@@ -29,6 +31,7 @@ export const CONTENT_STORAGE_KEYS = [
   STORAGE_BILLS,
   STORAGE_SAVINGS,
   STORAGE_WEEK_NOTES,
+  STORAGE_ACHIEVEMENTS,
 ];
 
 // ── Full wipe — only used if you ever need a true factory reset ───────────────

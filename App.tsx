@@ -26,7 +26,10 @@ import notifee, { EventType } from '@notifee/react-native';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, ALL_STORAGE_KEYS } from './src/storage';
+import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
+import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
+import { AchievementsSheet } from './src/components/AchievementsSheet';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -127,6 +130,14 @@ export default function App() {
   const hasLoaded    = useRef(false);
   // Set once loadAll has finished: queued events and links wait for it.
   const [ready, setReady] = useState(false);
+  // Achievements earned (null until loaded), the unlock banners waiting to show, and the list.
+  const [earned, setEarned]                 = useState<Earned | null>(null);
+  const [toasts, setToasts]                 = useState<ToastItem[]>([]);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const earnedRef = useRef<Earned>({});
+  earnedRef.current = earned ?? earnedRef.current;
+  // No achievements saved yet: what's earned from past history is announced in one banner.
+  const achievementsFirstRun = useRef(false);
   const [pendingLink, setPendingLink]       = useState<LinkTarget | null>(null);
   const [financeRequest, setFinanceRequest] = useState<FinanceRequest | null>(null);
   // Each habit's "done or skipped today" state as of the last reminder planning.
@@ -308,6 +319,11 @@ export default function App() {
       }
       if (day.billsChanged) await AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(loadedBills));
       scheduleBillReminders(loadedBills, loadedCurrency);
+      const storedA = await AsyncStorage.getItem(STORAGE_ACHIEVEMENTS);
+      const savedAchievements: { earned?: Earned } | null = storedA ? JSON.parse(storedA) : null;
+      achievementsFirstRun.current = !savedAchievements?.earned;
+      earnedRef.current = savedAchievements?.earned ?? {};
+      setEarned(earnedRef.current);
       const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
       setSavings(storedSv ? JSON.parse(storedSv) : EMPTY_SAVINGS);
       const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
@@ -429,6 +445,8 @@ export default function App() {
     setEveningReminder(DEFAULT_EVENING_REMINDER);
     setWeeklyRecap(true);
     setRecapOpen(null);
+    setEarned(null); earnedRef.current = {};
+    setToasts([]); setAchievementsOpen(false);
   }, []);
 
   // Replaces all data with a backup and reloads. Restoring the iCloud backup also lets this
@@ -540,6 +558,8 @@ export default function App() {
     }
     await AsyncStorage.setItem(STORAGE_ONBOARDED, 'true');
     scheduleWeeklyRecap(true);
+    achievementsFirstRun.current = false; earnedRef.current = {}; setEarned({});
+    AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: {} })).catch(() => {});
     hasLoaded.current = true; setIsOnboarded(true); setReady(true);
   }, [todayKey]);
 
@@ -712,6 +732,43 @@ export default function App() {
     todayKey: dayKey, commissions, history: completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings,
     budgetPeriod, budgetAmount, currency, name, streak: stats.currentStreak,
   }), [dayKey, commissions, completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings, budgetPeriod, budgetAmount, currency, name, stats.currentStreak]);
+
+  // ── Achievements ─────────────────────────────────────────────────────────
+  const achievementData: AchievementData = useMemo(() => ({
+    todayKey: dayKey, stats, history: completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings,
+    budgetPeriod, budgetAmount,
+  }), [dayKey, stats, completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings, budgetPeriod, budgetAmount]);
+
+  /** Saves newly earned achievements and announces them (several from past history in one banner). */
+  const award = useCallback((ids: string[], fromHistory = false) => {
+    const fresh = ids.filter(id => !earnedRef.current[id] && achievementById(id));
+    if (fresh.length === 0) return;
+    const when = fromHistory ? EARNED_BEFORE : liveState.current.dayKey;
+    const next = { ...earnedRef.current, ...Object.fromEntries(fresh.map(id => [id, when])) };
+    earnedRef.current = next;
+    setEarned(next);
+    AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: next })).catch(() => {});
+    haptic.success();
+    setToasts(q => [...q, ...(fromHistory && fresh.length > 1
+      ? [{ key: `history-${fresh.length}`, emoji: '🏅', title: `${fresh.length} achievements earned`, subtitle: 'From everything you’ve done so far. Tap to see them.', plural: true }]
+      : fresh.map(id => { const a = achievementById(id)!; return { key: id, emoji: a.emoji, title: a.title, subtitle: typeof a.description === 'string' ? a.description : a.description(achievementData) }; }))]);
+  }, [achievementData]);
+
+  // Checked a moment after anything changes, so a burst of taps is checked once.
+  useEffect(() => {
+    if (!ready || earned === null || !isOnboarded) return;
+    const t = setTimeout(async () => {
+      const ids = newlyEarned(achievementData, earnedRef.current);
+      if (!achievementsFirstRun.current) { award(ids); return; }
+      achievementsFirstRun.current = false;
+      // Chats from before achievements existed count too.
+      const chats = await AsyncStorage.getItem(STORAGE_COACH_MESSAGES).catch(() => null);
+      try { if ((JSON.parse(chats ?? '[]') as { from?: string }[]).some(m => m.from === 'user')) ids.push('hello-bonbon'); } catch {}
+      if (ids.length > 0) award(ids, true);
+      else AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: earnedRef.current })).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [ready, earned, isOnboarded, achievementData, award]);
 
   // On Home from Sunday evening (this week) through Monday (last week).
   const homeRecap = useMemo(() => {
@@ -986,7 +1043,7 @@ export default function App() {
         );
 
       case 'chat':
-        return <CoachScreen name={name} streak={stats.currentStreak} budget={budget} />;
+        return <CoachScreen name={name} streak={stats.currentStreak} budget={budget} onChatted={() => award(['hello-bonbon'])} />;
 
       case 'profile':
         return (  
@@ -996,6 +1053,8 @@ export default function App() {
             onSetName={handleSetName} onSetAvatar={handleSetAvatar}
             onOpenSettings={() => setActiveTab('settings')}
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
+            earned={earned ?? {}}
+            onOpenAchievements={() => setAchievementsOpen(true)}
           />
         );
 
@@ -1031,7 +1090,12 @@ export default function App() {
           <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
             <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
             <View style={{ flex: 1 }}>{renderScreen()}</View>
-            <WeekRecapSheet visible={recapOpen !== null} initialWeek={recapOpen ?? todayKey} data={weekData} onClose={() => setRecapOpen(null)} />
+            {/* Closing a recap (not opening it) earns "Look Back", so its banner isn't hidden behind the sheet. */}
+            <WeekRecapSheet visible={recapOpen !== null} initialWeek={recapOpen ?? todayKey} data={weekData} onClose={() => { setRecapOpen(null); award(['look-back']); }} />
+            <AchievementsSheet visible={achievementsOpen} earned={earned ?? {}} data={achievementData} onClose={() => setAchievementsOpen(false)} />
+            {toasts.length > 0 && (
+              <AchievementToast item={toasts[0]} avatar={avatar} onPress={() => setAchievementsOpen(true)} onDone={() => setToasts(q => q.slice(1))} />
+            )}
             {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
           </View>
         </SafeAreaProvider>

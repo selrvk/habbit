@@ -59,6 +59,8 @@ interface CoachScreenProps {
   name: string;
   streak: number;
   budget?: BudgetState;
+  /** After a reply from Bonbon (the "Hi, Bonbon!" achievement). */
+  onChatted?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -174,7 +176,7 @@ const MessageBubble = React.memo(({ msg, text, avatarState, frame, fontSize }: {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget }) => {
+export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, onChatted }) => {
   const [talkFrame, setTalkFrame]   = useState(0);
   const talkCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { isPro } = useProStatus();
@@ -365,6 +367,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget }
         isPro,
       );
       await consumeMessage();
+      onChatted?.();
 
       setBunnyState('talking');
       startTypewriter({ id: uid(), from: 'bunny', text: formatMessageText(reply) }, () => {
