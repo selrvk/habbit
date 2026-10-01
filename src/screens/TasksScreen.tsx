@@ -4,11 +4,11 @@ import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { daysLabel, reminderSummary, addDaysToKey, getDayName, isScheduledForDay, parseDateKey } from '../helpers';
+import { reminderSummary, scheduleLabel, addDaysToKey, getDayName, isScheduledForDay, parseDateKey } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { WeeklyHabitChart } from '../components/WeeklyHabitChart';
 import type { Commission, CompletionRecord, HabitChartDay } from '../types';
-import type { HabitStats } from '../habitStats';
+import type { HabitSummary } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
@@ -19,7 +19,12 @@ const haptic = {
 type DotState = 'done' | 'missed' | 'skipped' | 'pending' | 'none';
 
 /** One habbit's status on one day of the last-7-days strip. */
-const dayStateFor = (c: Commission, day: HabitChartDay): DotState => {
+const dayStateFor = (c: Commission, day: HabitChartDay, weekDone: boolean): DotState => {
+  // "N× a week" habits are never missed on a day: each day is just done or not.
+  if (c.perWeek) {
+    if (day.isToday) return c.completed ? 'done' : weekDone ? 'none' : 'pending';
+    return day.completedIds.includes(c.id) ? 'done' : 'none';
+  }
   if (day.isToday) {
     if (!isScheduledForDay(c, parseDateKey(day.date).getDay())) return 'none';
     return c.completed ? 'done' : c.skipped ? 'skipped' : 'pending';
@@ -39,7 +44,7 @@ export const TasksScreen = ({
 }: {
   commissions: Commission[];
   completionHistory: CompletionRecord[];
-  habitStats: Record<string, HabitStats>;
+  habitStats: Record<string, HabitSummary>;
   todayKey: string;
   onNavigateAdd: () => void;
   onOpenHabit: (item: Commission) => void;
@@ -97,12 +102,14 @@ export const TasksScreen = ({
     }
     const record  = completionHistory.find(r => r.date === date);
     const skipped = record?.skippedIds ?? [];
+    // The bars count the day's schedule only; weekly habits done that day aren't part of it.
+    const counted = (record?.scheduledIds ?? []).filter(id => !skipped.includes(id));
     return {
       date,
       dayName: getDayName(date),
       isToday: false,
-      completed: record?.completedIds?.length ?? 0,
-      scheduled: (record?.scheduledIds ?? []).filter(id => !skipped.includes(id)).length,
+      completed: counted.filter(id => record?.completedIds.includes(id)).length,
+      scheduled: counted.length,
       completedIds: record?.completedIds ?? [],
       scheduledIds: record?.scheduledIds ?? [],
       skippedIds: skipped,
@@ -290,16 +297,21 @@ export const TasksScreen = ({
         {/* ── Habbit list ── */}
         {commissions.map(item => {
           const tpd      = item.timesPerDay ?? 1;
-          const meta     = [daysLabel(item.days ?? []), tpd > 1 ? `${tpd}× a day` : null].filter(Boolean).join(' · ');
+          const stats    = habitStats[item.id];
+          const meta     = [
+            scheduleLabel(item),
+            tpd > 1 ? `${tpd}× a day` : null,
+            item.perWeek ? `${stats?.thisWeek ?? 0}/${item.perWeek} this week` : null,
+          ].filter(Boolean).join(' · ');
           const reminder = reminderSummary(item);
-          const streak   = habitStats[item.id]?.current ?? 0;
+          const streak   = stats?.current ?? 0;
           return (
             <TouchableOpacity
               key={item.id}
               onPress={() => { haptic.light(); onOpenHabit(item); }}
               activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={`${item.label}. ${meta}${reminder ? `. Reminder ${reminder}` : ''}${streak > 0 ? `. ${streak} day streak` : ''}`}
+              accessibilityLabel={`${item.label}. ${meta}${reminder ? `. Reminder ${reminder}` : ''}${streak > 0 ? `. ${streak} ${stats?.unit ?? 'day'} streak` : ''}`}
               accessibilityHint="Shows its streak and calendar"
               style={{ backgroundColor: '#5C3D2E', borderRadius: 16, marginBottom: 10, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.18)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -312,7 +324,7 @@ export const TasksScreen = ({
                 {streak > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(212,149,106,0.14)', borderRadius: 99, paddingVertical: 4, paddingHorizontal: 9, marginRight: 8 }}>
                     <Image source={require('./../../assets/emojis/Fire.png')} style={{ width: 14, height: 14 }} resizeMode="contain" />
-                    <Text style={{ fontFamily: 'DynaPuff', color: '#D4956A', fontSize: fs(13) }}>{streak}</Text>
+                    <Text style={{ fontFamily: 'DynaPuff', color: '#D4956A', fontSize: fs(13) }}>{streak}{stats?.unit === 'week' ? ' wk' : ''}</Text>
                   </View>
                 )}
                 <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.35)', fontSize: fs(22) }}>›</Text>
@@ -321,7 +333,7 @@ export const TasksScreen = ({
               {/* This habbit's last 7 days */}
               <View style={{ flexDirection: 'row', marginTop: 12 }}>
                 {habitChartDays.map(day => {
-                  const state = dayStateFor(item, day);
+                  const state = dayStateFor(item, day, !!stats?.weekDone);
                   return (
                     <View key={day.date} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
                       <View style={{

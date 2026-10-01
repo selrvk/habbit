@@ -10,7 +10,14 @@ export type Commission      = {
   completed: boolean;
   /** Skipped for today: counts neither for nor against any streak. Cleared at midnight. */
   skipped?: boolean;
+  /** Fixed days (0 = Sunday); empty means every day. Unused when `perWeek` is set. */
   days: number[];
+  /**
+   * "N× a week" habits: done on any days, at most once a day, until N times in the week
+   * (Monday to Sunday). They're never scheduled on a particular day, so they can't be
+   * missed on a day and don't count toward the daily "perfect day" streak.
+   */
+  perWeek?: number;
   // Single reminder (timesPerDay === 1)
   reminderTime: ReminderTime | null;
   // Multi-times fields
@@ -24,6 +31,7 @@ export type Commission      = {
 export type HabbitFormData  = {
   label: string;
   days: number[];
+  perWeek: number | null;
   timesPerDay: number;
   reminderTime: ReminderTime | null;
   reminderTimes: ReminderTime[];
@@ -68,6 +76,7 @@ export type CompletionRecord = {
   date: string;
   /** Every scheduled habit that wasn't skipped was done (and at least one was). */
   completed: boolean;
+  /** Habits done that day: scheduled ones, plus any "N× a week" ones. */
   completedIds: string[];
   scheduledIds: string[];
   /** Scheduled habits skipped that day. A day with all of them skipped is a rest day. */

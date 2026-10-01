@@ -21,6 +21,8 @@ const haptic = {
 
 const MAX_TIMES = 10;
 const TIMES_OPTIONS = Array.from({ length: MAX_TIMES }, (_, i) => i + 1);
+// 7× a week is just every day, which the "Set days" mode already covers.
+const PER_WEEK_OPTIONS = [1, 2, 3, 4, 5, 6];
 
 const SUGGESTIONS = [
   { label: 'Drink water',  times: 8 },
@@ -89,6 +91,10 @@ export const AddHabbitScreen = ({
   const [label, setLabel]             = useState(initialValue?.label ?? '');
   const [days, setDays]               = useState<number[]>(initialValue?.days ?? []);
   const [timesPerDay, setTimesPerDay] = useState(initialValue?.timesPerDay ?? 1);
+  // "N× a week" instead of set days: done on any days, once a day.
+  const [weekly, setWeekly]           = useState(!!initialValue?.perWeek);
+  const [perWeek, setPerWeek]         = useState(initialValue?.perWeek ?? 3);
+  const dailyTimes = weekly ? 1 : timesPerDay;
   // Once the user picks how many times a day, suggestions only fill in the name.
   const [timesChosen, setTimesChosen] = useState(isEdit);
 
@@ -114,7 +120,7 @@ export const AddHabbitScreen = ({
   const canSave     = label.trim().length > 0;
   const splitTimes  = computeSplitTimes(splitFrom.hour, splitFrom.minute, splitTo.hour, splitTo.minute, timesPerDay);
   const splitInvalid = splitTo.hour * 60 + splitTo.minute <= splitFrom.hour * 60 + splitFrom.minute;
-  const saveEnabled  = canSave && !(reminderEnabled && timesPerDay > 1 && mode === 'split' && splitInvalid);
+  const saveEnabled  = canSave && !(reminderEnabled && dailyTimes > 1 && mode === 'split' && splitInvalid);
 
   const chooseTimes = (n: number) => {
     haptic.light();
@@ -146,12 +152,12 @@ export const AddHabbitScreen = ({
     let reminderSplit: HabbitFormData['reminderSplit'] = null;
 
     if (reminderEnabled) {
-      if (timesPerDay === 1)   reminderTime = single;
+      if (dailyTimes === 1)    reminderTime = single;
       else if (mode === 'manual') reminderTimes = [...manualTimes].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
       else reminderSplit = { startHour: splitFrom.hour, startMinute: splitFrom.minute, endHour: splitTo.hour, endMinute: splitTo.minute };
     }
 
-    onSave({ label: label.trim(), days, timesPerDay, reminderTime, reminderTimes, reminderSplit });
+    onSave({ label: label.trim(), days, perWeek: weekly ? perWeek : null, timesPerDay: dailyTimes, reminderTime, reminderTimes, reminderSplit });
   };
 
   const rowText = { fontFamily: 'Jua', fontSize: fs(15), color: '#e8d5c0' } as const;
@@ -202,15 +208,48 @@ export const AddHabbitScreen = ({
           </View>
         )}
 
-        {/* ── Days ── */}
-        <Label>Which days?</Label>
+        {/* ── How often: set days, or N× a week on any days ── */}
+        <Label>How often?</Label>
         <Card>
-          <DayPicker days={days} onChange={setDays} />
+          <View style={{ flexDirection: 'row', backgroundColor: 'rgba(212,149,106,0.1)', borderRadius: 12, padding: 3, marginBottom: 14 }}>
+            {([['Set days', false], ['Times a week', true]] as const).map(([text, value]) => (
+              <TouchableOpacity key={text} onPress={() => { haptic.light(); setWeekly(value); }} activeOpacity={0.8}
+                accessibilityRole="button" accessibilityState={{ selected: weekly === value }}
+                style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: weekly === value ? '#D4956A' : 'transparent' }}>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: weekly === value ? '#fff' : 'rgba(232,213,192,0.6)' }}>{text}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {weekly ? (
+            <>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {PER_WEEK_OPTIONS.map(n => {
+                  const active = n === perWeek;
+                  return (
+                    <TouchableOpacity key={n} onPress={() => { haptic.light(); setPerWeek(n); }} activeOpacity={0.7}
+                      accessibilityLabel={`${n} times a week`} accessibilityState={{ selected: active }}
+                      style={{
+                        flex: 1, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
+                        backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
+                        borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
+                      }}>
+                      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{n}×</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[subText, { marginTop: 10 }]}>
+                Any days you like, once a day. It shows on Home until you've done it {perWeek}× that week (Monday to Sunday).
+              </Text>
+            </>
+          ) : (
+            <DayPicker days={days} onChange={setDays} />
+          )}
         </Card>
 
-        {/* ── Times per day ── */}
-        <Label>How many times a day?</Label>
-        <Card>
+        {/* ── Times per day (weekly habits are once a day) ── */}
+        {!weekly && <Label>How many times a day?</Label>}
+        {!weekly && <Card>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {TIMES_OPTIONS.map(n => {
               const active = n === timesPerDay;
@@ -230,7 +269,7 @@ export const AddHabbitScreen = ({
           <Text style={[subText, { marginTop: 10 }]}>
             {timesPerDay === 1 ? 'Tap it once on Home to check it off.' : `Tap it on Home each time you do it — ${timesPerDay} taps completes it.`}
           </Text>
-        </Card>
+        </Card>}
 
         {/* ── Reminder ── */}
         <Label>Reminder</Label>
@@ -254,11 +293,16 @@ export const AddHabbitScreen = ({
 
           {reminderEnabled && (
             <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
-              {timesPerDay === 1 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={rowText}>At</Text>
-                  <TimeField hour={single.hour} minute={single.minute} onChange={(hour, minute) => setSingle({ hour, minute })} />
-                </View>
+              {dailyTimes === 1 ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={rowText}>At</Text>
+                    <TimeField hour={single.hour} minute={single.minute} onChange={(hour, minute) => setSingle({ hour, minute })} />
+                  </View>
+                  {weekly && (
+                    <Text style={[subText, { marginTop: 10 }]}>Every day until you've done it {perWeek}× that week.</Text>
+                  )}
+                </>
               ) : mode === 'split' ? (
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -295,7 +339,7 @@ export const AddHabbitScreen = ({
         </Card>
 
         <Text style={[subText, { textAlign: 'center', marginTop: 18 }]}>
-          {daysLabel(days)} · {timesPerDay === 1 ? 'once a day' : `${timesPerDay}× a day`}
+          {weekly ? `${perWeek}× a week · any days` : `${daysLabel(days)} · ${timesPerDay === 1 ? 'once a day' : `${timesPerDay}× a day`}`}
           {reminderEnabled ? ' · with reminders' : ''}
         </Text>
 

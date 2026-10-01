@@ -4,7 +4,7 @@
 // History is kept in full (it is small) for stats and backups.
 
 import type { Commission, CompletionRecord, DailyTotal, FinanceData, Stats } from './types';
-import { addDaysToKey, allSkipped, isScheduledForDay, parseDateKey } from './helpers';
+import { addDaysToKey, isRestRecord, isScheduledForDay, parseDateKey } from './helpers';
 
 /**
  * True when every day strictly between `fromKey` and `toKey` was a rest day: nothing was
@@ -17,7 +17,7 @@ export const onlyRestDaysBetween = (
   for (let key = addDaysToKey(fromKey, 1); key < toKey; key = addDaysToKey(key, 1)) {
     const record = byDate.get(key);
     if (record) {
-      if (!allSkipped(record)) return false;
+      if (!isRestRecord(record)) return false;
       continue;
     }
     // No record: the app wasn't opened, so it was a rest day only if nothing was scheduled.
@@ -55,15 +55,16 @@ export const rolloverHabits = (
   // Record the final state of the previous day. Replaces any record written earlier that
   // day, so un-completing a habit after "all done" is reflected accurately.
   const dow       = parseDateKey(date).getDay();
-  const scheduled = commissions.filter(c => isScheduledForDay(c, dow));
-  const counted   = scheduled.filter(c => !c.skipped);
-  let history     = prev.history.filter(r => r.date !== date);
-  if (scheduled.length > 0) {
+  const scheduled  = commissions.filter(c => isScheduledForDay(c, dow));
+  const counted    = scheduled.filter(c => !c.skipped);
+  const weeklyDone = commissions.filter(c => c.perWeek && c.completed);
+  let history      = prev.history.filter(r => r.date !== date);
+  if (scheduled.length > 0 || weeklyDone.length > 0) {
     const skipped = scheduled.filter(c => c.skipped).map(c => c.id);
     history = [...history, {
       date,
       completed:    counted.length > 0 && counted.every(c => c.completed),
-      completedIds: scheduled.filter(c => c.completed).map(c => c.id),
+      completedIds: [...scheduled, ...weeklyDone].filter(c => c.completed).map(c => c.id),
       scheduledIds: scheduled.map(c => c.id),
       ...(skipped.length > 0 ? { skippedIds: skipped } : {}),
     }].sort((a, b) => a.date.localeCompare(b.date));

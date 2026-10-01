@@ -17,7 +17,10 @@ export function buildSystemPrompt(ctx: CoachContext): string {
     + `${ctx.habits.daysFullyCompletedLast7}/7 full days completed this week.`
     + (ctx.habits.habitsMostMissed.length > 0
         ? ` Still pending today: ${ctx.habits.habitsMostMissed.join(', ')}.`
-        : ' All habits done today!');
+        : ' All habits done today!')
+    + (ctx.habits.weeklyGoals.length > 0
+        ? ` Weekly goals (any days, Monday to Sunday): ${ctx.habits.weeklyGoals.map(g => `${g.label} ${g.done}/${g.target}`).join(', ')}.`
+        : '');
 
   const periodStatus = ctx.budgetPeriod
     ? `The user budgets ${ctx.budgetPeriod.period}: ${sym}${ctx.budgetPeriod.budget} this ${ctx.budgetPeriod.period === 'weekly' ? 'week' : 'month'}, `

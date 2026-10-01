@@ -1,7 +1,7 @@
 // src/notifications.ts
 
 import { Platform } from 'react-native';
-import { computeSplitTimes } from './helpers';
+import { computeSplitTimes, isScheduledForDay } from './helpers';
 import notifee, { TriggerType, RepeatFrequency, AndroidImportance } from '@notifee/react-native';
 import type { Commission, ReminderTime } from './types';
 
@@ -58,8 +58,16 @@ const habitNotification = (c: Commission) => ({
   ios: { sound: 'default' },
 });
 
-/** Done or skipped today: no more reminders until tomorrow. */
-const isQuietToday = (c: Commission) => c.completed || !!c.skipped;
+/**
+ * How long a habit's reminders stay quiet: `today` once it's done or skipped today,
+ * `week` once an "N× a week" habit has reached N (until Monday).
+ */
+export type Quiet = 'today' | 'week';
+
+const quietFromState = (c: Commission): Quiet | null => (c.completed || c.skipped ? 'today' : null);
+
+/** Days from today until next Monday (1–7). */
+const daysToNextWeek = () => ((8 - new Date().getDay()) % 7) || 7;
 
 /**
  * How many days of one-off reminders to plan while a habit is quiet. Fewer for habits with
@@ -68,19 +76,20 @@ const isQuietToday = (c: Commission) => c.completed || !!c.skipped;
 const quietDays = (timesPerDay: number) => Math.max(2, Math.min(7, Math.floor(14 / timesPerDay)));
 
 /**
- * (Re)plans one habit's reminders from its current state. Call it whenever a habit is added,
- * edited, completed, skipped or un-done.
+ * (Re)plans one habit's reminders. Call it whenever a habit is added, edited, completed,
+ * skipped or un-done. `quiet` defaults to what the habit's own state says; App passes
+ * `week` for weekly habits that have reached their goal (that needs their history).
  */
-export const scheduleHabitNotifs = async (commission: Commission) => {
+export const scheduleHabitNotifs = async (commission: Commission, quiet: Quiet | null = quietFromState(commission)) => {
   try {
     await cancelHabitNotifs(commission.id);
     const times = reminderTimesFor(commission).slice(0, MAX_TIMES_PER_DAY);
     if (times.length === 0) return;
     const notification = habitNotification(commission);
 
-    if (isQuietToday(commission)) {
-      const days = quietDays(times.length);
-      for (let d = 1; d <= days; d++) {
+    if (quiet) {
+      const first = quiet === 'week' ? daysToNextWeek() : 1;
+      for (let d = first; d < first + quietDays(times.length); d++) {
         const day = new Date(); day.setDate(day.getDate() + d);
         if (commission.days.length > 0 && !commission.days.includes(day.getDay())) continue;
         for (const [ti, t] of times.entries()) {
@@ -163,7 +172,7 @@ export const scheduleEveningCheckins = async (
       if (at.getTime() <= now.getTime()) continue;
 
       const dow       = at.getDay();
-      const scheduled = commissions.filter(c => !c.days?.length || c.days.includes(dow));
+      const scheduled = commissions.filter(c => isScheduledForDay(c, dow));
       if (scheduled.length === 0) continue;
 
       let body = "Evening check-in — how did your Habbits go today? 🐰";

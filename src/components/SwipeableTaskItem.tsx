@@ -19,6 +19,7 @@ export const SwipeableTaskItem = ({
   item,
   streak = 0,
   skips,
+  week,
   onComplete,
   onUncomplete,
   onSkip,
@@ -31,6 +32,8 @@ export const SwipeableTaskItem = ({
   streak?: number;
   /** This week's skips for this habit. */
   skips?: SkipAllowance;
+  /** "N× a week" habits: progress this week (today included). Streaks are in weeks. */
+  week?: { done: number; target: number };
   onComplete: (id: string) => void;
   onUncomplete: (id: string) => void;
   onSkip?: (id: string) => void;
@@ -179,7 +182,8 @@ export const SwipeableTaskItem = ({
   const leftHintOpacity  = leftProgress.interpolate({  inputRange: [0, 0.15, 1], outputRange: [0, 0, 1] });
 
   const isDone     = item.completed;
-  const isDim      = isDone || isSkipped;
+  const weekMet    = !!week && week.done >= week.target;
+  const isDim      = isDone || isSkipped || weekMet;
   const borderColor = isDim ? '#6B5040' : '#D4956A';
 
   // Reminder label for subtitle
@@ -190,7 +194,7 @@ export const SwipeableTaskItem = ({
     return null;
   })();
 
-  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0;
+  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week;
 
   return (
     <View style={{ marginBottom: 10 }}>
@@ -232,7 +236,7 @@ export const SwipeableTaskItem = ({
           onLongPress={handleLongPress}
           delayLongPress={450}
           accessibilityRole="button"
-          accessibilityLabel={`${item.label}${isSkipped ? ', skipped today' : isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}${streak > 0 ? `, ${streak} day streak` : ''}`}
+          accessibilityLabel={`${item.label}${isSkipped ? ', skipped today' : isMulti ? `, ${count} of ${timesPerDay}` : item.completed ? ', done' : ''}${week ? `, ${week.done} of ${week.target} this week` : ''}${streak > 0 ? `, ${streak} ${week ? 'week' : 'day'} streak` : ''}`}
           accessibilityHint={isSkipped ? 'Double tap to un-skip' : canComplete ? 'Double tap to check off' : undefined}
           accessibilityActions={[
             ...(canComplete || isSkipped ? [{ name: 'activate', label: isSkipped ? 'Un-skip' : 'Check off' }] : []),
@@ -257,7 +261,12 @@ export const SwipeableTaskItem = ({
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                 {streak > 0 && (
-                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}</Text>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}{week ? ' wk' : ''}</Text>
+                )}
+                {week && (
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
+                    {weekMet ? `Goal met · ${week.done}/${week.target} this week 🎉` : `${week.done} of ${week.target} this week`}
+                  </Text>
                 )}
                 {item.days && item.days.length > 0 && item.days.length < 7 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>

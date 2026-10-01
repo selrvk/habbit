@@ -74,6 +74,10 @@ export const HomeScreen = ({
   const today = getFormattedDate();
 
   const todays         = commissions.filter(c => isScheduledForDay(c, today.dow));
+  // "N× a week" habits: any day, so they get their own section. Still to do first.
+  const weeklyRank     = (c: Commission) => (habitStats[c.id]?.weekDone ? 2 : c.completed ? 1 : 0);
+  const weekly         = commissions.filter(c => c.perWeek).sort((a, b) => weeklyRank(a) - weeklyRank(b));
+  const weeklyToDo     = weekly.filter(c => weeklyRank(c) === 0);
   // Skipped habits are taken out of today's count.
   const skippedTasks   = todays.filter(c => c.skipped);
   const counted        = todays.filter(c => !c.skipped);
@@ -119,8 +123,9 @@ export const HomeScreen = ({
 
   const renderItem = (item: Commission) => (
     <SwipeableTaskItem key={item.id} item={item} streak={habitStats[item.id]?.current ?? 0} skips={habitStats[item.id]?.skips}
+      week={item.perWeek ? { done: habitStats[item.id]?.thisWeek ?? 0, target: item.perWeek } : undefined}
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
-      onSkip={onSkip} onUnskip={onUnskip}
+      onSkip={item.perWeek ? undefined : onSkip} onUnskip={onUnskip}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />
   );
 
@@ -203,6 +208,10 @@ export const HomeScreen = ({
               <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: fs(14) }}>+ Add your first Habbit</Text>
             </TouchableOpacity>
           </View>
+        ) : todays.length === 0 && weeklyToDo.length > 0 ? (
+          <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), marginBottom: 4 }}>
+            Nothing set for {today.dayName}. Fancy one from this week? 👇
+          </Text>
         ) : todays.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 28, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: fs(40), marginBottom: 8 }}>😴</Text>
@@ -264,6 +273,17 @@ export const HomeScreen = ({
                 )}
               </>
             )}
+          </>
+        )}
+
+        {/* ── This week: "N× a week" habits, any day ── */}
+        {weekly.length > 0 && (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17) }}>This week</Text>
+              <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.7)', fontSize: fs(12) }}>Any days you like</Text>
+            </View>
+            {weekly.map(renderItem)}
           </>
         )}
       </ScrollView>

@@ -9,6 +9,7 @@ import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
 } from '../types';
 import { isScheduledForDay, getLast7DayKeys } from '../helpers';
+import { habitStats } from '../habitStats';
 import type { BudgetState } from '../budget';
 
 export interface WeeklySnapshotDay {
@@ -40,6 +41,8 @@ export interface CoachContext {
     daysFullyCompletedLast7: number;
     missedDaysLast7: number;
     habitsMostMissed: string[];
+    /** "N× a week" habits and how far along they are this week. */
+    weeklyGoals: { label: string; done: number; target: number }[];
   };
   finance: {
     spentToday: number;
@@ -96,6 +99,10 @@ export async function buildCoachContext(
     .filter(h => !h.completed && !h.skipped && isScheduledForDay(h, todayDow))
     .map(h => h.label)
     .slice(0, 3);
+
+  const weeklyGoals = habits
+    .filter(h => h.perWeek)
+    .map(h => ({ label: h.label, done: habitStats(h, completionHistory, last7[last7.length - 1]).thisWeek, target: h.perWeek! }));
 
   const last7Set = new Set(last7);
   const recentRecords           = completionHistory.filter(r => last7Set.has(r.date));
@@ -168,7 +175,8 @@ export async function buildCoachContext(
     return {
       date,
       dayName: DAY_NAMES[dow],
-      habitsCompleted: completedIds.length,
+      // Weekly habits done that day are named below but aren't part of the day's schedule.
+      habitsCompleted: completedIds.filter(id => scheduledIds.includes(id)).length,
       habitsScheduled: scheduledIds.length,
       habitLabelsCompleted,
       spent: finance?.total ?? (date === todayStr ? spentToday : 0),
@@ -187,6 +195,7 @@ export async function buildCoachContext(
       daysFullyCompletedLast7,
       missedDaysLast7,
       habitsMostMissed,
+      weeklyGoals,
     },
     finance: {
       spentToday: Math.round(spentToday * 100) / 100,

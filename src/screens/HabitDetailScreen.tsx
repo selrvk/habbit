@@ -7,7 +7,7 @@ import React, { useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
-import { daysLabel, parseDateKey, reminderSummary } from '../helpers';
+import { parseDateKey, reminderSummary, scheduleLabel } from '../helpers';
 import { habitDays, skipAllowance, statsFromDays } from '../habitStats';
 import { HabitCalendar } from '../components/HabitCalendar';
 import { useFontSize } from '../hooks/useFontSize';
@@ -37,17 +37,20 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
 }) => {
   const fs = useFontSize();
   const days  = useMemo(() => habitDays(habit, history, todayKey), [habit, history, todayKey]);
-  const stats = useMemo(() => statsFromDays(days, todayKey), [days, todayKey]);
+  const stats = useMemo(() => statsFromDays(habit, days, todayKey), [habit, days, todayKey]);
   const skips = useMemo(() => skipAllowance(habit, history, todayKey), [habit, history, todayKey]);
 
   const tpd      = habit.timesPerDay ?? 1;
   const reminder = reminderSummary(habit);
-  const meta     = [daysLabel(habit.days ?? []), tpd > 1 ? `${tpd}× a day` : null, reminder ? `🔔 ${reminder}` : null].filter(Boolean).join('  ·  ');
+  const meta     = [scheduleLabel(habit), tpd > 1 ? `${tpd}× a day` : null, reminder ? `🔔 ${reminder}` : null].filter(Boolean).join('  ·  ');
 
   const since    = parseDateKey(stats.since);
   const sinceStr = `${MONTHS[since.getMonth()]} ${since.getDate()}${since.getFullYear() !== parseDateKey(todayKey).getFullYear() ? `, ${since.getFullYear()}` : ''}`;
   const tracked  = stats.done + stats.missed;
   const today    = days[days.length - 1]?.state;
+  const unit     = (n: number) => `${stats.unit}${n === 1 ? '' : 's'}`;
+  const perWeek  = habit.perWeek ?? 0;
+  const weekLeft = Math.max(perWeek - stats.thisWeek, 0);
 
   const Tile = ({ image, value, suffix, label, highlight = false }: { image: any; value: string; suffix?: string; label: string; highlight?: boolean }) => (
     <View style={{ flex: 1, backgroundColor: C.card, borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: highlight ? 'rgba(212,149,106,0.45)' : C.border }}>
@@ -60,7 +63,13 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
     </View>
   );
 
-  const hint =
+  const weeklyHint =
+    weekLeft === 0     ? `Goal met this week — ${stats.thisWeek} of ${perWeek}! 🎉` :
+    today === 'done'   ? `Done today · ${weekLeft} more this week` :
+    stats.current > 0  ? `${weekLeft} more this week to make it ${stats.current + 1} weeks 🔥` :
+                         `${weekLeft} more this week to start a streak 🔥`;
+
+  const hint = perWeek ? weeklyHint :
     today === 'pending' && stats.current > 0 ? `Check it off today to make it ${stats.current + 1} 🔥` :
     today === 'pending'                      ? 'Check it off today to start a streak 🔥' :
     today === 'done'                         ? 'Done for today — nice one! 🐰' :
@@ -102,19 +111,21 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
 
         {/* ── Stats ── */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Tile image={require('./../../assets/emojis/Fire.png')} value={String(stats.current)} suffix={stats.current === 1 ? 'day' : 'days'} label="Current streak" highlight={stats.current > 0} />
-          <Tile image={require('./../../assets/emojis/Star.png')} value={String(stats.best)} suffix={stats.best === 1 ? 'day' : 'days'} label="Best streak" />
+          <Tile image={require('./../../assets/emojis/Fire.png')} value={String(stats.current)} suffix={unit(stats.current)} label="Current streak" highlight={stats.current > 0} />
+          <Tile image={require('./../../assets/emojis/Star.png')} value={String(stats.best)} suffix={unit(stats.best)} label="Best streak" />
           <Tile image={IMAGES.carrots} value={stats.rate === null ? '—' : `${Math.round(stats.rate * 100)}%`} label="Done" />
         </View>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, textAlign: 'center', marginTop: 10 }}>
-          {tracked === 0
-            ? `Tracking since ${sinceStr}`
-            : `Done ${stats.done} of ${tracked} scheduled day${tracked === 1 ? '' : 's'} since ${sinceStr}`}
+          {stats.unit === 'week'
+            ? `${tracked > 0 ? `Goal met ${stats.done} of ${tracked} weeks · ` : ''}Done ${stats.sessions} time${stats.sessions === 1 ? '' : 's'} since ${sinceStr}`
+            : tracked === 0
+              ? `Tracking since ${sinceStr}`
+              : `Done ${stats.done} of ${tracked} scheduled day${tracked === 1 ? '' : 's'} since ${sinceStr}`}
         </Text>
 
         {/* ── Calendar ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
-          <HabitCalendar days={days} todayKey={todayKey} />
+          <HabitCalendar days={days} todayKey={todayKey} weekly={!!habit.perWeek} />
         </View>
 
         <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, textAlign: 'center', marginTop: 16 }}>{hint}</Text>
@@ -128,11 +139,13 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
             <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.cream }}>{today === 'pending' ? 'Skip today' : 'Undo skip'}</Text>
           </TouchableOpacity>
         )}
-        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(232,213,192,0.35)', textAlign: 'center', marginTop: 8 }}>
-          {skips.left === 0
-            ? `No skips left this week · ${skips.limit === 1 ? 'it resets' : 'they reset'} on Monday`
-            : `${skips.left} of ${skips.limit} skip${skips.limit === 1 ? '' : 's'} left this week`}
-        </Text>
+        {skips.limit > 0 && (
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: 'rgba(232,213,192,0.35)', textAlign: 'center', marginTop: 8 }}>
+            {skips.left === 0
+              ? `No skips left this week · ${skips.limit === 1 ? 'it resets' : 'they reset'} on Monday`
+              : `${skips.left} of ${skips.limit} skip${skips.limit === 1 ? '' : 's'} left this week`}
+          </Text>
+        )}
       </ScrollView>
     </View>
   );

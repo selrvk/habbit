@@ -107,3 +107,39 @@ describe('skipAllowance', () => {
     expect(skipAllowance(habit({ days: [1, 2, 3, 4, 5] }), [], TODAY).limit).toBe(2);
   });
 });
+
+describe('weekly habits (N× a week)', () => {
+  // Weeks run Monday to Sunday. TODAY is Thursday 2026-10-01 (week of Sep 28).
+  const gym = (over: Partial<Commission> = {}) => habit({ id: created('2026-09-07'), perWeek: 3, ...over }); // a Monday
+  const doneOn = (id: string, dates: string[]): CompletionRecord[] =>
+    dates.map(date => ({ date, completed: false, scheduledIds: [], completedIds: [id] }));
+
+  it('counts weeks that met the goal, with the current week still open', () => {
+    const h = gym();
+    const history = doneOn(h.id, [
+      '2026-09-07', '2026-09-09', '2026-09-11',               // week 1: 3 ✓
+      '2026-09-14', '2026-09-20',                             // week 2: 2 ✗
+      '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-26', // week 3: 4 ✓
+      '2026-09-29',                                           // this week: 1 so far
+    ]);
+    const s = habitStats(h, history, TODAY);
+    expect(s).toMatchObject({ unit: 'week', current: 1, best: 1, done: 2, missed: 1, sessions: 10, thisWeek: 1, weekDone: false });
+  });
+
+  it('counts this week once the goal is met, today included', () => {
+    const h = gym({ completed: true });
+    const s = habitStats(h, doneOn(h.id, ['2026-09-21', '2026-09-23', '2026-09-25', '2026-09-28', '2026-09-30']), TODAY);
+    expect(s).toMatchObject({ current: 2, thisWeek: 3, weekDone: true });
+  });
+
+  it('never marks a day missed, and has no skips', () => {
+    const h = gym();
+    expect(habitDays(h, [], TODAY).every(d => d.state === 'rest' || d.state === 'pending')).toBe(true);
+    expect(skipAllowance(h, [], TODAY).limit).toBe(0);
+  });
+
+  it('does not hold a part first week against the habit', () => {
+    const h = gym({ id: created('2026-09-24') }); // a Thursday, done once that week
+    expect(habitStats(h, doneOn(h.id, ['2026-09-26']), TODAY)).toMatchObject({ current: 0, missed: 0, rate: null });
+  });
+});

@@ -16,7 +16,7 @@ import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay,
 import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins } from './src/notifications';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, type Quiet } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
@@ -29,8 +29,26 @@ import { CoachScreen } from "./src/screens/Coachscreen";
 const scheduledByDow = (items: Commission[]) =>
   [0, 1, 2, 3, 4, 5, 6].map(dow => items.filter(c => isScheduledForDay(c, dow)).length);
 
-/** Each habit's "done or skipped today" state: its reminders are quiet until tomorrow. */
-const quietMap = (items: Commission[]) => new Map(items.map(c => [c.id, c.completed || !!c.skipped]));
+/**
+ * How long a habit's reminders are quiet: until Monday once an "N× a week" habit has met
+ * its goal, until tomorrow once a habit is done or skipped today.
+ */
+const quietModeOf = (c: Commission, s: HabitSummary): Quiet | null =>
+  s.weekDone ? 'week' : c.completed || c.skipped ? 'today' : null;
+
+const quietMap = (items: Commission[], history: CompletionRecord[], todayKey: string) =>
+  new Map(items.map(c => [c.id, quietModeOf(c, habitStats(c, history, todayKey))]));
+
+/** The habit fields the add/edit form controls. Weekly habits are once a day, any day. */
+const formFields = (data: HabbitFormData) => ({
+  label:         data.label,
+  days:          data.perWeek ? [] : data.days,
+  perWeek:       data.perWeek ?? undefined,
+  timesPerDay:   data.perWeek ? 1 : data.timesPerDay,
+  reminderTime:  data.reminderTime,
+  reminderTimes: data.reminderTimes,
+  reminderSplit: data.reminderSplit,
+});
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
 
@@ -78,7 +96,7 @@ export default function App() {
   const [dayKey, setDayKey] = useState(getTodayKey);
   const hasLoaded    = useRef(false);
   // Each habit's "done or skipped today" state as of the last reminder planning.
-  const quietById    = useRef<Map<string, boolean>>(new Map());
+  const quietById    = useRef<Map<string, Quiet | null>>(new Map());
   const todayKey     = dayKey;
   const yesterdayKey = addDaysToKey(dayKey, -1);
   const dayDow       = parseDateKey(dayKey).getDay();
@@ -243,10 +261,10 @@ export default function App() {
       // (and so quiet) yesterday get their repeating reminders back. v3 re-plans once for
       // everyone: quiet reminders are new, and older versions never scheduled split ones.
       if (newDay || (await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '3') {
-        for (const c of migrated) await scheduleHabitNotifs(c);
+        for (const c of migrated) await scheduleHabitNotifs(c, quietModeOf(c, habitStats(c, loadedHistory, todayKey)));
         await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '3');
       }
-      quietById.current = quietMap(migrated);
+      quietById.current = quietMap(migrated, loadedHistory, todayKey);
       setStats(loadedStats); saveStats(loadedStats);
       setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
     } catch { setIsOnboarded(true); }
@@ -413,18 +431,20 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: commissions, date: todayKey })).catch(() => {});
   }, [commissions]);
 
-  // A habit that's done or skipped goes quiet until tomorrow; un-doing it (or a new day
-  // resetting it) brings its reminders back. Only habits whose state changed are re-planned;
-  // loadAll sets the starting point after planning everything itself.
+  // A habit that's done or skipped goes quiet until tomorrow (a weekly one that met its goal,
+  // until Monday); un-doing it, or a new day or week, brings its reminders back. Only habits
+  // whose quiet state changed are re-planned; loadAll sets the starting point.
   useEffect(() => {
     if (!hasLoaded.current) return;
-    const quiet = quietMap(commissions);
-    const prev  = quietById.current;
-    quietById.current = quiet;
+    const prev = quietById.current;
+    const next = new Map<string, Quiet | null>();
     for (const c of commissions) {
-      if ((prev.get(c.id) ?? false) !== quiet.get(c.id)) scheduleHabitNotifs(c);
+      const mode = habitStatsById[c.id] ? quietModeOf(c, habitStatsById[c.id]) : null;
+      next.set(c.id, mode);
+      if ((prev.get(c.id) ?? null) !== mode) scheduleHabitNotifs(c, mode);
     }
-  }, [commissions]);
+    quietById.current = next;
+  }, [commissions, habitStatsById]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
@@ -560,17 +580,7 @@ export default function App() {
 
   // ── Add: receives full HabbitFormData, closes sub-screen ─────────────────
   const handleAdd = useCallback((data: HabbitFormData) => {
-    const newItem: Commission = {
-      id: generateId(),
-      label: data.label,
-      completed: false,
-      days: data.days,
-      reminderTime: data.reminderTime,
-      timesPerDay: data.timesPerDay,
-      completionCount: 0,
-      reminderTimes: data.reminderTimes,
-      reminderSplit: data.reminderSplit,
-    };
+    const newItem: Commission = { id: generateId(), completed: false, completionCount: 0, ...formFields(data) };
     setCommissions(p => [...p, newItem]);
     scheduleHabitNotifs(newItem);
     setTasksSubScreen(null);
@@ -578,20 +588,15 @@ export default function App() {
 
   // ── Edit: receives id + full HabbitFormData, closes sub-screen ───────────
   const handleEdit = useCallback((id: string, data: HabbitFormData) => {
-    setCommissions(p => p.map(c => {
-      if (c.id !== id) return c;
-      const updated: Commission = {
-        ...c,
-        label: data.label,
-        days: data.days,
-        reminderTime: data.reminderTime,
-        timesPerDay: data.timesPerDay,
-        reminderTimes: data.reminderTimes,
-        reminderSplit: data.reminderSplit,
-      };
-      scheduleHabitNotifs(updated);
-      return updated;
-    }));
+    const { commissions: current, completionHistory: history, dayKey: today } = liveState.current;
+    const cur = current.find(c => c.id === id);
+    if (cur) {
+      const updated: Commission = { ...cur, ...formFields(data) };
+      const mode = quietModeOf(updated, habitStats(updated, history, today));
+      quietById.current.set(id, mode); // planned here, so the quiet effect leaves it alone
+      scheduleHabitNotifs(updated, mode);
+      setCommissions(p => p.map(c => (c.id === id ? { ...c, ...formFields(data) } : c)));
+    }
     setTasksSubScreen(afterEditor);
   }, []);
 

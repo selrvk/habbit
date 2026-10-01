@@ -18,7 +18,8 @@ const STATE_LABEL: Record<HabitDayState | 'outside', string> = {
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-export const HabitCalendar = ({ days, todayKey }: { days: HabitDay[]; todayKey: string }) => {
+/** `weekly`: an "N× a week" habit, whose days are only ever done or not (never missed). */
+export const HabitCalendar = ({ days, todayKey, weekly = false }: { days: HabitDay[]; todayKey: string; weekly?: boolean }) => {
   const fs = useFontSize();
   const states = useMemo(() => new Map(days.map(d => [d.date, d.state])), [days]);
 
@@ -97,12 +98,15 @@ export const HabitCalendar = ({ days, todayKey }: { days: HabitDay[]; todayKey: 
       ))}
 
       <View style={{ flexDirection: 'row', gap: 16, marginTop: 12, justifyContent: 'center' }}>
-        {[
-          { label: 'Done',     dot: { backgroundColor: '#D4956A' } },
-          { label: 'Missed',   dot: { backgroundColor: 'rgba(200,80,60,0.3)' } },
-          { label: 'Skipped',  dot: { backgroundColor: 'rgba(232,213,192,0.14)' } },
-          { label: 'Rest day', dot: { borderWidth: 1, borderColor: 'rgba(232,213,192,0.3)' } },
-        ].map(({ label, dot }) => (
+        {(weekly
+          ? [{ label: 'Done', dot: { backgroundColor: '#D4956A' } }]
+          : [
+              { label: 'Done',     dot: { backgroundColor: '#D4956A' } },
+              { label: 'Missed',   dot: { backgroundColor: 'rgba(200,80,60,0.3)' } },
+              { label: 'Skipped',  dot: { backgroundColor: 'rgba(232,213,192,0.14)' } },
+              { label: 'Rest day', dot: { borderWidth: 1, borderColor: 'rgba(232,213,192,0.3)' } },
+            ]
+        ).map(({ label, dot }) => (
           <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <View style={{ width: 9, height: 9, borderRadius: 5, ...dot }} />
             <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: 'rgba(232,213,192,0.45)' }}>{label}</Text>

@@ -52,6 +52,13 @@ describe('scheduleHabitNotifs', () => {
     }
   });
 
+  it('stays quiet until Monday once a weekly habit has met its goal', async () => {
+    await scheduleHabitNotifs(habit({ perWeek: 3 }), 'week');
+    const plan = created();
+    expect(plan[0].at).toEqual(new Date(2026, 9, 5, 20, 0)); // Mon Oct 5
+    expect(plan).toHaveLength(7);
+  });
+
   it('plans fewer quiet days for habits with many reminders, and only on scheduled days', async () => {
     await scheduleHabitNotifs(habit({ completed: true, timesPerDay: 8, reminderTime: null, reminderTimes: Array.from({ length: 8 }, (_, i) => ({ hour: 9 + i, minute: 0 })) }));
     expect(created()).toHaveLength(16); // 2 days × 8

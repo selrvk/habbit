@@ -2,14 +2,14 @@
 
 import React from 'react';
 import { View, Text } from 'react-native';
-import { allSkipped, buildCalendarGrid } from '../helpers';
+import { buildCalendarGrid, isRestRecord } from '../helpers';
 import { CAL_DAY_LABELS } from '../constants';
 import type { CompletionRecord } from '../types';
 
 export const CompletionCalendar = ({ records, todayKey }: { records: CompletionRecord[]; todayKey: string }) => {
   const grid        = buildCalendarGrid(records, todayKey, 6);
   const doneCount   = records.filter(r => r.completed).length;
-  const missedCount = records.filter(r => !r.completed && !allSkipped(r)).length;
+  const missedCount = records.filter(r => !r.completed && !isRestRecord(r)).length;
   const cellColor   = (state: string) => {
     switch (state) {
       case 'done':   return '#D4956A';

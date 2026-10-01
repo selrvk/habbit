@@ -46,13 +46,19 @@ export const getLast7Days = (dailyTotals: DailyTotal[], spentToday: number): Cha
     return {date:key,dayName:dayNames[d.getDay()],total:i===6?spentToday:(dailyTotals.find(t=>t.date===key)?.total??0),isToday:i===6};
   });
 };
+/** Fixed-day habits on that weekday. "N× a week" habits are never scheduled on a day. */
 export const isScheduledForDay = (c: Commission, dow: number) =>
-  !c.days||c.days.length===0?true:c.days.includes(dow);
+  c.perWeek ? false : !c.days||c.days.length===0?true:c.days.includes(dow);
 /** Scheduled today and not skipped: the habits today's progress and streak are judged on. */
 export const countsToday = (c: Commission, dow: number) => isScheduledForDay(c, dow) && !c.skipped;
 /** Every habit scheduled that day was skipped. */
 export const allSkipped = (r: CompletionRecord) =>
   r.scheduledIds.length > 0 && r.scheduledIds.every(id => r.skippedIds?.includes(id));
+/** A rest day: nothing was scheduled (only weekly habits, if anything) or all of it skipped. */
+export const isRestRecord = (r: CompletionRecord) =>
+  r.scheduledIds.every(id => r.skippedIds?.includes(id));
+/** "Every day", "Weekdays", "M W F", or "3× a week". */
+export const scheduleLabel = (c: Commission) => (c.perWeek ? `${c.perWeek}× a week` : daysLabel(c.days ?? []));
 /** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
 export const reminderSummary = (c: Commission): string | null => {
   if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
@@ -74,7 +80,7 @@ export const buildCalendarGrid = (records: CompletionRecord[], todayKey: string,
   const today=new Date();
   const sunday=new Date(today); sunday.setDate(today.getDate()-today.getDay());
   type CellState='done'|'missed'|'skipped'|'today'|'future'|'empty';
-  const recordMap=new Map<string,CellState>(records.map(r=>[r.date,r.completed?'done':allSkipped(r)?'skipped':'missed']));
+  const recordMap=new Map<string,CellState>(records.map(r=>[r.date,r.completed?'done':allSkipped(r)?'skipped':isRestRecord(r)?'empty':'missed']));
   const cols: {date:string;state:CellState}[][]=[];
   for (let w=-(weeks-1);w<=0;w++) {
     const col: {date:string;state:CellState}[]=[];

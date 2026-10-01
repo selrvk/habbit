@@ -85,6 +85,26 @@ describe('rolloverHabits', () => {
     expect(r.stats.currentStreak).toBe(0);
   });
 
+  it('records weekly habits done that day without scheduling them', () => {
+    const r = rolloverHabits({
+      date: MON, commissions: [habit({ completed: true }), habit({ id: 'gym', perWeek: 3, completed: true })],
+      stats: stats(), history: [],
+    }, TUE);
+    expect(r.history).toEqual([{ date: MON, completed: true, completedIds: ['h1', 'gym'], scheduledIds: ['h1'] }]);
+  });
+
+  it('treats a day with only weekly habits as a rest day for the streak', () => {
+    const weekdays = habit({ days: [1, 2, 3, 4, 5] });
+    const gym = habit({ id: 'gym', perWeek: 3, completed: true });
+    const r = rolloverHabits({
+      date: SAT, commissions: [weekdays, gym],
+      stats: stats({ currentStreak: 5, lastFullDate: '2026-10-02' }), history: [],
+    }, SUN);
+    expect(r.history).toEqual([{ date: SAT, completed: false, completedIds: ['gym'], scheduledIds: [] }]);
+    expect(r.stats.currentStreak).toBe(5);
+    expect(streakContinues(r.stats, '2026-10-05', [weekdays, gym], r.history)).toBe(true);
+  });
+
   it('is a no-op on the same day', () => {
     const input = { date: MON, commissions: [habit({ completed: true })], stats: stats(), history: [] };
     expect(rolloverHabits(input, MON).changed).toBe(false);
