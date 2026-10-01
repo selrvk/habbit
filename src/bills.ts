@@ -7,6 +7,7 @@
 
 import type { DailyTotal, FinanceData, SpendingEntry } from './types';
 import { addDaysToKey, parseDateKey } from './helpers';
+import { addEntryOnDay } from './dayRollover';
 
 export type BillRepeat = 'monthly' | 'weekly';
 
@@ -86,18 +87,7 @@ export const logDueBills = (
     changed = true;
 
     for (const date of dates) {
-      const entry = billEntry(bill, date);
-      if (date === todayKey) {
-        if (fin.history.some(e => e.id === entry.id)) continue;
-        fin = { ...fin, spentToday: fin.spentToday + entry.amount, history: [...fin.history, entry] };
-        continue;
-      }
-      const day = totals.find(t => t.date === date);
-      if (day?.entries?.some(e => e.id === entry.id)) continue;
-      const withEntry: DailyTotal = day
-        ? { ...day, total: day.total + entry.amount, entries: [...(day.entries ?? []), entry] }
-        : { date, total: entry.amount, entries: [entry] };
-      totals = [...totals.filter(t => t.date !== date), withEntry].sort((a, b) => a.date.localeCompare(b.date));
+      ({ finance: fin, dailyTotals: totals } = addEntryOnDay(fin, totals, billEntry(bill, date), date));
     }
     return { ...bill, lastLogged: dates[dates.length - 1] };
   });

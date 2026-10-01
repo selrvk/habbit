@@ -20,7 +20,7 @@ const NOTE_MODAL_SHIFT = Platform.OS === 'ios' ? -130 : -110;
 // The category grid makes the note step taller, so it needs to move further for the keyboard.
 const CATEGORY_MODAL_SHIFT = Platform.OS === 'ios' ? -165 : -140;
 
-export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra }: {
+export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra, initialNote, initialCategory }: {
   visible: boolean; title: string; hint?: string; confirmLabel: string; amount: string; currency: string;
   onChangeAmount: (v: string) => void; onConfirm: (note?: string, category?: string) => void; onClose: () => void;
   withNote?: boolean;
@@ -29,6 +29,9 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   notePlaceholder?: string;
   /** Rendered between the title and the amount, e.g. a period picker. */
   headerExtra?: React.ReactNode;
+  /** Filled in when it opens, e.g. from a habbit://spend link. */
+  initialNote?: string;
+  initialCategory?: string;
 }) => {
   const scaleAnim      = useRef(new Animated.Value(0.88)).current;
   const opacityAnim    = useRef(new Animated.Value(0)).current;
@@ -45,8 +48,8 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
     if (visible) {
       haptic.medium();
       setStep('amount');
-      setNote('');
-      setCategory(undefined);
+      setNote(initialNote ?? '');
+      setCategory(initialCategory);
       noteAnim.setValue(0);
       modalShiftAnim.setValue(0);
     }

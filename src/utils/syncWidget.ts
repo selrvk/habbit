@@ -11,6 +11,20 @@ interface WidgetReloaderModule extends TurboModule {
 
 const WidgetReloader = TurboModuleRegistry.get<WidgetReloaderModule>('WidgetReloader');
 
+/** A habit as Siri, Shortcuts and quick actions see it (ios/HabbitStore.swift). */
+export type WidgetHabit = {
+  id: string;
+  label: string;
+  days: number[];
+  perWeek?: number;
+  times: number;
+  count: number;
+  done: boolean;
+  skipped: boolean;
+  /** "N× a week" habits: times done this week, today included. */
+  week: number;
+};
+
 export type WidgetData = {
   name: string;
   completedCount: number;
@@ -25,6 +39,7 @@ export type WidgetData = {
   date: string;
   /** Habits scheduled on each weekday (0 = Sunday), for the widget's fresh-day view. */
   scheduledByDow: number[];
+  habits: WidgetHabit[];
 };
 
 let lastSerialized: string | null = null;

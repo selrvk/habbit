@@ -3,7 +3,7 @@
 // Pure "a new day started" logic, shared by app launch and app resume.
 // History is kept in full (it is small) for stats and backups.
 
-import type { Commission, CompletionRecord, DailyTotal, FinanceData, Stats } from './types';
+import type { Commission, CompletionRecord, DailyTotal, FinanceData, SpendingEntry, Stats } from './types';
 import { addDaysToKey, isRestRecord, isScheduledForDay, parseDateKey } from './helpers';
 
 /**
@@ -45,6 +45,26 @@ export const rolloverFinance = (
   return { finance: { spentToday: 0, date: todayKey, history: [] }, dailyTotals: totals, changed: true };
 };
 
+/**
+ * Adds a spending entry to its own day: today's (`finance.date`) to today's spending, an
+ * earlier day's to that day's history. An entry already there (same id) isn't added twice.
+ */
+export const addEntryOnDay = (
+  finance: FinanceData, dailyTotals: DailyTotal[], entry: SpendingEntry, date: string,
+): { finance: FinanceData; dailyTotals: DailyTotal[] } => {
+  if (date >= finance.date) {
+    const history = finance.history ?? [];
+    if (history.some(e => e.id === entry.id)) return { finance, dailyTotals };
+    return { finance: { ...finance, spentToday: finance.spentToday + entry.amount, history: [...history, entry] }, dailyTotals };
+  }
+  const day = dailyTotals.find(t => t.date === date);
+  if (day?.entries?.some(e => e.id === entry.id)) return { finance, dailyTotals };
+  const withEntry: DailyTotal = day
+    ? { ...day, total: day.total + entry.amount, entries: [...(day.entries ?? []), entry] }
+    : { date, total: entry.amount, entries: [entry] };
+  return { finance, dailyTotals: [...dailyTotals.filter(t => t.date !== date), withEntry].sort((a, b) => a.date.localeCompare(b.date)) };
+};
+
 export const rolloverHabits = (
   prev: { date: string; commissions: Commission[]; stats: Stats; history: CompletionRecord[] },
   todayKey: string,
@@ -72,10 +92,16 @@ export const rolloverHabits = (
     history = prev.history;
   }
 
-  // Streak increments happen live when the last habit is completed; here we only break it.
-  // totalCompleted is also counted live, so it is not touched here.
-  const kept  = { ...prev.stats, beforeToday: undefined };
-  const stats = streakContinues(prev.stats, todayKey, commissions, history) ? kept : { ...kept, currentStreak: 0 };
+  // Streak increments happen live when the last habit is completed, so here it's mostly
+  // broken. A day finished outside the app (Siri) was never credited live: credit it now.
+  // totalCompleted is counted where habits are completed, so it is not touched here.
+  let before = prev.stats;
+  if (counted.length > 0 && counted.every(c => c.completed) && before.lastFullDate !== date) {
+    const streak = streakContinues(before, date, commissions, history) ? before.currentStreak + 1 : 1;
+    before = { ...before, currentStreak: streak, bestStreak: Math.max(streak, before.bestStreak), lastFullDate: date };
+  }
+  const kept  = { ...before, beforeToday: undefined };
+  const stats = streakContinues(before, todayKey, commissions, history) ? kept : { ...kept, currentStreak: 0 };
 
   return {
     commissions: commissions.map(c => ({ ...c, completed: false, completionCount: 0, skipped: false })),

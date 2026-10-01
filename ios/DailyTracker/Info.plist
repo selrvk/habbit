@@ -22,6 +22,17 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.selrvk.habbit</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>habbit</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -41,6 +52,48 @@
 	<array>
 		<string>Jua-Regular.ttf</string>
 		<string>DynaPuff-Regular.ttf</string>
+	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>creditcard</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Log Expense</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.selrvk.habbit.spend</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>habbit://spend</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>plus.circle</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Add Habit</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.selrvk.habbit.new-habit</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>habbit://habits/new</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>bubble.left.and.bubble.right</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Ask Bonbon</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.selrvk.habbit.coach</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>habbit://coach</string>
+			</dict>
+		</dict>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

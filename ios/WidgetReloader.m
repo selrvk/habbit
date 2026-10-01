@@ -34,6 +34,15 @@ RCT_EXPORT_METHOD(setData:(NSDictionary *)data) {
     [defaults setObject:jsonString forKey:@"widgetData"];
   }
   reloadWidgetTimelines();
+  // The "check off" quick action follows the snapshot.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    Class helper = NSClassFromString(@"HabbitShortcutsHelper");
+    SEL sel = NSSelectorFromString(@"snapshotChanged");
+    if ([helper respondsToSelector:sel]) {
+      void (*func)(id, SEL) = (void *)[helper methodForSelector:sel];
+      func(helper, sel);
+    }
+  });
 }
 
 RCT_EXPORT_METHOD(reloadAll) {

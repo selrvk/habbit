@@ -23,13 +23,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     window = UIWindow(frame: UIScreen.main.bounds)
 
+    // A quick action that launched the app does its part now, and its link becomes the
+    // launch URL (Linking.getInitialURL). Returning false stops iOS calling performActionFor too.
+    var options = launchOptions ?? [:]
+    let quickAction = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem
+    if let quickAction, let url = QuickActions.handle(quickAction) { options[.url] = url }
+
     factory.startReactNative(
       withModuleName: "DailyTracker",
       in: window,
-      launchOptions: launchOptions
+      launchOptions: options
     )
 
-    return true
+    return quickAction == nil
+  }
+
+  // habbit:// links (src/links.ts).
+  func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    RCTLinkingManager.application(app, open: url, options: options)
+  }
+
+  // A quick action while the app is running or suspended.
+  func application(
+    _ application: UIApplication,
+    performActionFor shortcutItem: UIApplicationShortcutItem,
+    completionHandler: @escaping (Bool) -> Void
+  ) {
+    guard let url = QuickActions.handle(shortcutItem) else { return completionHandler(false) }
+    completionHandler(RCTLinkingManager.application(application, open: url, options: [:]))
   }
 }
 

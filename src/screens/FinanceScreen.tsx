@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
@@ -65,13 +65,19 @@ type ActivityRow =
   | { kind: 'spend'; id: string; amount: number; time: string; note?: string; category?: string; billId?: string }
   | { kind: 'topup'; id: string; amount: number; time?: string; note?: string };
 
+/** Something to open on arrival, asked for by a link (src/links.ts). */
+export type FinanceRequest =
+  | { kind: 'spend'; amount?: string; category?: string; note?: string }
+  | { kind: 'money' }
+  | { kind: 'recap' };
+
 /** "Coffee" (note), else the category's name, else "Spending". */
 const entryTitle = (e: { note?: string; category?: string }) => e.note || categoryOf(e.category)?.label || 'Spending';
 
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
   onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
-  bills, onSaveBill, onDeleteBill, jar, topUps, completionHistory,
+  bills, onSaveBill, onDeleteBill, jar, topUps, completionHistory, request, onRequestHandled,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -93,6 +99,8 @@ export const FinanceScreen = ({
   jar: Jar;
   topUps: TopUp[];
   completionHistory: CompletionRecord[];
+  request?: FinanceRequest | null;
+  onRequestHandled?: () => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -103,6 +111,7 @@ export const FinanceScreen = ({
   const [editPeriod, setEditPeriod]   = useState<BudgetPeriod>(budget.period);
   const [spendModal,  setSpendModal]  = useState(false);
   const [spendInput,  setSpendInput]  = useState('');
+  const [spendPrefill, setSpendPrefill] = useState<{ note?: string; category?: string }>({});
   const [moneyModal,  setMoneyModal]  = useState(false);
   const [moneyInput,  setMoneyInput]  = useState('');
   const [selectedDay, setSelectedDay] = useState<ChartDay | null>(null);
@@ -117,6 +126,27 @@ export const FinanceScreen = ({
   // Early in a month, point at last month's finished recap.
   const recapLastMonth = Number(todayKey.slice(8)) <= 7 && dailyTotals.some(d => d.date >= monthStart(todayKey, -1) && d.date < monthStart(todayKey));
   const recapMonth     = recapLastMonth ? monthStart(todayKey, -1) : monthStart(todayKey);
+  // A link asked for something. Whatever's open closes first, and the new one opens a
+  // moment later: iOS can't present a sheet while another is closing.
+  useEffect(() => {
+    if (!request) return;
+    setBudgetModal(false); setMoneyModal(false); setSpendModal(false);
+    setSelectedDay(null); setEditingId(null); setBillEditor(null); setSummaryMonth(null);
+    const timer = setTimeout(() => {
+      onRequestHandled?.();
+      if (request.kind === 'spend') {
+        setSpendInput(request.amount ?? '');
+        setSpendPrefill({ note: request.note, category: request.category });
+        setSpendModal(true);
+      } else if (request.kind === 'money') {
+        setMoneyInput(''); setMoneyModal(true);
+      } else {
+        setSummaryMonth(recapMonth);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [request]);
+
   const sortedBills = bills
     .map(b => ({ bill: b, next: upcomingDueDate(b, todayKey) ?? '9999' }))
     .sort((a, b) => a.next.localeCompare(b.next));
@@ -244,11 +274,13 @@ export const FinanceScreen = ({
         amount={spendInput}
         currency={currency}
         onChangeAmount={setSpendInput}
-        onConfirm={(note, category) => { onAddSpending(spendInput, note, category); setSpendInput(''); setSpendModal(false); }}
-        onClose={() => { setSpendModal(false); setSpendInput(''); }}
+        onConfirm={(note, category) => { onAddSpending(spendInput, note, category); setSpendInput(''); setSpendPrefill({}); setSpendModal(false); }}
+        onClose={() => { setSpendModal(false); setSpendInput(''); setSpendPrefill({}); }}
         withNote
         withCategory
         notePlaceholder="Add a note (optional)"
+        initialNote={spendPrefill.note}
+        initialCategory={spendPrefill.category}
       />
 
       <BillEditor

@@ -1,19 +1,22 @@
 // app.tsx
 import "./global.css";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StatusBar, Platform, Image, AppState, Alert } from 'react-native';
+import { View, StatusBar, Platform, Image, AppState, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ProProvider } from './src/context/ProContext';
-import { syncWidgetData, flushWidgetData } from "./src/utils/syncWidget";
+import { syncWidgetData, flushWidgetData, type WidgetHabit } from "./src/utils/syncWidget";
+import { takeInbox, takeLink, onInboxChanged } from './src/utils/habbitInbox';
+import { catchUpDay, type InboxEvent } from './src/inbox';
+import { parseLink, type LinkTarget } from './src/links';
 import { applyBackup, backUpToICloud, getCloudBackupStatus, loadICloudBackup, markBackupHandled, pickBackupFile, type CloudBackupMeta } from './src/utils/cloudBackup';
 import { describeBackupContents, describeBackupTime, summarizeBackup, type BackupFile } from './src/backupFormat';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime } from './src/helpers';
-import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
+import { streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
@@ -21,9 +24,10 @@ import { EMPTY_SAVINGS, leftoverOffer, type Savings } from './src/savings';
 import type { Jar } from './src/components/SavingsJar';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, type Quiet } from './src/notifications';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, ALL_STORAGE_KEYS } from './src/storage';
-import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
+import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
+import type { FinanceRequest } from './src/screens/FinanceScreen';
 import { AddHabbitScreen } from './src/screens/AddHabbitScreen';
 import { HabitDetailScreen } from './src/screens/HabitDetailScreen';
 import { BottomNav } from './src/components/BottomNav';
@@ -52,6 +56,21 @@ const formFields = (data: HabbitFormData) => ({
   reminderTimes: data.reminderTimes,
   reminderSplit: data.reminderSplit,
 });
+
+/** Habits as Siri and quick actions see them. `thisWeek` gives an "N× a week" habit's count. */
+const widgetHabits = (items: Commission[], thisWeek: (c: Commission) => number): WidgetHabit[] =>
+  items.map(c => ({
+    id: c.id, label: c.label, days: c.days ?? [], ...(c.perWeek ? { perWeek: c.perWeek } : {}),
+    times: c.timesPerDay ?? 1, count: c.completionCount ?? 0, done: c.completed, skipped: !!c.skipped,
+    week: c.perWeek ? thisWeek(c) : 0,
+  }));
+
+/** The tab each link opens on. */
+const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
+  home: 'home', habits: 'tasks', 'new-habit': 'tasks', habit: 'tasks',
+  finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance',
+  coach: 'chat', profile: 'profile',
+};
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
 
@@ -96,10 +115,14 @@ export default function App() {
   const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
   const [eveningReminder, setEveningReminder]     = useState<EveningReminder>(DEFAULT_EVENING_REMINDER);
 
-  // The day the in-memory state belongs to. Only advanced by rolloverIfNewDay, so data is
+  // The day the in-memory state belongs to. Only advanced by catchUp, so data is
   // never written under a new date before the previous day has been rolled over.
   const [dayKey, setDayKey] = useState(getTodayKey);
   const hasLoaded    = useRef(false);
+  // Set once loadAll has finished: queued events and links wait for it.
+  const [ready, setReady] = useState(false);
+  const [pendingLink, setPendingLink]       = useState<LinkTarget | null>(null);
+  const [financeRequest, setFinanceRequest] = useState<FinanceRequest | null>(null);
   // Each habit's "done or skipped today" state as of the last reminder planning.
   const quietById    = useRef<Map<string, Quiet | null>>(new Map());
   const todayKey     = dayKey;
@@ -138,59 +161,73 @@ export default function App() {
             streak: stats.currentStreak,
             avatar,
             upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
+            habits: widgetHabits(commissions, c => habitStatsById[c.id]?.thisWeek ?? 0),
           });
-        }, [commissions, budget, stats, name, allocatedPerDay, currency, avatar, dayDow, dayKey]);
+        }, [commissions, habitStatsById, budget, stats, name, allocatedPerDay, currency, avatar, dayDow, dayKey]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
     updateWidget();
   }, [updateWidget]);
 
-  // Latest state for rolloverIfNewDay, which runs from AppState/timer callbacks.
+  // Latest state for catchUp, which runs from AppState/timer/inbox callbacks.
   const liveState = useRef({ dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory, bills });
   liveState.current = { dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory, bills };
 
-  // iOS usually suspends the app instead of killing it, so the load effect alone
-  // would miss midnight. Called on resume and by a timer at midnight.
-  const rolloverIfNewDay = useCallback(() => {
+  // Brings the app up to the current day and applies what Siri, Shortcuts and quick actions
+  // did meanwhile (src/inbox.ts). iOS usually suspends the app instead of killing it, so
+  // the load effect alone would miss midnight: this runs on resume, at midnight, and when
+  // something is queued while the app is running.
+  const catchUp = useCallback((events: InboxEvent[] = []) => {
     if (!hasLoaded.current) return;
     const s = liveState.current;
     const newKey = getTodayKey();
-    if (newKey === s.dayKey) return;
+    if (newKey === s.dayKey && events.length === 0) return;
 
-    const rolled = rolloverFinance({ spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory }, s.dailyTotals, newKey);
-    const fin    = logDueBills(s.bills, rolled.finance, rolled.dailyTotals, newKey);
-    const hab    = rolloverHabits({ date: s.dayKey, commissions: s.commissions, stats: s.stats, history: s.completionHistory }, newKey);
+    const r = catchUpDay({
+      habits: { date: s.dayKey, commissions: s.commissions, stats: s.stats, history: s.completionHistory },
+      finance: { spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory },
+      dailyTotals: s.dailyTotals,
+      bills: s.bills,
+    }, newKey, events);
 
     setDayKey(newKey);
-    setSpentToday(fin.finance.spentToday); setTodayHistory(fin.finance.history); setDailyTotals(fin.dailyTotals);
-    if (fin.changed) { setBills(fin.bills); AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(fin.bills)).catch(() => {}); }
-    setCommissions(hab.commissions); // persisted by the commissions effect under the new dayKey
-    setStats(hab.stats); saveStats(hab.stats);
-    setCompletionHistory(hab.history); saveCompletionHistory(hab.history);
-    AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: fin.dailyTotals })).catch(() => {});
-    AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(fin.finance)).catch(() => {});
+    if (r.financeChanged) {
+      setSpentToday(r.finance.spentToday); setTodayHistory(r.finance.history); setDailyTotals(r.dailyTotals);
+      AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: r.dailyTotals })).catch(() => {});
+      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(r.finance)).catch(() => {});
+    }
+    if (r.billsChanged) { setBills(r.bills); AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(r.bills)).catch(() => {}); }
+    if (r.habitsChanged) setCommissions(r.commissions); // persisted by the commissions effect under the new dayKey
+    if (r.stats !== s.stats) { setStats(r.stats); saveStats(r.stats); }
+    if (r.history !== s.completionHistory) { setCompletionHistory(r.history); saveCompletionHistory(r.history); }
   }, [saveStats, saveCompletionHistory]);
+
+  const drainInbox = useCallback(async () => {
+    if (!hasLoaded.current) return;
+    catchUp(await takeInbox());
+  }, [catchUp]);
+
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' || state === 'inactive') {
         flushWidgetData();
       } else if (state === 'active' && hasLoaded.current) {
-        rolloverIfNewDay();
+        drainInbox();
         updateWidget();
         flushWidgetData();
       }
     });
     return () => sub.remove();
-  }, [updateWidget, rolloverIfNewDay]);
+  }, [updateWidget, drainInbox]);
 
   // Roll over at midnight while the app is open in the foreground.
   useEffect(() => {
     const next = new Date(); next.setHours(24, 0, 1, 0);
-    const timer = setTimeout(rolloverIfNewDay, next.getTime() - Date.now());
+    const timer = setTimeout(drainInbox, next.getTime() - Date.now());
     return () => clearTimeout(timer);
-  }, [dayKey, rolloverIfNewDay]);
+  }, [dayKey, drainInbox]);
 
   // Loads everything from storage. Runs at launch and again after restoring a backup.
   const loadAll = useCallback(async () => {
@@ -208,6 +245,7 @@ export default function App() {
     let loadedAvatar: string = DEFAULT_AVATAR;
     let migrated: Commission[] = [];
     let loadedStats = defaultStats();
+    let loadedHistory: CompletionRecord[] = [];
     let newDay = false;
 
     try {
@@ -232,47 +270,46 @@ export default function App() {
       }
 
       const storedCH = await AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY);
-      let loadedHistory: CompletionRecord[] = storedCH ? JSON.parse(storedCH) : [];
       const storedSt = await AsyncStorage.getItem(STORAGE_STATS);
-      loadedStats = defaultStats();
-      if (storedSt) loadedStats = JSON.parse(storedSt);
-      const storedH = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
-      let existingTotals: DailyTotal[] = storedH ? JSON.parse(storedH).dailyTotals ?? [] : [];
-      const storedF = await AsyncStorage.getItem(STORAGE_FINANCE);
-      const rolled  = rolloverFinance(storedF ? JSON.parse(storedF) : { spentToday: 0, date: todayKey, history: [] }, existingTotals, todayKey);
-      // Recurring bills that came due since the app was last open.
-      const storedB = await AsyncStorage.getItem(STORAGE_BILLS);
-      const fin     = logDueBills(storedB ? JSON.parse(storedB) : [], { ...rolled.finance, history: rolled.finance.history ?? [] }, rolled.dailyTotals, todayKey);
-      existingTotals     = fin.dailyTotals;
-      loadedSpent        = fin.finance.spentToday;
-      loadedTodayHistory = fin.finance.history;
-      loadedBills        = fin.bills;
-      setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills);
-      if (rolled.changed || fin.changed) {
-        await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
-        await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(fin.finance));
+      const storedH  = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
+      const storedF  = await AsyncStorage.getItem(STORAGE_FINANCE);
+      const storedB  = await AsyncStorage.getItem(STORAGE_BILLS);
+      const storedC  = await AsyncStorage.getItem(STORAGE_COMMISSIONS);
+      const storedCommissions: CommissionsData | null = storedC ? JSON.parse(storedC) : null;
+      const storedFinance: FinanceData = storedF ? JSON.parse(storedF) : { spentToday: 0, date: todayKey, history: [] };
+      const stored = {
+        habits: {
+          date:        storedCommissions?.date ?? todayKey,
+          commissions: storedCommissions ? migrateCommissions(storedCommissions.items) : [],
+          stats:       storedSt ? JSON.parse(storedSt) as Stats : defaultStats(),
+          history:     storedCH ? JSON.parse(storedCH) as CompletionRecord[] : [],
+        },
+        finance:     { ...storedFinance, history: storedFinance.history ?? [] },
+        dailyTotals: (storedH ? JSON.parse(storedH).dailyTotals : null) ?? [],
+        bills:       storedB ? JSON.parse(storedB) as Bill[] : [],
+      };
+
+      // Up to today: the new day, bills that came due, and what Siri and quick actions did.
+      const day = catchUpDay(stored, todayKey, await takeInbox());
+
+      loadedTotals = day.dailyTotals; loadedSpent = day.finance.spentToday; loadedTodayHistory = day.finance.history; loadedBills = day.bills;
+      setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills); setDailyTotals(loadedTotals);
+      if (day.financeChanged) {
+        await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: loadedTotals }));
+        await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(day.finance));
       }
-      if (fin.changed) await AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(loadedBills));
+      if (day.billsChanged) await AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(loadedBills));
       scheduleBillReminders(loadedBills, loadedCurrency);
-      setDailyTotals(existingTotals);
-      loadedTotals = existingTotals;
       const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
       setSavings(storedSv ? JSON.parse(storedSv) : EMPTY_SAVINGS);
       const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
       loadedTopUps  = storedT ? JSON.parse(storedT) as TopUp[] : [];
       setTopUps(loadedTopUps);
-      const storedC = await AsyncStorage.getItem(STORAGE_COMMISSIONS);
-      if (storedC) {
-        const parsed: CommissionsData = JSON.parse(storedC);
-        const r = rolloverHabits(
-          { date: parsed.date, commissions: migrateCommissions(parsed.items), stats: loadedStats, history: loadedHistory },
-          todayKey,
-        );
-        migrated = r.commissions; loadedStats = r.stats; loadedHistory = r.history;
-        newDay = r.changed;
-        setCommissions(migrated);
-        if (r.changed) await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: migrated, date: todayKey }));
-      }
+
+      migrated = day.commissions; loadedStats = day.stats; loadedHistory = day.history;
+      newDay = day.newDay;
+      setCommissions(migrated);
+      if (day.habitsChanged) await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: migrated, date: todayKey }));
       // Re-plan every habit's reminders on a new day, so habits that were done or skipped
       // (and so quiet) yesterday get their repeating reminders back. v3 re-plans once for
       // everyone: quiet reminders are new, and older versions never scheduled split ones.
@@ -305,11 +342,49 @@ export default function App() {
         streak: loadedStats.currentStreak,
         avatar: loadedAvatar,
         upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
+        habits: widgetHabits(migrated, c => habitStats(c, loadedHistory, todayKey).thisWeek),
       });
+      setReady(true);
     }
   }, [saveStats, saveCompletionHistory]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Anything queued while loadAll was running.
+  useEffect(() => { if (ready) drainInbox(); }, [ready, drainInbox]);
+
+  // ── Links: quick actions, Shortcuts and habbit:// URLs (src/links.ts) ──────
+  const openLater = useCallback((url: string | null) => { const t = url ? parseLink(url) : null; if (t) setPendingLink(t); }, []);
+  const takeLeftLink = useCallback(() => { takeLink().then(openLater); }, [openLater]);
+  useEffect(() => {
+    Linking.getInitialURL().then(openLater).catch(() => {});
+    takeLeftLink();
+    const sub = Linking.addEventListener('url', ({ url }) => openLater(url));
+    return () => sub.remove();
+  }, [openLater, takeLeftLink]);
+
+  // Siri or Shortcuts queued something, or left a link, while the app is running.
+  useEffect(() => onInboxChanged(() => { drainInbox(); takeLeftLink(); }), [drainInbox, takeLeftLink]);
+
+  // Opened once loaded; ignored before onboarding.
+  useEffect(() => {
+    if (!pendingLink || !ready) return;
+    const t = pendingLink;
+    setPendingLink(null);
+    if (!isOnboardedRef.current) return;
+    setActiveTab(LINK_TABS[t.screen]);
+    setTasksSubScreen(
+      t.screen === 'new-habit' ? { mode: 'add' }
+      : t.screen === 'habit' && liveState.current.commissions.some(c => c.id === t.id) ? { mode: 'detail', id: t.id }
+      : null,
+    );
+    setFinanceRequest(
+      t.screen === 'spend' ? { kind: 'spend', amount: t.amount, category: t.category, note: t.note }
+      : t.screen === 'add-money' ? { kind: 'money' }
+      : t.screen === 'recap' ? { kind: 'recap' }
+      : null,
+    );
+  }, [pendingLink, ready]);
 
   // ── Backup ────────────────────────────────────────────────────────────────
 
@@ -444,7 +519,7 @@ export default function App() {
       await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: initial, date: todayKey }));
     }
     await AsyncStorage.setItem(STORAGE_ONBOARDED, 'true');
-    hasLoaded.current = true; setIsOnboarded(true);
+    hasLoaded.current = true; setIsOnboarded(true); setReady(true);
   }, [todayKey]);
 
   useEffect(() => {
@@ -511,7 +586,7 @@ export default function App() {
       saveCompletionHistory(updated); return updated;
     });
     updateWidget();
-  }, [commissions]);
+  }, [commissions, ready]);
 
   const saveSettings = useCallback((partial: Partial<Settings>) => {
     AsyncStorage.getItem(STORAGE_SETTINGS).then(s => {
@@ -859,6 +934,8 @@ export default function App() {
             topUps={topUps}
             completionHistory={completionHistory}
             onAddSpending={handleFinanceAddSpend}
+            request={financeRequest}
+            onRequestHandled={() => setFinanceRequest(null)}
           />
         );
 
