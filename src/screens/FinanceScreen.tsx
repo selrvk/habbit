@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Modal, Animated, PanResponder } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
@@ -6,7 +6,7 @@ import { getLast7Days, currencyStr, addDaysToKey } from '../helpers';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { WeeklyChart } from '../components/WeeklyChart';
-import type { SpendingEntry, DailyTotal, ChartDay } from '../types';
+import type { SpendingEntry, DailyTotal, ChartDay, CompletionRecord } from '../types';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
 import { PERIOD_LABELS, periodStart, type BudgetPeriod, type BudgetState, type TopUp } from '../budget';
@@ -15,6 +15,8 @@ import { CategoryGrid } from '../components/CategoryGrid';
 import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 import { LeftoverBanner, SavingsJarCard, type Jar } from '../components/SavingsJar';
+import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
+import { monthLabel, monthStart } from '../monthSummary';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -69,7 +71,7 @@ const entryTitle = (e: { note?: string; category?: string }) => e.note || catego
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
   onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
-  bills, onSaveBill, onDeleteBill, jar,
+  bills, onSaveBill, onDeleteBill, jar, topUps, completionHistory,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -89,6 +91,8 @@ export const FinanceScreen = ({
   onSaveBill: (data: BillFormData, id?: string) => void;
   onDeleteBill: (id: string) => void;
   jar: Jar;
+  topUps: TopUp[];
+  completionHistory: CompletionRecord[];
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -105,6 +109,14 @@ export const FinanceScreen = ({
   const [editingId, setEditingId]     = useState<string | null>(null);
   // null: closed; 'new': adding; otherwise the bill being edited.
   const [billEditor, setBillEditor]   = useState<Bill | 'new' | null>(null);
+  const [summaryMonth, setSummaryMonth] = useState<string | null>(null);
+  const summaryData: MonthSummaryData = useMemo(() => ({
+    todayKey, dailyTotals, todayHistory, spentToday, topUps, bills, savings: jar.savings,
+    history: completionHistory, budgetPeriod: budget.period, budgetAmount, currency,
+  }), [todayKey, dailyTotals, todayHistory, spentToday, topUps, bills, jar.savings, completionHistory, budget.period, budgetAmount, currency]);
+  // Early in a month, point at last month's finished recap.
+  const recapLastMonth = Number(todayKey.slice(8)) <= 7 && dailyTotals.some(d => d.date >= monthStart(todayKey, -1) && d.date < monthStart(todayKey));
+  const recapMonth     = recapLastMonth ? monthStart(todayKey, -1) : monthStart(todayKey);
   const sortedBills = bills
     .map(b => ({ bill: b, next: upcomingDueDate(b, todayKey) ?? '9999' }))
     .sort((a, b) => a.next.localeCompare(b.next));
@@ -249,6 +261,8 @@ export const FinanceScreen = ({
         onDelete={billEditor && billEditor !== 'new' ? () => { onDeleteBill(billEditor.id); setBillEditor(null); } : undefined}
         onClose={() => setBillEditor(null)}
       />
+
+      <MonthSummarySheet visible={summaryMonth !== null} initialMonth={summaryMonth ?? todayKey} data={summaryData} onClose={() => setSummaryMonth(null)} />
 
       {/* ── Edit one of today's entries: category, or remove it ── */}
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={() => setEditingId(null)}>
@@ -517,6 +531,19 @@ export const FinanceScreen = ({
             </View>
           </>
         )}
+
+        {/* ── Monthly recap ── */}
+        <TouchableOpacity onPress={() => { haptic.light(); setSummaryMonth(recapMonth); }} activeOpacity={0.8}
+          style={{ backgroundColor: recapLastMonth ? 'rgba(212,149,106,0.16)' : C.card, borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12, borderWidth: 1, borderColor: recapLastMonth ? 'rgba(212,149,106,0.45)' : C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: fs(24) }}>📊</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>
+              {recapLastMonth ? `Your ${monthLabel(recapMonth).name} recap is ready` : `${monthLabel(recapMonth).name} so far`}
+            </Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Spending vs last month, categories and how your budget went</Text>
+          </View>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
+        </TouchableOpacity>
 
         {/* ── This week ── */}
         <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17), marginTop: 12, marginBottom: 10 }}>This week</Text>

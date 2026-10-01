@@ -856,6 +856,8 @@ export default function App() {
             onSaveBill={handleSaveBill}
             onDeleteBill={handleDeleteBill}
             jar={jar}
+            topUps={topUps}
+            completionHistory={completionHistory}
             onAddSpending={handleFinanceAddSpend}
           />
         );

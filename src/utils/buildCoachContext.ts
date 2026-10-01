@@ -13,7 +13,8 @@ import { habitStats } from '../habitStats';
 import { categoryOf } from '../categories';
 import type { BudgetState } from '../budget';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
-import { jarTotal, type Savings } from '../savings';
+import { EMPTY_SAVINGS, jarTotal, type Savings } from '../savings';
+import { monthStart, monthSummary } from '../monthSummary';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -61,6 +62,8 @@ export interface CoachContext {
   bills: { name: string; amount: number; schedule: string; next: string | null }[];
   /** The savings jar's goal and how much is in it. */
   savingsGoal: { name: string; target: number; saved: number } | null;
+  /** Last month's spending against the month before it, and its biggest category. */
+  lastMonth: { name: string; spent: number; prevSpent: number | null; prevName: string; topCategory: string | null } | null;
   weeklySnapshot: WeeklySnapshotDay[];
   // NEW: individual entries with notes for the last 7 days
   recentSpendingEntries: SpendingEntryContext[];
@@ -229,6 +232,16 @@ export async function buildCoachContext(
           billsSetAside: Math.round(budget.billsSetAside * 100) / 100,
         }
       : null,
+    lastMonth: (() => {
+      const today = last7[last7.length - 1];
+      const m = monthSummary({
+        month: monthStart(today, -1), todayKey: today, dailyTotals: financeHistory, todayHistory: [], spentToday: 0,
+        topUps: [], bills, savings: savings ?? EMPTY_SAVINGS, history: completionHistory, budgetPeriod: 'weekly', budgetAmount: 0,
+      });
+      if (m.spent === 0) return null;
+      const top = m.byCategory[0];
+      return { name: m.name, spent: m.spent, prevSpent: m.prevSpent, prevName: m.prevName, topCategory: top && top.key !== 'none' ? categoryOf(top.key)?.label ?? null : null };
+    })(),
     savingsGoal: savings?.goal ? { name: savings.goal.name, target: savings.goal.target, saved: jarTotal(savings) } : null,
     bills: bills.map(b => ({ name: b.name, amount: b.amount, schedule: billScheduleLabel(b), next: upcomingDueDate(b, last7[last7.length - 1]) })),
     weeklySnapshot,
