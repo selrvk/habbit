@@ -1,13 +1,15 @@
 // app.tsx
 import "./global.css";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StatusBar, Platform, Image, AppState } from 'react-native';
+import { View, StatusBar, Platform, Image, AppState, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ProProvider } from './src/context/ProContext';
 import { syncWidgetData, flushWidgetData } from "./src/utils/syncWidget";
+import { applyBackup, backUpToICloud, getCloudBackupStatus, loadICloudBackup, markBackupHandled, pickBackupFile, type CloudBackupMeta } from './src/utils/cloudBackup';
+import { describeBackupContents, describeBackupTime, summarizeBackup, type BackupFile } from './src/backupFormat';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime } from './src/helpers';
@@ -26,6 +28,8 @@ const scheduledByDow = (items: Commission[]) =>
   [0, 1, 2, 3, 4, 5, 6].map(dow => items.filter(c => isScheduledForDay(c, dow)).length);
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
+
+const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -143,108 +147,222 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [dayKey, rolloverIfNewDay]);
 
-  useEffect(() => {
-    const load = async () => {
+  // Loads everything from storage. Runs at launch and again after restoring a backup.
+  const loadAll = useCallback(async () => {
+    const todayKey = getTodayKey();
+    setDayKey(todayKey);
+    let loadedName = 'Friend';
+    let loadedCurrency = DEFAULT_CURRENCY;
+    let loadedPeriod: BudgetPeriod = 'daily';
+    let loadedAmount = DEFAULT_BUDGET;
+    let loadedTopUps: TopUp[] = [];
+    let loadedTotals: DailyTotal[] = [];
+    let loadedSpent = 0;
+    let loadedAvatar: string = DEFAULT_AVATAR;
+    let migrated: Commission[] = [];
+    let loadedStats = defaultStats();
 
-      let loadedName = 'Friend';
-      let loadedCurrency = DEFAULT_CURRENCY;
-      let loadedPeriod: BudgetPeriod = 'daily';
-      let loadedAmount = DEFAULT_BUDGET;
-      let loadedTopUps: TopUp[] = [];
-      let loadedTotals: DailyTotal[] = [];
-      let loadedSpent = 0;
-      let loadedAvatar: string = DEFAULT_AVATAR;
-      let migrated: Commission[] = [];
-      let loadedStats = defaultStats();
-
-      try {
-        
-        await initNotifications();
-        const onboarded = await AsyncStorage.getItem(STORAGE_ONBOARDED);
-        if (!onboarded) { setIsOnboarded(false); return; }
-        setIsOnboarded(true);
-        const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
-        if (storedS) {
-          const s: Settings = JSON.parse(storedS);
-          if (s.name)            { setName(s.name); loadedName = s.name; }
-          if (s.currency)        { setCurrency(s.currency); loadedCurrency = s.currency; }
-          // Budgets predating budget periods were always daily (allocatedPerDay).
-          loadedPeriod = s.budgetPeriod ?? 'daily';
-          loadedAmount = s.budgetAmount ?? s.allocatedPerDay ?? DEFAULT_BUDGET;
-          setBudgetPeriod(loadedPeriod); setBudgetAmount(loadedAmount);
-          if (s.avatar)          { setAvatar(s.avatar); loadedAvatar = s.avatar; }
-          // The midnight "new day" ping was replaced by the evening check-in.
-          setEveningReminder(s.eveningReminder ?? { ...DEFAULT_EVENING_REMINDER, enabled: !!s.midnightNotifEnabled });
-          if (s.midnightNotifEnabled) cancelMidnightNotif();
-        }
-
-        const storedCH = await AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY);
-        let loadedHistory: CompletionRecord[] = storedCH ? JSON.parse(storedCH) : [];
-        const storedSt = await AsyncStorage.getItem(STORAGE_STATS);
-        loadedStats = defaultStats();
-        if (storedSt) loadedStats = JSON.parse(storedSt);
-        const storedH = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
-        let existingTotals: DailyTotal[] = storedH ? JSON.parse(storedH).dailyTotals ?? [] : [];
-        const storedF = await AsyncStorage.getItem(STORAGE_FINANCE);
-        if (storedF) {
-          const r = rolloverFinance(JSON.parse(storedF), existingTotals, todayKey);
-          existingTotals = r.dailyTotals;
-          loadedSpent = r.finance.spentToday;
-          setSpentToday(r.finance.spentToday); setTodayHistory(r.finance.history ?? []);
-          if (r.changed) {
-            await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
-            await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(r.finance));
-          }
-        }
-        setDailyTotals(existingTotals);
-        loadedTotals = existingTotals;
-        const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
-        const oldest  = addDaysToKey(todayKey, -62);
-        loadedTopUps  = (storedT ? JSON.parse(storedT) as TopUp[] : []).filter(t => t.date >= oldest);
-        setTopUps(loadedTopUps);
-        const storedC = await AsyncStorage.getItem(STORAGE_COMMISSIONS);
-        if (storedC) {
-          const parsed: CommissionsData = JSON.parse(storedC);
-          const r = rolloverHabits(
-            { date: parsed.date, commissions: migrateCommissions(parsed.items), stats: loadedStats, history: loadedHistory },
-            todayKey,
-          );
-          migrated = r.commissions; loadedStats = r.stats; loadedHistory = r.history;
-          setCommissions(migrated);
-          if (r.changed) await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: migrated, date: todayKey }));
-        }
-        // One-time reschedule: split-evenly reminders were never scheduled before v2,
-        // and every-day habits now use a single daily trigger.
-        if ((await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '2') {
-          for (const c of migrated) await scheduleHabitNotifs(c);
-          await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '2');
-        }
-        setStats(loadedStats); saveStats(loadedStats);
-        setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
-      } catch { setIsOnboarded(true); }
-      finally { 
-        hasLoaded.current = true; 
-        const todayDow = new Date().getDay();
-        const todaysScheduled = migrated.filter(c => isScheduledForDay(c, todayDow));
-        syncWidgetData({
-          name: loadedName,
-          date: todayKey,
-          scheduledByDow: scheduledByDow(migrated),
-          completedCount: todaysScheduled.filter(c => c.completed).length,
-          totalCount: todaysScheduled.length,
-          spentToday: loadedSpent,
-          allocatedPerDay: computeBudget({
-            period: loadedPeriod, amount: loadedAmount, todayKey, spentToday: loadedSpent, dailyTotals: loadedTotals, topUps: loadedTopUps,
-          }).dailyAllowance,
-          currency: loadedCurrency,
-          streak: loadedStats.currentStreak,
-          avatar: loadedAvatar,
-          upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
-        });
+    try {
+      
+      await initNotifications();
+      const onboarded = await AsyncStorage.getItem(STORAGE_ONBOARDED);
+      if (!onboarded) { setIsOnboarded(false); return; }
+      setIsOnboarded(true);
+      const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
+      if (storedS) {
+        const s: Settings = JSON.parse(storedS);
+        if (s.name)            { setName(s.name); loadedName = s.name; }
+        if (s.currency)        { setCurrency(s.currency); loadedCurrency = s.currency; }
+        // Budgets predating budget periods were always daily (allocatedPerDay).
+        loadedPeriod = s.budgetPeriod ?? 'daily';
+        loadedAmount = s.budgetAmount ?? s.allocatedPerDay ?? DEFAULT_BUDGET;
+        setBudgetPeriod(loadedPeriod); setBudgetAmount(loadedAmount);
+        if (s.avatar)          { setAvatar(s.avatar); loadedAvatar = s.avatar; }
+        // The midnight "new day" ping was replaced by the evening check-in.
+        setEveningReminder(s.eveningReminder ?? { ...DEFAULT_EVENING_REMINDER, enabled: !!s.midnightNotifEnabled });
+        if (s.midnightNotifEnabled) cancelMidnightNotif();
       }
-    };
-    load();
+
+      const storedCH = await AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY);
+      let loadedHistory: CompletionRecord[] = storedCH ? JSON.parse(storedCH) : [];
+      const storedSt = await AsyncStorage.getItem(STORAGE_STATS);
+      loadedStats = defaultStats();
+      if (storedSt) loadedStats = JSON.parse(storedSt);
+      const storedH = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
+      let existingTotals: DailyTotal[] = storedH ? JSON.parse(storedH).dailyTotals ?? [] : [];
+      const storedF = await AsyncStorage.getItem(STORAGE_FINANCE);
+      if (storedF) {
+        const r = rolloverFinance(JSON.parse(storedF), existingTotals, todayKey);
+        existingTotals = r.dailyTotals;
+        loadedSpent = r.finance.spentToday;
+        setSpentToday(r.finance.spentToday); setTodayHistory(r.finance.history ?? []);
+        if (r.changed) {
+          await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
+          await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(r.finance));
+        }
+      }
+      setDailyTotals(existingTotals);
+      loadedTotals = existingTotals;
+      const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
+      loadedTopUps  = storedT ? JSON.parse(storedT) as TopUp[] : [];
+      setTopUps(loadedTopUps);
+      const storedC = await AsyncStorage.getItem(STORAGE_COMMISSIONS);
+      if (storedC) {
+        const parsed: CommissionsData = JSON.parse(storedC);
+        const r = rolloverHabits(
+          { date: parsed.date, commissions: migrateCommissions(parsed.items), stats: loadedStats, history: loadedHistory },
+          todayKey,
+        );
+        migrated = r.commissions; loadedStats = r.stats; loadedHistory = r.history;
+        setCommissions(migrated);
+        if (r.changed) await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: migrated, date: todayKey }));
+      }
+      // One-time reschedule: split-evenly reminders were never scheduled before v2,
+      // and every-day habits now use a single daily trigger.
+      if ((await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '2') {
+        for (const c of migrated) await scheduleHabitNotifs(c);
+        await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '2');
+      }
+      setStats(loadedStats); saveStats(loadedStats);
+      setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
+    } catch { setIsOnboarded(true); }
+    finally { 
+      hasLoaded.current = true; 
+      const todayDow = new Date().getDay();
+      const todaysScheduled = migrated.filter(c => isScheduledForDay(c, todayDow));
+      syncWidgetData({
+        name: loadedName,
+        date: todayKey,
+        scheduledByDow: scheduledByDow(migrated),
+        completedCount: todaysScheduled.filter(c => c.completed).length,
+        totalCount: todaysScheduled.length,
+        spentToday: loadedSpent,
+        allocatedPerDay: computeBudget({
+          period: loadedPeriod, amount: loadedAmount, todayKey, spentToday: loadedSpent, dailyTotals: loadedTotals, topUps: loadedTopUps,
+        }).dailyAllowance,
+        currency: loadedCurrency,
+        streak: loadedStats.currentStreak,
+        avatar: loadedAvatar,
+        upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
+      });
+    }
+  }, [saveStats, saveCompletionHistory]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // ── Backup ────────────────────────────────────────────────────────────────
+
+  const isOnboardedRef = useRef(isOnboarded);
+  isOnboardedRef.current = isOnboarded;
+
+  const resetState = useCallback(() => {
+    setActiveTab('home');
+    setTasksSubScreen(null);
+    setCommissions([]);
+    setSpentToday(0);
+    setTodayHistory([]);
+    setDailyTotals([]);
+    setBudgetPeriod('daily');
+    setBudgetAmount(DEFAULT_BUDGET);
+    setTopUps([]);
+    setCurrency(DEFAULT_CURRENCY);
+    setName('Friend');
+    setAvatar(DEFAULT_AVATAR);
+    setStats(defaultStats());
+    setCompletionHistory([]);
+    setEveningReminder(DEFAULT_EVENING_REMINDER);
   }, []);
+
+  // Replaces all data with a backup and reloads. Restoring the iCloud backup also lets this
+  // install keep it up to date from now on.
+  const restoreBackup = useCallback(async (file: BackupFile, fromICloud: boolean) => {
+    hasLoaded.current = false;
+    await cancelAllNotifications();
+    await applyBackup(file);
+    if (fromICloud) await markBackupHandled(file.createdAt);
+    resetState();
+    await loadAll();
+    haptic.success();
+    Alert.alert('Welcome back! 🐰', `Restored ${describeBackupContents(summarizeBackup(file))}.`);
+  }, [resetState, loadAll]);
+
+  const restoreFromICloud = useCallback(async () => {
+    try {
+      const file = await loadICloudBackup();
+      if (!file) { Alert.alert('No backup found', 'There’s no Habbit backup in this iCloud account yet.'); return; }
+      await restoreBackup(file, true);
+    } catch (e) {
+      Alert.alert('Couldn’t restore', errorMessage(e));
+    }
+  }, [restoreBackup]);
+
+  /** Returns true once restored. With `confirm`, asks first, since it replaces existing data. */
+  const importBackupFile = useCallback(async (confirm: boolean): Promise<boolean> => {
+    try {
+      const file = await pickBackupFile();
+      if (!file) return false;
+      if (!confirm) { await restoreBackup(file, false); return true; }
+      Alert.alert(
+        'Replace everything?',
+        `This backup is from ${describeBackupTime(file.createdAt)} (${describeBackupContents(summarizeBackup(file))}). It replaces all Habbits, spending and stats on this phone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Restore', style: 'destructive', onPress: () => { restoreBackup(file, false).catch(e => Alert.alert('Couldn’t restore', errorMessage(e))); } },
+        ],
+      );
+    } catch (e) {
+      Alert.alert('Couldn’t import', errorMessage(e));
+    }
+    return false;
+  }, [restoreBackup]);
+
+  // Another install's backup is in iCloud (a reinstall, a new phone, or iCloud delivering it
+  // after onboarding). Automatic backup is paused until the user picks one, so ask once.
+  const backupPromptOpen = useRef(false);
+  const offerCloudBackup = useCallback(async () => {
+    if (backupPromptOpen.current || !isOnboardedRef.current) return;
+    const status = await getCloudBackupStatus().catch(() => null);
+    const meta = status?.needsDecision ? status.meta : null;
+    if (!meta || backupPromptOpen.current) return;
+    backupPromptOpen.current = true;
+    Alert.alert(
+      'Found an iCloud backup',
+      `Backed up ${describeBackupTime(meta.createdAt)} · ${describeBackupContents(meta)}.\n\nRestore it? This replaces what’s on this phone. Keeping this phone’s data replaces the backup instead.`,
+      [
+        { text: 'Keep this phone’s data', onPress: () => { backupPromptOpen.current = false; markBackupHandled(meta.createdAt); } },
+        { text: 'Restore', onPress: () => { backupPromptOpen.current = false; restoreFromICloud(); } },
+      ],
+      { cancelable: false },
+    );
+  }, [restoreFromICloud]);
+
+  useEffect(() => { if (isOnboarded) offerCloudBackup(); }, [isOnboarded, offerCloudBackup]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (!hasLoaded.current || !isOnboardedRef.current) return;
+      if (state === 'background') backUpToICloud().catch(() => {});
+      else if (state === 'active') offerCloudBackup();
+    });
+    return () => sub.remove();
+  }, [offerCloudBackup]);
+
+  // On a fresh install iCloud can take a few seconds to deliver an existing backup, so keep
+  // checking while onboarding is open.
+  const [onboardingBackup, setOnboardingBackup] = useState<CloudBackupMeta | null>(null);
+  useEffect(() => {
+    if (isOnboarded !== false) return;
+    let stopped = false;
+    (async () => {
+      for (let i = 0; i < 30 && !stopped; i++) {
+        const status = await getCloudBackupStatus().catch(() => null);
+        if (stopped) return;
+        if (status?.meta) { setOnboardingBackup(status.meta); return; }
+        await new Promise<void>(r => setTimeout(r, 2000));
+      }
+    })();
+    return () => { stopped = true; };
+  }, [isOnboarded]);
 
   const handleOnboardingComplete = useCallback(async (result: any) => {
     const { name: onboardName, firstHabbit, budget: onboardBudget, budgetPeriod: onboardPeriod = 'daily', currency: onboardCurrency } = result;
@@ -309,7 +427,7 @@ export default function App() {
         completed: true,
         completedIds: commissions.filter(c => c.completed).map(c => c.id),
         scheduledIds: todaysScheduled.map(c => c.id),
-      }].sort((a, b) => a.date.localeCompare(b.date)).slice(-60);
+      }].sort((a, b) => a.date.localeCompare(b.date));
       saveCompletionHistory(updated); return updated;
     });
     updateWidget();
@@ -474,27 +592,14 @@ export default function App() {
     updateWidget();
   }, [commissions, todayKey]);
 
-const handleDeleteAllData = useCallback(async () => {
-  await cancelAllNotifications();
-  await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key))); // full wipe
-  setIsOnboarded(false); // ← back in
-  setActiveTab('home');
-  setTasksSubScreen(null);
-  hasLoaded.current = false;
-  setCommissions([]);
-  setSpentToday(0);
-  setTodayHistory([]);
-  setDailyTotals([]);
-  setBudgetPeriod('daily');
-  setBudgetAmount(DEFAULT_BUDGET);
-  setTopUps([]);
-  setCurrency(DEFAULT_CURRENCY);
-  setName('Friend');
-  setAvatar(DEFAULT_AVATAR);
-  setStats(defaultStats());
-  setCompletionHistory([]);
-  setEveningReminder(DEFAULT_EVENING_REMINDER);
-}, [commissions]);
+  // The iCloud backup is kept: onboarding offers it again, so this can still be undone there.
+  const handleDeleteAllData = useCallback(async () => {
+    await cancelAllNotifications();
+    await Promise.all(ALL_STORAGE_KEYS.map(key => AsyncStorage.removeItem(key))); // full wipe
+    hasLoaded.current = false;
+    setIsOnboarded(false);
+    resetState();
+  }, [resetState]);
 
   // ── Loading splash ────────────────────────────────────────────────────────
   if (isOnboarded === null) return (
@@ -504,7 +609,18 @@ const handleDeleteAllData = useCallback(async () => {
     </View>
   );
 
-  if (!isOnboarded) return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+  if (!isOnboarded) return (
+    <OnboardingScreen
+      onComplete={handleOnboardingComplete}
+      cloudBackup={onboardingBackup}
+      onRestoreCloud={restoreFromICloud}
+      onDeclineCloud={() => { if (onboardingBackup) markBackupHandled(onboardingBackup.createdAt); }}
+      onImportFile={async () => {
+        // Choosing a file over the iCloud backup that was on offer counts as deciding on it.
+        if ((await importBackupFile(false)) && onboardingBackup) markBackupHandled(onboardingBackup.createdAt);
+      }}
+    />
+  );
 
   
 
@@ -597,6 +713,8 @@ const handleDeleteAllData = useCallback(async () => {
             onOpenBudget={() => setActiveTab('finance')}
             onResetToday={handleResetToday}
             onDeleteAllData={handleDeleteAllData}
+            onRestoreFromICloud={restoreFromICloud}
+            onImportBackupFile={() => importBackupFile(true).then(() => {})}
             onBack={() => setActiveTab('profile')}
             onSetCurrency={handleSetCurrency}
           />

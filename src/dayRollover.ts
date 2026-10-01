@@ -1,12 +1,10 @@
 // src/dayRollover.ts
 //
 // Pure "a new day started" logic, shared by app launch and app resume.
+// History is kept in full (it is small) for stats and backups.
 
 import type { Commission, CompletionRecord, DailyTotal, FinanceData, Stats } from './types';
 import { addDaysToKey, isScheduledForDay, parseDateKey } from './helpers';
-
-const FINANCE_HISTORY_DAYS    = 62; // enough to cover a monthly budget period
-const COMPLETION_HISTORY_DAYS = 60;
 
 /**
  * True when no habit was scheduled on any day strictly between `fromKey` and `toKey`.
@@ -35,7 +33,6 @@ export const rolloverFinance = (
   const totals = finance.spentToday > 0
     ? [...dailyTotals.filter(t => t.date !== finance.date), { date: finance.date, total: finance.spentToday, entries: finance.history ?? [] }]
         .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-FINANCE_HISTORY_DAYS)
     : dailyTotals;
   return { finance: { spentToday: 0, date: todayKey, history: [] }, dailyTotals: totals, changed: true };
 };
@@ -58,7 +55,7 @@ export const rolloverHabits = (
       completed:    scheduled.every(c => c.completed),
       completedIds: scheduled.filter(c => c.completed).map(c => c.id),
       scheduledIds: scheduled.map(c => c.id),
-    }].sort((a, b) => a.date.localeCompare(b.date)).slice(-COMPLETION_HISTORY_DAYS);
+    }].sort((a, b) => a.date.localeCompare(b.date));
   } else if (history.length === prev.history.length) {
     history = prev.history;
   }

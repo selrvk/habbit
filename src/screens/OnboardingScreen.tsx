@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform, Animated, Image, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform, Animated, Image, KeyboardAvoidingView, Alert } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, CURRENCIES, IMAGES } from '../constants';
 import type { OnboardingResult } from '../types';
 import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
+import { describeBackupContents, describeBackupTime, type BackupSummary } from '../backupFormat';
 
 // Starting amounts if the user skips the budget step.
 const DEFAULT_BY_PERIOD: Record<BudgetPeriod, number> = {
@@ -20,8 +21,19 @@ const haptic = {
 
 const ONBOARD_STEPS = 5;
 
-export const OnboardingScreen = ({ onComplete }: { onComplete: (result: OnboardingResult) => void }) => {
+type OnboardingProps = {
+  onComplete: (result: OnboardingResult) => void;
+  /** An iCloud backup from an earlier install, once iCloud has delivered it. */
+  cloudBackup: BackupSummary | null;
+  onRestoreCloud: () => Promise<void>;
+  /** The user chose to start fresh even though a backup was offered. */
+  onDeclineCloud: () => void;
+  onImportFile: () => Promise<void>;
+};
+
+export const OnboardingScreen = ({ onComplete, cloudBackup, onRestoreCloud, onDeclineCloud, onImportFile }: OnboardingProps) => {
   const [step, setStep]                       = useState(0);
+  const [restoring, setRestoring]             = useState(false);
   const [name, setName]                       = useState('');
   const [habbit, setHabbit]                   = useState('');
   const [budgetInput, setBudgetInput]         = useState('');
@@ -64,6 +76,24 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
     });
   };
 
+  const handleRestoreCloud = async () => {
+    haptic.light();
+    setRestoring(true);
+    try { await onRestoreCloud(); } finally { setRestoring(false); }
+  };
+
+  const handleStartFresh = () => {
+    haptic.light();
+    Alert.alert(
+      'Start fresh?',
+      `Your iCloud backup (${cloudBackup ? describeBackupContents(cloudBackup) : ''}) will be replaced once you start using Habbit on this phone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Start fresh', style: 'destructive', onPress: () => { onDeclineCloud(); goNext(); } },
+      ],
+    );
+  };
+
   const canProceedStep1 = name.trim().length > 0;
   const budgetSet       = parseFloat(budgetInput || '0') > 0;
 
@@ -85,14 +115,39 @@ export const OnboardingScreen = ({ onComplete }: { onComplete: (result: Onboardi
           </View>
           <Text style={{ fontFamily: 'DynaPuff', fontSize: 32, color: '#e8d5c0', marginBottom: 6, textAlign: 'center' }}>Habbit</Text>
           <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(212,149,106,0.8)', marginBottom: 20, textAlign: 'center', letterSpacing: 1 }}>YOUR DAILY COMPANION</Text>
-          <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 18, marginBottom: 40, borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)', width: '100%' }}>
-            <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.7)', textAlign: 'center', lineHeight: 20 }}>
-              Yes, <Text style={{ color: '#D4956A' }}>Habbit</Text> is spelled with two B's on purpose 🐰{'\n'}
-              It's a nod to <Text style={{ color: '#D4956A' }}>Habit</Text> + <Text style={{ color: '#D4956A' }}>Rabbit</Text> — your furry companion for building better daily routines and staying on budget.
-            </Text>
-          </View>
-          <TouchableOpacity onPress={goNext} activeOpacity={0.85} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 16, paddingHorizontal: 48, shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 }}>
-            <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 17 }}>Let's get started 🥕</Text>
+          {cloudBackup ? (
+            <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 18, marginBottom: 40, borderWidth: 1.5, borderColor: '#D4956A', width: '100%', alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: 17, color: '#e8d5c0', marginBottom: 6 }}>Welcome back! ☁️</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.7)', textAlign: 'center', lineHeight: 20 }}>
+                Found your iCloud backup{'\n'}
+                <Text style={{ color: '#D4956A' }}>{describeBackupContents(cloudBackup)}</Text>{'\n'}
+                Backed up {describeBackupTime(cloudBackup.createdAt)}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, padding: 18, marginBottom: 40, borderWidth: 1, borderColor: 'rgba(212,149,106,0.2)', width: '100%' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.7)', textAlign: 'center', lineHeight: 20 }}>
+                Yes, <Text style={{ color: '#D4956A' }}>Habbit</Text> is spelled with two B's on purpose 🐰{'\n'}
+                It's a nod to <Text style={{ color: '#D4956A' }}>Habit</Text> + <Text style={{ color: '#D4956A' }}>Rabbit</Text> — your furry companion for building better daily routines and staying on budget.
+              </Text>
+            </View>
+          )}
+          {cloudBackup ? (
+            <>
+              <TouchableOpacity onPress={restoring ? undefined : handleRestoreCloud} activeOpacity={0.85} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 16, width: '100%', alignItems: 'center', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 }}>
+                <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 17 }}>{restoring ? 'Restoring…' : 'Restore my data 🥕'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={restoring ? undefined : handleStartFresh} hitSlop={8} style={{ marginTop: 18 }}>
+                <Text style={{ fontFamily: 'Jua', fontSize: 14, color: 'rgba(232,213,192,0.6)' }}>Start fresh instead</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity onPress={goNext} activeOpacity={0.85} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 16, paddingHorizontal: 48, shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 17 }}>Let's get started 🥕</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => { haptic.light(); onImportFile(); }} hitSlop={8} style={{ marginTop: 22 }}>
+            <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(232,213,192,0.4)' }}>Have a backup file? <Text style={{ textDecorationLine: 'underline' }}>Import it</Text></Text>
           </TouchableOpacity>
         </View>
       );

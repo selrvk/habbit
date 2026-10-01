@@ -20,6 +20,10 @@ import { useProStatus } from '../context/ProContext';
 import { getUserId } from '../utils/supabaseAuth';
 import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 import Purchases from 'react-native-purchases';
+import {
+  backUpToICloud, exportBackupFile, exportSpendingCsv, getCloudBackupStatus, markBackupHandled, type CloudBackupStatus,
+} from '../utils/cloudBackup';
+import { describeBackupContents, describeBackupTime } from '../backupFormat';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -216,6 +220,8 @@ interface SettingsScreenProps {
   onSetCurrency:         (v: string) => void;
   onResetToday:          () => void;
   onDeleteAllData:       () => void;
+  onRestoreFromICloud:   () => Promise<void>;
+  onImportBackupFile:    () => Promise<void>;
   onBack:                () => void;
 }
 
@@ -229,6 +235,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onSetCurrency,
   onResetToday,
   onDeleteAllData,
+  onRestoreFromICloud,
+  onImportBackupFile,
   onBack,
 }) => {
   const fs = useFontSize();
@@ -273,6 +281,83 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     } finally {
       setRestoring(false);
     }
+  };
+
+  // ── Backup ──────────────────────────────────────────────────────────────
+  const [backup, setBackup]       = useState<CloudBackupStatus | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
+  const refreshBackup = () => { getCloudBackupStatus().then(setBackup).catch(() => {}); };
+  useEffect(() => { refreshBackup(); }, []);
+
+  const backupSublabel =
+    !backup                          ? 'Checking iCloud…' :
+    !backup.available                ? 'Sign in to iCloud to back up automatically' :
+    backup.needsDecision             ? 'Paused · there’s a backup from another install' :
+    backup.ours && backup.meta       ? `Backed up ${describeBackupTime(backup.meta.createdAt)}` :
+                                       'Backs up automatically when you leave the app';
+
+  const runBackup = async () => {
+    setBackingUp(true);
+    try {
+      await backUpToICloud(true);
+      haptic.success();
+    } catch (e) {
+      Alert.alert('Backup failed', errorText(e));
+    } finally {
+      setBackingUp(false);
+      refreshBackup();
+    }
+  };
+
+  const handleBackUpNow = () => {
+    const meta = backup?.needsDecision ? backup.meta : null;
+    if (!meta) { runBackup(); return; }
+    Alert.alert(
+      'Replace the iCloud backup?',
+      `The backup from another install (${describeBackupContents(meta)}, backed up ${describeBackupTime(meta.createdAt)}) will be replaced with this phone’s data.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Replace', style: 'destructive', onPress: async () => { await markBackupHandled(meta.createdAt); runBackup(); } },
+      ],
+    );
+  };
+
+  const handleRestoreICloud = () => {
+    const meta = backup?.meta;
+    if (!meta) return;
+    Alert.alert(
+      'Restore from iCloud?',
+      `This replaces all Habbits, spending and stats on this phone with the backup (${describeBackupContents(meta)}, backed up ${describeBackupTime(meta.createdAt)}).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', style: 'destructive', onPress: () => { onRestoreFromICloud(); } },
+      ],
+    );
+  };
+
+  const handleICloud = () => {
+    haptic.light();
+    if (backup && !backup.available) {
+      Alert.alert('iCloud is off', 'Sign in to iCloud in the Settings app, and make sure Habbit is allowed to use it. You can still export a backup file below.');
+      return;
+    }
+    const meta = backup?.meta;
+    Alert.alert(
+      'iCloud Backup',
+      meta
+        ? `${backup?.ours ? 'Your backup' : 'Backup from another install'}: ${describeBackupContents(meta)}, backed up ${describeBackupTime(meta.createdAt)}.`
+        : 'Habbit backs up to your iCloud whenever you leave the app, so a new phone or a reinstall can pick up where you left off.',
+      [
+        { text: 'Back up now', onPress: handleBackUpNow },
+        ...(meta ? [{ text: 'Restore from iCloud', onPress: handleRestoreICloud }] : []),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
+  };
+
+  const runExport = async (exportFn: () => Promise<void>) => {
+    haptic.light();
+    try { await exportFn(); } catch (e) { Alert.alert('Couldn’t export', errorText(e)); }
   };
 
   const handleReset = () => {
@@ -420,6 +505,39 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               />
             </View>
           )}
+        </Section>
+
+        {/* ── Backup ─────────────────────────────────────────────────── */}
+        <Section title="Backup">
+          <Row
+            icon="☁️"
+            label={backingUp ? 'Backing up…' : 'iCloud Backup'}
+            sublabel={backupSublabel}
+            onPress={backingUp ? undefined : handleICloud}
+            rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+          />
+          <Row
+            icon="📤"
+            label="Export backup file"
+            sublabel="Save a copy to Files or send it to yourself"
+            onPress={() => runExport(exportBackupFile)}
+            rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+          />
+          <Row
+            icon="📥"
+            label="Import backup file"
+            sublabel="Replaces everything on this phone"
+            onPress={() => { haptic.light(); onImportBackupFile(); }}
+            rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+          />
+          <Row
+            icon="🧾"
+            label="Export spending (CSV)"
+            sublabel="Open it in Numbers, Excel or Google Sheets"
+            onPress={() => runExport(exportSpendingCsv)}
+            rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+            last
+          />
         </Section>
 
         {/* ── Data ───────────────────────────────────────────────────── */}
