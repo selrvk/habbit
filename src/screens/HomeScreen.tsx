@@ -8,6 +8,7 @@ import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
 import type { Commission } from '../types';
 import type { HabitSummary } from '../habitStats';
+import { LeftoverBanner, type Jar } from '../components/SavingsJar';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
 import { PERIOD_LABELS, type BudgetState } from '../budget';
@@ -52,7 +53,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany,
+  onSkip, onUnskip, onSkipMany, jar,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -63,6 +64,7 @@ export const HomeScreen = ({
   onAddSpending: (amount: string, note?: string, category?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
   onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
+  jar: Jar;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -190,6 +192,8 @@ export const HomeScreen = ({
             </TouchableOpacity>
           </TouchableOpacity>
         </View>
+
+        <LeftoverBanner jar={jar} currency={currency} />
 
         {/* ── Today's habbits ── */}
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>

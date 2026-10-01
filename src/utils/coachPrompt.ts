@@ -33,7 +33,10 @@ export function buildSystemPrompt(ctx: CoachContext): string {
       + ctx.bills.map(b => `${b.name} ${sym}${b.amount} ${b.schedule.toLowerCase()}${b.next ? `, next ${b.next}` : ''}`).join('; ') + '. '
     : '';
 
-  const financeStatus = periodStatus + billsStatus + (ctx.dailyBudget === 0
+  const savingsStatus = ctx.savingsGoal
+    ? `Saving for "${ctx.savingsGoal.name}": ${sym}${ctx.savingsGoal.saved} of ${sym}${ctx.savingsGoal.target} in their savings jar. `
+    : '';
+  const financeStatus = periodStatus + billsStatus + savingsStatus + (ctx.dailyBudget === 0
     ? `Spent ${sym}${ctx.finance.spentToday} today. No daily budget set.`
     : `Spent ${sym}${ctx.finance.spentToday} of ${sym}${Math.round(ctx.dailyBudget * 100) / 100} allowed today `
     + `(${ctx.finance.budgetUsedTodayPct}% of budget). `

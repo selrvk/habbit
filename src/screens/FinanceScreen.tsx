@@ -14,6 +14,7 @@ import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
 import { CategoryGrid } from '../components/CategoryGrid';
 import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
+import { LeftoverBanner, SavingsJarCard, type Jar } from '../components/SavingsJar';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -68,7 +69,7 @@ const entryTitle = (e: { note?: string; category?: string }) => e.note || catego
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
   onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
-  bills, onSaveBill, onDeleteBill,
+  bills, onSaveBill, onDeleteBill, jar,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -87,6 +88,7 @@ export const FinanceScreen = ({
   bills: Bill[];
   onSaveBill: (data: BillFormData, id?: string) => void;
   onDeleteBill: (id: string) => void;
+  jar: Jar;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -359,6 +361,8 @@ export const FinanceScreen = ({
           </TouchableOpacity>
         </View>
 
+        <LeftoverBanner jar={jar} currency={currency} />
+
         {/* ── Today + period card ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isOverToday ? 'rgba(240,144,144,0.4)' : C.border }}>
           <Text style={label}>{isOverToday ? 'Over today by' : 'Left to spend today'}</Text>
@@ -406,6 +410,8 @@ export const FinanceScreen = ({
             <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(15) }}>+ Money</Text>
           </TouchableOpacity>
         </View>
+
+        <SavingsJarCard jar={jar} currency={currency} />
 
         {/* ── Today's activity ── */}
         <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17), marginBottom: 10 }}>Today</Text>

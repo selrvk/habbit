@@ -3,7 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   STORAGE_COMMISSIONS, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY,
-  STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS, STORAGE_BILLS,
+  STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS, STORAGE_BILLS, STORAGE_SAVINGS,
 } from '../storage';
 import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
@@ -13,6 +13,7 @@ import { habitStats } from '../habitStats';
 import { categoryOf } from '../categories';
 import type { BudgetState } from '../budget';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
+import { jarTotal, type Savings } from '../savings';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -58,6 +59,8 @@ export interface CoachContext {
   budgetPeriod: { period: 'weekly' | 'monthly'; budget: number; left: number; daysLeft: number; billsSetAside: number } | null;
   /** Recurring bills, logged automatically on their due day. */
   bills: { name: string; amount: number; schedule: string; next: string | null }[];
+  /** The savings jar's goal and how much is in it. */
+  savingsGoal: { name: string; target: number; saved: number } | null;
   weeklySnapshot: WeeklySnapshotDay[];
   // NEW: individual entries with notes for the last 7 days
   recentSpendingEntries: SpendingEntryContext[];
@@ -75,7 +78,7 @@ export async function buildCoachContext(
 
   const [
     commissionsRaw, financeRaw, financeHistoryRaw,
-    completionHistoryRaw, statsRaw, settingsRaw, billsRaw,
+    completionHistoryRaw, statsRaw, settingsRaw, billsRaw, savingsRaw,
   ] = await Promise.all([
     AsyncStorage.getItem(STORAGE_COMMISSIONS),
     AsyncStorage.getItem(STORAGE_FINANCE),
@@ -84,7 +87,9 @@ export async function buildCoachContext(
     AsyncStorage.getItem(STORAGE_STATS),
     AsyncStorage.getItem(STORAGE_SETTINGS),
     AsyncStorage.getItem(STORAGE_BILLS),
+    AsyncStorage.getItem(STORAGE_SAVINGS),
   ]);
+  const savings: Savings | null = savingsRaw ? JSON.parse(savingsRaw) : null;
   const bills: Bill[] = billsRaw ? JSON.parse(billsRaw) : [];
 
   const commissionsData: CommissionsData | null = commissionsRaw ? JSON.parse(commissionsRaw) : null;
@@ -224,6 +229,7 @@ export async function buildCoachContext(
           billsSetAside: Math.round(budget.billsSetAside * 100) / 100,
         }
       : null,
+    savingsGoal: savings?.goal ? { name: savings.goal.name, target: savings.goal.target, saved: jarTotal(savings) } : null,
     bills: bills.map(b => ({ name: b.name, amount: b.amount, schedule: billScheduleLabel(b), next: upcomingDueDate(b, last7[last7.length - 1]) })),
     weeklySnapshot,
     recentSpendingEntries,

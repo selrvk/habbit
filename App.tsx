@@ -17,8 +17,10 @@ import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollo
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
+import { EMPTY_SAVINGS, leftoverOffer, type Savings } from './src/savings';
+import type { Jar } from './src/components/SavingsJar';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, type Quiet } from './src/notifications';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -86,6 +88,7 @@ export default function App() {
   const [budgetAmount, setBudgetAmount]           = useState(DEFAULT_BUDGET);
   const [topUps, setTopUps]                       = useState<TopUp[]>([]);
   const [bills, setBills]                         = useState<Bill[]>([]);
+  const [savings, setSavings]                     = useState<Savings>(EMPTY_SAVINGS);
   const [currency, setCurrency]                 = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
   const [avatar, setAvatar]                       = useState<string>(DEFAULT_AVATAR);
@@ -253,6 +256,8 @@ export default function App() {
       scheduleBillReminders(loadedBills, loadedCurrency);
       setDailyTotals(existingTotals);
       loadedTotals = existingTotals;
+      const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
+      setSavings(storedSv ? JSON.parse(storedSv) : EMPTY_SAVINGS);
       const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
       loadedTopUps  = storedT ? JSON.parse(storedT) as TopUp[] : [];
       setTopUps(loadedTopUps);
@@ -322,6 +327,7 @@ export default function App() {
     setBudgetAmount(DEFAULT_BUDGET);
     setTopUps([]);
     setBills([]);
+    setSavings(EMPTY_SAVINGS);
     setCurrency(DEFAULT_CURRENCY);
     setName('Friend');
     setAvatar(DEFAULT_AVATAR);
@@ -565,6 +571,39 @@ export default function App() {
     scheduleBillReminders(next, currency);
   }, [saveBills, currency]);
 
+  // ── Savings jar ──────────────────────────────────────────────────────────
+  const updateSavings = useCallback((fn: (s: Savings) => Savings) => {
+    setSavings(prev => {
+      const next = fn(prev);
+      AsyncStorage.setItem(STORAGE_SAVINGS, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  // What was left of last week's or month's budget, offered once.
+  const offer = useMemo(
+    () => leftoverOffer({ period: budgetPeriod, amount: budgetAmount, todayKey: dayKey, dailyTotals, topUps, bills, lastOffered: savings.lastOffered }),
+    [budgetPeriod, budgetAmount, dayKey, dailyTotals, topUps, bills, savings.lastOffered],
+  );
+
+  const jar: Jar = useMemo(() => {
+    const entry = (amount: number, kind: 'leftover' | 'deposit' | 'withdraw', note?: string) =>
+      ({ id: generateId(), amount, date: dayKey, kind, ...(note ? { note } : {}) });
+    return {
+      savings,
+      offer,
+      saveGoal: goal => updateSavings(s => ({ ...s, goal: { ...goal, createdAt: s.goal?.createdAt ?? dayKey } })),
+      deleteJar: () => updateSavings(s => ({ goal: null, entries: [], lastOffered: s.lastOffered })),
+      add:       (amount, note) => updateSavings(s => ({ ...s, entries: [...s.entries, entry(amount, 'deposit', note)] })),
+      takeOut:   (amount, note) => updateSavings(s => ({ ...s, entries: [...s.entries, entry(-amount, 'withdraw', note)] })),
+      takeOffer: () => {
+        if (!offer) return;
+        updateSavings(s => ({ ...s, lastOffered: offer.periodStart, entries: [...s.entries, entry(offer.amount, 'leftover', `Left over ${offer.label}`)] }));
+      },
+      skipOffer: () => { if (offer) updateSavings(s => ({ ...s, lastOffered: offer.periodStart })); },
+    };
+  }, [savings, offer, dayKey, updateSavings]);
+
   const handleSetCurrency         = useCallback((v: string)  => { setCurrency(v); saveSettings({ currency: v }); }, []);
   const handleSetName             = useCallback((v: string)  => { setName(v); saveSettings({ name: v }); }, []);
   const handleSetAvatar           = useCallback((v: string)  => { setAvatar(v); saveSettings({ avatar: v }); }, []);
@@ -751,6 +790,7 @@ export default function App() {
             onSkip={handleSkip}
             onUnskip={handleUnskip}
             onSkipMany={handleSkipMany}
+            jar={jar}
           />
         );
 
@@ -815,6 +855,7 @@ export default function App() {
             bills={bills}
             onSaveBill={handleSaveBill}
             onDeleteBill={handleDeleteBill}
+            jar={jar}
             onAddSpending={handleFinanceAddSpend}
           />
         );
