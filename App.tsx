@@ -16,8 +16,9 @@ import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay,
 import { rolloverFinance, rolloverHabits, streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, type Quiet } from './src/notifications';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, ALL_STORAGE_KEYS } from './src/storage';
+import { logDueBills, type Bill } from './src/bills';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, type Quiet } from './src/notifications';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -84,6 +85,7 @@ export default function App() {
   const [budgetPeriod, setBudgetPeriod]           = useState<BudgetPeriod>('daily');
   const [budgetAmount, setBudgetAmount]           = useState(DEFAULT_BUDGET);
   const [topUps, setTopUps]                       = useState<TopUp[]>([]);
+  const [bills, setBills]                         = useState<Bill[]>([]);
   const [currency, setCurrency]                 = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
   const [avatar, setAvatar]                       = useState<string>(DEFAULT_AVATAR);
@@ -102,8 +104,8 @@ export default function App() {
   const dayDow       = parseDateKey(dayKey).getDay();
 
   const budget = useMemo(
-    () => computeBudget({ period: budgetPeriod, amount: budgetAmount, todayKey: dayKey, spentToday, dailyTotals, topUps }),
-    [budgetPeriod, budgetAmount, dayKey, spentToday, dailyTotals, topUps],
+    () => computeBudget({ period: budgetPeriod, amount: budgetAmount, todayKey: dayKey, spentToday, todayHistory, dailyTotals, topUps, bills }),
+    [budgetPeriod, budgetAmount, dayKey, spentToday, todayHistory, dailyTotals, topUps, bills],
   );
   // What can be spent today. For weekly/monthly budgets this adapts to the rest of the period.
   const allocatedPerDay = budget.dailyAllowance;
@@ -127,14 +129,14 @@ export default function App() {
             scheduledByDow: scheduledByDow(commissions),
             completedCount: todaysScheduled.filter(c => c.completed).length,
             totalCount: todaysScheduled.length,
-            spentToday,
+            spentToday: budget.spentToday,
             allocatedPerDay,
             currency,
             streak: stats.currentStreak,
             avatar,
             upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
           });
-        }, [commissions, spentToday, stats, name, allocatedPerDay, currency, avatar, dayDow, dayKey]);
+        }, [commissions, budget, stats, name, allocatedPerDay, currency, avatar, dayDow, dayKey]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
@@ -142,8 +144,8 @@ export default function App() {
   }, [updateWidget]);
 
   // Latest state for rolloverIfNewDay, which runs from AppState/timer callbacks.
-  const liveState = useRef({ dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory });
-  liveState.current = { dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory };
+  const liveState = useRef({ dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory, bills });
+  liveState.current = { dayKey, commissions, spentToday, todayHistory, dailyTotals, stats, completionHistory, bills };
 
   // iOS usually suspends the app instead of killing it, so the load effect alone
   // would miss midnight. Called on resume and by a timer at midnight.
@@ -153,11 +155,13 @@ export default function App() {
     const newKey = getTodayKey();
     if (newKey === s.dayKey) return;
 
-    const fin = rolloverFinance({ spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory }, s.dailyTotals, newKey);
-    const hab = rolloverHabits({ date: s.dayKey, commissions: s.commissions, stats: s.stats, history: s.completionHistory }, newKey);
+    const rolled = rolloverFinance({ spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory }, s.dailyTotals, newKey);
+    const fin    = logDueBills(s.bills, rolled.finance, rolled.dailyTotals, newKey);
+    const hab    = rolloverHabits({ date: s.dayKey, commissions: s.commissions, stats: s.stats, history: s.completionHistory }, newKey);
 
     setDayKey(newKey);
-    setSpentToday(0); setTodayHistory([]); setDailyTotals(fin.dailyTotals);
+    setSpentToday(fin.finance.spentToday); setTodayHistory(fin.finance.history); setDailyTotals(fin.dailyTotals);
+    if (fin.changed) { setBills(fin.bills); AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(fin.bills)).catch(() => {}); }
     setCommissions(hab.commissions); // persisted by the commissions effect under the new dayKey
     setStats(hab.stats); saveStats(hab.stats);
     setCompletionHistory(hab.history); saveCompletionHistory(hab.history);
@@ -194,6 +198,8 @@ export default function App() {
     let loadedPeriod: BudgetPeriod = 'daily';
     let loadedAmount = DEFAULT_BUDGET;
     let loadedTopUps: TopUp[] = [];
+    let loadedBills: Bill[] = [];
+    let loadedTodayHistory: SpendingEntry[] = [];
     let loadedTotals: DailyTotal[] = [];
     let loadedSpent = 0;
     let loadedAvatar: string = DEFAULT_AVATAR;
@@ -230,16 +236,21 @@ export default function App() {
       const storedH = await AsyncStorage.getItem(STORAGE_FINANCE_HISTORY);
       let existingTotals: DailyTotal[] = storedH ? JSON.parse(storedH).dailyTotals ?? [] : [];
       const storedF = await AsyncStorage.getItem(STORAGE_FINANCE);
-      if (storedF) {
-        const r = rolloverFinance(JSON.parse(storedF), existingTotals, todayKey);
-        existingTotals = r.dailyTotals;
-        loadedSpent = r.finance.spentToday;
-        setSpentToday(r.finance.spentToday); setTodayHistory(r.finance.history ?? []);
-        if (r.changed) {
-          await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
-          await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(r.finance));
-        }
+      const rolled  = rolloverFinance(storedF ? JSON.parse(storedF) : { spentToday: 0, date: todayKey, history: [] }, existingTotals, todayKey);
+      // Recurring bills that came due since the app was last open.
+      const storedB = await AsyncStorage.getItem(STORAGE_BILLS);
+      const fin     = logDueBills(storedB ? JSON.parse(storedB) : [], { ...rolled.finance, history: rolled.finance.history ?? [] }, rolled.dailyTotals, todayKey);
+      existingTotals     = fin.dailyTotals;
+      loadedSpent        = fin.finance.spentToday;
+      loadedTodayHistory = fin.finance.history;
+      loadedBills        = fin.bills;
+      setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills);
+      if (rolled.changed || fin.changed) {
+        await AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: existingTotals }));
+        await AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(fin.finance));
       }
+      if (fin.changed) await AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(loadedBills));
+      scheduleBillReminders(loadedBills, loadedCurrency);
       setDailyTotals(existingTotals);
       loadedTotals = existingTotals;
       const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
@@ -278,10 +289,13 @@ export default function App() {
         scheduledByDow: scheduledByDow(migrated),
         completedCount: todaysScheduled.filter(c => c.completed).length,
         totalCount: todaysScheduled.length,
-        spentToday: loadedSpent,
-        allocatedPerDay: computeBudget({
-          period: loadedPeriod, amount: loadedAmount, todayKey, spentToday: loadedSpent, dailyTotals: loadedTotals, topUps: loadedTopUps,
-        }).dailyAllowance,
+        ...(() => {
+          const b = computeBudget({
+            period: loadedPeriod, amount: loadedAmount, todayKey, spentToday: loadedSpent, todayHistory: loadedTodayHistory,
+            dailyTotals: loadedTotals, topUps: loadedTopUps, bills: loadedBills,
+          });
+          return { spentToday: b.spentToday, allocatedPerDay: b.dailyAllowance };
+        })(),
         currency: loadedCurrency,
         streak: loadedStats.currentStreak,
         avatar: loadedAvatar,
@@ -307,6 +321,7 @@ export default function App() {
     setBudgetPeriod('daily');
     setBudgetAmount(DEFAULT_BUDGET);
     setTopUps([]);
+    setBills([]);
     setCurrency(DEFAULT_CURRENCY);
     setName('Friend');
     setAvatar(DEFAULT_AVATAR);
@@ -522,6 +537,34 @@ export default function App() {
       saveTopUps(updated); return updated;
     });
   }, [saveTopUps]);
+  // ── Bills ────────────────────────────────────────────────────────────────
+  const saveBills = useCallback((b: Bill[]) => AsyncStorage.setItem(STORAGE_BILLS, JSON.stringify(b)).catch(() => {}), []);
+
+  /** Adds (no id) or updates a bill, logging it straight away if it's due today. */
+  const handleSaveBill = useCallback((data: Omit<Bill, 'id' | 'startDate' | 'lastLogged'>, id?: string) => {
+    const s = liveState.current;
+    const yesterday = addDaysToKey(s.dayKey, -1);
+    const next: Bill[] = id
+      // An edit never logs past dates under the new schedule.
+      ? s.bills.map(b => (b.id === id ? { ...b, ...data, lastLogged: b.lastLogged && b.lastLogged > yesterday ? b.lastLogged : yesterday } : b))
+      : [...s.bills, { id: generateId(), ...data, startDate: s.dayKey }];
+    const fin = logDueBills(next, { spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory }, s.dailyTotals, s.dayKey);
+    setBills(fin.bills); saveBills(fin.bills);
+    if (fin.changed) {
+      setSpentToday(fin.finance.spentToday); setTodayHistory(fin.finance.history); setDailyTotals(fin.dailyTotals);
+      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(fin.finance)).catch(() => {});
+      AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: fin.dailyTotals })).catch(() => {});
+    }
+    scheduleBillReminders(fin.bills, currency);
+  }, [saveBills, currency]);
+
+  /** Past payments stay in the history. */
+  const handleDeleteBill = useCallback((id: string) => {
+    const next = liveState.current.bills.filter(b => b.id !== id);
+    setBills(next); saveBills(next);
+    scheduleBillReminders(next, currency);
+  }, [saveBills, currency]);
+
   const handleSetCurrency         = useCallback((v: string)  => { setCurrency(v); saveSettings({ currency: v }); }, []);
   const handleSetName             = useCallback((v: string)  => { setName(v); saveSettings({ name: v }); }, []);
   const handleSetAvatar           = useCallback((v: string)  => { setAvatar(v); saveSettings({ avatar: v }); }, []);
@@ -769,6 +812,9 @@ export default function App() {
             onUndoEntry={handleUndoEntry}
             onSetEntryCategory={handleSetEntryCategory}
             todayKey={todayKey}
+            bills={bills}
+            onSaveBill={handleSaveBill}
+            onDeleteBill={handleDeleteBill}
             onAddSpending={handleFinanceAddSpend}
           />
         );

@@ -1,7 +1,8 @@
 // src/notifications.ts
 
 import { Platform } from 'react-native';
-import { computeSplitTimes, isScheduledForDay } from './helpers';
+import { addDaysToKey, computeSplitTimes, currencyStr, getTodayKey, isScheduledForDay, parseDateKey } from './helpers';
+import { nextDueDate, type Bill } from './bills';
 import notifee, { TriggerType, RepeatFrequency, AndroidImportance } from '@notifee/react-native';
 import type { Commission, ReminderTime } from './types';
 
@@ -189,6 +190,40 @@ export const scheduleEveningCheckins = async (
         },
         { type: TriggerType.TIMESTAMP, timestamp: at.getTime() },
       );
+    }
+  } catch {}
+};
+
+// ── Bills ────────────────────────────────────────────────────────────────────
+// One-off reminders at 9 AM on each bill's next two due dates, re-planned whenever the
+// app loads or a bill changes (iOS can't repeat monthly).
+
+const BILL_REMINDER_HOUR = 9;
+
+export const scheduleBillReminders = async (bills: Bill[], currency: string) => {
+  try {
+    const old = (await notifee.getTriggerNotificationIds()).filter(id => id.startsWith('bill-'));
+    if (old.length > 0) await notifee.cancelTriggerNotifications(old);
+
+    for (const bill of bills) {
+      if (!bill.remind) continue;
+      let from = getTodayKey();
+      for (let n = 0; n < 2; ) {
+        const due = nextDueDate(bill, from);
+        if (!due) break;
+        from = addDaysToKey(due, 1);
+        const at = parseDateKey(due); at.setHours(BILL_REMINDER_HOUR, 0, 0, 0);
+        if (at.getTime() <= Date.now()) continue;
+        const amount = currencyStr(currency, bill.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }));
+        await notifee.createTriggerNotification(
+          {
+            id: `bill-${bill.id}-${n}`, title: 'Habbit 🧾', body: `${bill.name} (${amount}) is due today. Habbit logs it for you.`,
+            android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
+          },
+          { type: TriggerType.TIMESTAMP, timestamp: at.getTime() },
+        );
+        n++;
+      }
     }
   } catch {}
 };

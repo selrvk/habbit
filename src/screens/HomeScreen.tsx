@@ -109,9 +109,10 @@ export const HomeScreen = ({
     );
   };
 
-  const remaining    = allocatedPerDay - spentToday;
+  // The budget's own figures: bills are set aside up front (or, on daily budgets, only tracked).
+  const remaining    = budget.leftToday;
   const isOverBudget = remaining < 0;
-  const budgetPct    = allocatedPerDay > 0 ? spentToday / allocatedPerDay : 0;
+  const budgetPct    = allocatedPerDay > 0 ? budget.spentToday / allocatedPerDay : 0;
 
   const handleConfirm = (note?: string, category?: string) => {
     onAddSpending(addingAmount, note, category);

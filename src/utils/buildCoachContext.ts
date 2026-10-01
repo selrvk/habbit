@@ -3,7 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   STORAGE_COMMISSIONS, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY,
-  STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS,
+  STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS, STORAGE_BILLS,
 } from '../storage';
 import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
@@ -12,6 +12,7 @@ import { isScheduledForDay, getLast7DayKeys } from '../helpers';
 import { habitStats } from '../habitStats';
 import { categoryOf } from '../categories';
 import type { BudgetState } from '../budget';
+import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -54,7 +55,9 @@ export interface CoachContext {
     budgetUsedTodayPct: number;
   };
   /** Weekly/monthly budget status; null for daily budgets. */
-  budgetPeriod: { period: 'weekly' | 'monthly'; budget: number; left: number; daysLeft: number } | null;
+  budgetPeriod: { period: 'weekly' | 'monthly'; budget: number; left: number; daysLeft: number; billsSetAside: number } | null;
+  /** Recurring bills, logged automatically on their due day. */
+  bills: { name: string; amount: number; schedule: string; next: string | null }[];
   weeklySnapshot: WeeklySnapshotDay[];
   // NEW: individual entries with notes for the last 7 days
   recentSpendingEntries: SpendingEntryContext[];
@@ -72,7 +75,7 @@ export async function buildCoachContext(
 
   const [
     commissionsRaw, financeRaw, financeHistoryRaw,
-    completionHistoryRaw, statsRaw, settingsRaw,
+    completionHistoryRaw, statsRaw, settingsRaw, billsRaw,
   ] = await Promise.all([
     AsyncStorage.getItem(STORAGE_COMMISSIONS),
     AsyncStorage.getItem(STORAGE_FINANCE),
@@ -80,7 +83,9 @@ export async function buildCoachContext(
     AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY),
     AsyncStorage.getItem(STORAGE_STATS),
     AsyncStorage.getItem(STORAGE_SETTINGS),
+    AsyncStorage.getItem(STORAGE_BILLS),
   ]);
+  const bills: Bill[] = billsRaw ? JSON.parse(billsRaw) : [];
 
   const commissionsData: CommissionsData | null = commissionsRaw ? JSON.parse(commissionsRaw) : null;
   const financeData: FinanceData | null         = financeRaw ? JSON.parse(financeRaw) : null;
@@ -125,7 +130,9 @@ export async function buildCoachContext(
   const totalSpentLast7Days = allLast7Spending.reduce((s, d) => s + d.total, 0);
   const dailyAverageSpend   = allLast7Spending.length > 0 ? totalSpentLast7Days / allLast7Spending.length : 0;
   const busiestDay          = [...allLast7Spending].sort((a, b) => b.total - a.total)[0];
-  const budgetUsedTodayPct  = dailyBudget > 0 ? Math.round((spentToday / dailyBudget) * 100) : 0;
+  // Bills don't count against the daily allowance (they're set aside, or only tracked).
+  const countedToday        = budget?.spentToday ?? spentToday;
+  const budgetUsedTodayPct  = dailyBudget > 0 ? Math.round((countedToday / dailyBudget) * 100) : 0;
 
   // ── Collect individual spending entries for the last 7 days ───────────────
   const recentSpendingEntries: SpendingEntryContext[] = [];
@@ -214,8 +221,10 @@ export async function buildCoachContext(
           budget:   Math.round(budget.periodBudget * 100) / 100,
           left:     Math.round(budget.periodLeft * 100) / 100,
           daysLeft: budget.daysLeft,
+          billsSetAside: Math.round(budget.billsSetAside * 100) / 100,
         }
       : null,
+    bills: bills.map(b => ({ name: b.name, amount: b.amount, schedule: billScheduleLabel(b), next: upcomingDueDate(b, last7[last7.length - 1]) })),
     weeklySnapshot,
     recentSpendingEntries,
   };

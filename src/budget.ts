@@ -3,9 +3,13 @@
 // Budget math. A budget is an amount per period (day / week / month). For weekly and
 // monthly budgets, the daily allowance adapts: what's left in the period is spread
 // over the days that remain, so overspending one day shrinks the next day's allowance.
+//
+// Recurring bills: weekly/monthly budgets set aside every bill due in the period up front,
+// and the bills' own spending entries aren't counted again. Daily budgets only track bills.
 
-import type { DailyTotal } from './types';
+import type { DailyTotal, SpendingEntry } from './types';
 import { addDaysToKey, parseDateKey, toDateKey } from './helpers';
+import { billSpending, billsDueTotal, type Bill } from './bills';
 
 export type BudgetPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -45,22 +49,30 @@ export type BudgetState = {
   /** Base amount for the period, plus any top-ups made during it. */
   periodBudget: number;
   topUpsThisPeriod: number;
+  /** Bills due this period, set aside up front (weekly/monthly budgets only). */
+  billsSetAside: number;
+  /** Day-to-day spending this period plus the bills set aside. */
   periodSpent: number;
   periodLeft: number;
   /** Days remaining in the period, including today. */
   daysLeft: number;
   /** What the user can spend today. For daily budgets this is the daily amount (+ today's top-ups). */
   dailyAllowance: number;
+  /** Today's spending that counts against the allowance (bills excluded). */
+  spentToday: number;
   leftToday: number;
 };
 
-export const computeBudget = ({ period, amount, todayKey, spentToday, dailyTotals, topUps }: {
+export const computeBudget = ({ period, amount, todayKey, spentToday, todayHistory = [], dailyTotals, topUps, bills = [] }: {
   period: BudgetPeriod;
   amount: number;
   todayKey: string;
+  /** Everything spent today, bills included. */
   spentToday: number;
+  todayHistory?: SpendingEntry[];
   dailyTotals: DailyTotal[];
   topUps: TopUp[];
+  bills?: Bill[];
 }): BudgetState => {
   const start = periodStart(period, todayKey);
   const end   = periodEnd(period, todayKey);
@@ -68,27 +80,32 @@ export const computeBudget = ({ period, amount, todayKey, spentToday, dailyTotal
   const topUpsThisPeriod = topUps
     .filter(t => t.date >= start && t.date <= todayKey)
     .reduce((s, t) => s + t.amount, 0);
+  // Bill entries never count here: they're set aside up front (or, on daily budgets, only tracked).
   const spentBeforeToday = dailyTotals
     .filter(d => d.date >= start && d.date < todayKey)
-    .reduce((s, d) => s + d.total, 0);
+    .reduce((s, d) => s + d.total - billSpending(d.entries), 0);
+  const countedToday  = spentToday - billSpending(todayHistory);
+  const billsSetAside = period === 'daily' ? 0 : billsDueTotal(bills, start, end);
 
   const periodBudget = amount + topUpsThisPeriod;
-  const periodSpent  = spentBeforeToday + spentToday;
+  const periodSpent  = spentBeforeToday + countedToday + billsSetAside;
   const daysLeft     = daysBetweenInclusive(todayKey, end);
 
   // Today's allowance is fixed at the start of the day (it doesn't shrink as you spend today).
   const dailyAllowance = period === 'daily'
     ? periodBudget
-    : Math.max(0, (periodBudget - spentBeforeToday) / daysLeft);
+    : Math.max(0, (periodBudget - billsSetAside - spentBeforeToday) / daysLeft);
 
   return {
     period,
     periodBudget,
     topUpsThisPeriod,
+    billsSetAside,
     periodSpent,
     periodLeft: periodBudget - periodSpent,
     daysLeft,
     dailyAllowance,
-    leftToday: dailyAllowance - spentToday,
+    spentToday: countedToday,
+    leftToday: dailyAllowance - countedToday,
   };
 };

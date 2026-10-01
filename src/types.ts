@@ -44,6 +44,8 @@ export type SpendingEntry   = {
   id: string; amount: number; time: string; note?: string;
   /** A CategoryKey (see categories.ts); missing on entries logged before categories. */
   category?: string;
+  /** Logged automatically for a recurring bill (see bills.ts). */
+  billId?: string;
 };
 export type FinanceData     = { spentToday: number; date: string; history: SpendingEntry[] };
 export type DailyTotal      = { date: string; total: number; entries?: SpendingEntry[] };

@@ -12,6 +12,8 @@ import { CurrencyAmount } from '../components/CurrencyAmount';
 import { PERIOD_LABELS, periodStart, type BudgetPeriod, type BudgetState, type TopUp } from '../budget';
 import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
 import { CategoryGrid } from '../components/CategoryGrid';
+import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
+import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -57,7 +59,7 @@ const Bar = ({ ratio, height = 10 }: { ratio: number; height?: number }) => (
 
 // Unified row for today's activity: spending (−) and money added (+).
 type ActivityRow =
-  | { kind: 'spend'; id: string; amount: number; time: string; note?: string; category?: string }
+  | { kind: 'spend'; id: string; amount: number; time: string; note?: string; category?: string; billId?: string }
   | { kind: 'topup'; id: string; amount: number; time?: string; note?: string };
 
 /** "Coffee" (note), else the category's name, else "Spending". */
@@ -66,6 +68,7 @@ const entryTitle = (e: { note?: string; category?: string }) => e.note || catego
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
   onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
+  bills, onSaveBill, onDeleteBill,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -81,6 +84,9 @@ export const FinanceScreen = ({
   onAddSpending: (amount: string, note?: string, category?: string) => void;
   onUndoEntry: (id: string) => void;
   onSetEntryCategory: (id: string, category: string | undefined) => void;
+  bills: Bill[];
+  onSaveBill: (data: BillFormData, id?: string) => void;
+  onDeleteBill: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -95,6 +101,11 @@ export const FinanceScreen = ({
   const [moneyInput,  setMoneyInput]  = useState('');
   const [selectedDay, setSelectedDay] = useState<ChartDay | null>(null);
   const [editingId, setEditingId]     = useState<string | null>(null);
+  // null: closed; 'new': adding; otherwise the bill being edited.
+  const [billEditor, setBillEditor]   = useState<Bill | 'new' | null>(null);
+  const sortedBills = bills
+    .map(b => ({ bill: b, next: upcomingDueDate(b, todayKey) ?? '9999' }))
+    .sort((a, b) => a.next.localeCompare(b.next));
   const editing = editingId ? todayHistory.find(e => e.id === editingId) ?? null : null;
 
   // ── derived values ────────────────────────────────────────────────────────
@@ -103,7 +114,7 @@ export const FinanceScreen = ({
   const isDaily      = period === 'daily';
   const leftToday    = budget.leftToday;
   const isOverToday  = leftToday < 0;
-  const todayRatio   = budget.dailyAllowance > 0 ? spentToday / budget.dailyAllowance : spentToday > 0 ? 2 : 0;
+  const todayRatio   = budget.dailyAllowance > 0 ? budget.spentToday / budget.dailyAllowance : budget.spentToday > 0 ? 2 : 0;
   const periodRatio  = budget.periodBudget > 0 ? budget.periodSpent / budget.periodBudget : 0;
   const chartDays    = getLast7Days(dailyTotals, spentToday);
   const weekTotal    = chartDays.reduce((s, d) => s + d.total, 0);
@@ -226,6 +237,17 @@ export const FinanceScreen = ({
         notePlaceholder="Add a note (optional)"
       />
 
+      <BillEditor
+        visible={billEditor !== null}
+        bill={billEditor === 'new' || billEditor === null ? undefined : billEditor}
+        currency={currency}
+        budgetPeriod={period}
+        todayKey={todayKey}
+        onSave={data => { onSaveBill(data, billEditor && billEditor !== 'new' ? billEditor.id : undefined); setBillEditor(null); }}
+        onDelete={billEditor && billEditor !== 'new' ? () => { onDeleteBill(billEditor.id); setBillEditor(null); } : undefined}
+        onClose={() => setBillEditor(null)}
+      />
+
       {/* ── Edit one of today's entries: category, or remove it ── */}
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={() => setEditingId(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(18,7,5,0.80)', justifyContent: 'flex-end' }}>
@@ -234,7 +256,7 @@ export const FinanceScreen = ({
             <View style={{ backgroundColor: '#3B2220', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1.5, borderBottomWidth: 0, borderColor: 'rgba(212,149,106,0.35)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>{entryTitle(editing)} · {editing.time}</Text>
+                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>{entryTitle(editing)} · {editing.billId ? 'Bill' : editing.time}</Text>
                   <CurrencyAmount currency={currency} amount={fmt(editing.amount)} imageSize={fs(24)}
                     textStyle={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(26) }} />
                 </View>
@@ -343,7 +365,7 @@ export const FinanceScreen = ({
           <CurrencyAmount currency={currency} amount={fmt(Math.abs(leftToday))} imageSize={fs(28)}
             textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(32), color: isOverToday ? C.red : C.cream, marginVertical: 2 }} />
           <Text style={[label, { marginBottom: 10 }]}>
-            {currencyStr(currency, fmt(spentToday))} spent of {currencyStr(currency, fmt(budget.dailyAllowance))}
+            {currencyStr(currency, fmt(budget.spentToday))} spent of {currencyStr(currency, fmt(budget.dailyAllowance))}
             {isDaily ? '' : ' allowed today'}
           </Text>
           <Bar ratio={todayRatio} />
@@ -360,6 +382,11 @@ export const FinanceScreen = ({
               {budget.topUpsThisPeriod > 0 && (
                 <Text style={[label, { marginTop: 8, color: 'rgba(157,224,135,0.8)' }]}>
                   Includes {currencyStr(currency, fmt(budget.topUpsThisPeriod))} added this {noun}
+                </Text>
+              )}
+              {budget.billsSetAside > 0 && (
+                <Text style={[label, { marginTop: budget.topUpsThisPeriod > 0 ? 2 : 8 }]}>
+                  🧾 {currencyStr(currency, fmt(budget.billsSetAside))} set aside for bills this {noun}
                 </Text>
               )}
             </View>
@@ -402,13 +429,55 @@ export const FinanceScreen = ({
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>
                     {row.kind === 'spend' ? entryTitle(row) : row.note || 'Money added'}
                   </Text>
-                  {row.time ? <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{row.time}</Text> : null}
+                  {row.kind === 'spend' && row.billId
+                    ? <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>Bill · logged automatically</Text>
+                    : row.time ? <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{row.time}</Text> : null}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: row.kind === 'spend' ? C.cream : C.green }}>{row.kind === 'spend' ? '−' : '+'}</Text>
                   <CurrencyAmount currency={currency} amount={fmt(row.amount)} imageSize={fs(15)}
                     textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: row.kind === 'spend' ? C.cream : C.green }} />
                 </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* ── Bills: recurring, logged automatically on the day ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 10 }}>
+          <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17) }}>Bills</Text>
+          {bills.length > 0 && (
+            <TouchableOpacity onPress={() => { haptic.light(); setBillEditor('new'); }} accessibilityLabel="Add bill"
+              style={{ backgroundColor: 'rgba(212,149,106,0.14)', borderRadius: 99, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+              <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(12) }}>+ Add</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {bills.length === 0 ? (
+          <TouchableOpacity onPress={() => { haptic.light(); setBillEditor('new'); }} activeOpacity={0.8}
+            style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={{ fontSize: fs(24) }}>🧾</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Add rent, subscriptions and other bills</Text>
+              <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Add them once — they're logged for you on the day.</Text>
+            </View>
+            <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>+</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ backgroundColor: C.card, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
+            {sortedBills.map(({ bill, next }, i) => (
+              <TouchableOpacity key={bill.id} onPress={() => { haptic.light(); setBillEditor(bill); }} activeOpacity={0.7}
+                accessibilityHint="Edit this bill"
+                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
+                <Text style={{ fontSize: fs(18), marginRight: 10 }}>🧾</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>{bill.name}</Text>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }} numberOfLines={1}>
+                    {billScheduleLabel(bill)}{next !== '9999' ? ` · next ${dueLabel(next, todayKey)}` : ''}{!isDaily && !bill.inBudget ? ' · not in budget' : ''}
+                  </Text>
+                </View>
+                <CurrencyAmount currency={currency} amount={fmt(bill.amount)} imageSize={fs(15)}
+                  textStyle={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.cream }} />
               </TouchableOpacity>
             ))}
           </View>

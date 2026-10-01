@@ -6,7 +6,7 @@
 
 import {
   STORAGE_COACH_MESSAGES, STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE,
-  STORAGE_FINANCE_HISTORY, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_TOPUPS,
+  STORAGE_FINANCE_HISTORY, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_TOPUPS, STORAGE_BILLS,
 } from './storage';
 import type { DailyTotal, FinanceData } from './types';
 import type { TopUp } from './budget';
@@ -23,6 +23,7 @@ export const BACKUP_SECTIONS = {
   today:         STORAGE_FINANCE,
   spending:      STORAGE_FINANCE_HISTORY,
   topUps:        STORAGE_TOPUPS,
+  bills:         STORAGE_BILLS,
   coachMessages: STORAGE_COACH_MESSAGES,
 } as const;
 
@@ -51,6 +52,7 @@ const VALIDATORS: Record<BackupSection, (v: any) => boolean> = {
   today:         v => isObject(v) && typeof v.spentToday === 'number' && typeof v.date === 'string',
   spending:      v => isObject(v) && Array.isArray(v.dailyTotals),
   topUps:        v => Array.isArray(v),
+  bills:         v => Array.isArray(v),
   coachMessages: v => Array.isArray(v),
 };
 

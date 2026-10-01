@@ -25,10 +25,15 @@ export function buildSystemPrompt(ctx: CoachContext): string {
   const periodStatus = ctx.budgetPeriod
     ? `The user budgets ${ctx.budgetPeriod.period}: ${sym}${ctx.budgetPeriod.budget} this ${ctx.budgetPeriod.period === 'weekly' ? 'week' : 'month'}, `
       + `${sym}${ctx.budgetPeriod.left} left with ${ctx.budgetPeriod.daysLeft} day(s) to go. `
+      + (ctx.budgetPeriod.billsSetAside > 0 ? `${sym}${ctx.budgetPeriod.billsSetAside} of that is set aside for bills. ` : '')
       + `Today's allowance adapts to what's left. `
     : '';
+  const billsStatus = ctx.bills.length > 0
+    ? `Recurring bills (logged automatically on the day; they don't count against the daily allowance): `
+      + ctx.bills.map(b => `${b.name} ${sym}${b.amount} ${b.schedule.toLowerCase()}${b.next ? `, next ${b.next}` : ''}`).join('; ') + '. '
+    : '';
 
-  const financeStatus = periodStatus + (ctx.dailyBudget === 0
+  const financeStatus = periodStatus + billsStatus + (ctx.dailyBudget === 0
     ? `Spent ${sym}${ctx.finance.spentToday} today. No daily budget set.`
     : `Spent ${sym}${ctx.finance.spentToday} of ${sym}${Math.round(ctx.dailyBudget * 100) / 100} allowed today `
     + `(${ctx.finance.budgetUsedTodayPct}% of budget). `
