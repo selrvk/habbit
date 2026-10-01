@@ -1884,6 +1884,28 @@ PODS:
   - RevenueCat (5.68.0)
   - RevenueCatUI (5.68.0):
     - RevenueCat (= 5.68.0)
+  - RNKeychain (10.0.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNNotifee (9.1.8):
     - React-Core
     - RNNotifee/NotifeeCore (= 9.1.8)
@@ -1997,6 +2019,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
+  - RNKeychain (from `../node_modules/react-native-keychain`)
   - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - RNPaywalls (from `../node_modules/react-native-purchases-ui`)
   - RNPurchases (from `../node_modules/react-native-purchases`)
@@ -2161,6 +2184,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNKeychain:
+    :path: "../node_modules/react-native-keychain"
   RNNotifee:
     :path: "../node_modules/@notifee/react-native"
   RNPaywalls:
@@ -2253,6 +2278,7 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: 860a7a1617123d819d94a3298c22b3ebcae073c8
   RevenueCat: c535d3739d51163f6d9d5dbd01c7b5d93b718ff5
   RevenueCatUI: fb23ded3007789db7a240f05c35c2237a197d629
+  RNKeychain: 667b7bd224f14055ae4cb52b41a82ad0ad70574f
   RNNotifee: 5e3b271e8ea7456a36eec994085543c9adca9168
   RNPaywalls: 051e2576b934bd1accdab123ebccc04c1e658a0d
   RNPurchases: ef34b2c0c1fcdab1df209fde0d95b026f90ae329
@@ -2262,4 +2288,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 70a249abd540e970f5e663a9bbf085c0b80aecd6
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

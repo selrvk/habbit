@@ -13,7 +13,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { buildCoachContext } from '../utils/buildCoachContext';
 import { buildSystemPrompt } from '../utils/coachPrompt';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
-import { getAccessToken, clearSession } from '../utils/supabaseAuth';
+import { getAccessToken, invalidateAccessToken } from '../utils/supabaseAuth';
 import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 import {
   getRemainingMessages,
@@ -144,8 +144,8 @@ async function sendMessage(
 
   let res = await post();
   if (res.status === 401) {
-    // Stale or revoked session: start a fresh anonymous one and try once more.
-    await clearSession();
+    // Rejected token: refresh it (same user) and try once more.
+    invalidateAccessToken();
     await syncRevenueCatUser().catch(() => null);
     res = await post();
   }
