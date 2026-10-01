@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { CustomerInfo } from 'react-native-purchases';
-import { getUserId } from '../utils/supabaseAuth';
+import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 
 const PRO_ENTITLEMENT = 'Habbit: Habits & Finance Pro'; 
 
@@ -51,14 +51,9 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Use the Supabase user id as the RevenueCat app user id, so the coach backend can
     // verify Pro for the signed-in user. RevenueCat carries existing purchases over from
     // the anonymous id. Offline? Skip; it retries on the next launch.
-    (async () => {
-      try {
-        const userId = await getUserId();
-        if ((await Purchases.getAppUserID()) === userId) return;
-        const { customerInfo } = await Purchases.logIn(userId);
-        await checkStatus(customerInfo);
-      } catch {}
-    })();
+    syncRevenueCatUser()
+      .then(info => { if (info) return checkStatus(info); })
+      .catch(() => {});
 
       Purchases.getOfferings().then(offerings => {
         const packages = offerings.current?.availablePackages ?? [];
@@ -74,6 +69,9 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const restorePurchases = async () => {
+    // Link first so restored purchases land on the account the coach checks. Let errors
+    // surface: restoring onto the wrong customer would look like success but fix nothing.
+    await syncRevenueCatUser();
     const customerInfo = await Purchases.restorePurchases();
     await checkStatus(customerInfo);
     };
@@ -85,6 +83,8 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         period === 'monthly' ? p.packageType === 'MONTHLY' : p.packageType === 'ANNUAL'
       );
       if (!pkg) throw new Error('Package not found');
+      // Make sure the purchase lands on the customer the coach backend checks.
+      await syncRevenueCatUser().catch(() => null);
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       await checkStatus(customerInfo);
     };

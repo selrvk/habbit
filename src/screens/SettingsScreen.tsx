@@ -2,7 +2,7 @@
 //
 // Settings page, opened from the gear icon on the Profile screen.
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image
 } from 'react-native';
@@ -16,6 +16,10 @@ import { currencyStr } from '../helpers';
 import { TimeField } from '../components/TimePicker';
 import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
 import type { EveningReminder } from '../types';
+import { useProStatus } from '../context/ProContext';
+import { getUserId } from '../utils/supabaseAuth';
+import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
+import Purchases from 'react-native-purchases';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -229,6 +233,48 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 }) => {
   const fs = useFontSize();
 
+  const { isPro, restorePurchases } = useProStatus();
+  const [restoring, setRestoring] = useState(false);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  // RevenueCat must be logged in as the account id for the coach to recognise Pro.
+  const [purchasesLinked, setPurchasesLinked] = useState<boolean | null>(null);
+
+  const refreshAccount = async () => {
+    try {
+      const [id, rcId] = await Promise.all([getUserId(), Purchases.getAppUserID()]);
+      setAccountId(id);
+      setPurchasesLinked(id === rcId);
+    } catch {}
+  };
+  useEffect(() => { refreshAccount(); }, []);
+
+  const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  const handleLink = async () => {
+    haptic.light();
+    try {
+      await syncRevenueCatUser();
+      await refreshAccount();
+      Alert.alert('Linked', 'Purchases are linked to this account. Restore purchases if Pro still isn’t recognised.');
+    } catch (e) {
+      Alert.alert('Couldn’t link purchases', errorText(e));
+    }
+  };
+
+  const handleRestore = async () => {
+    haptic.light();
+    setRestoring(true);
+    try {
+      await restorePurchases();
+      await refreshAccount();
+      Alert.alert('Restore complete', 'Any purchases on this Apple ID are now on this account.');
+    } catch (e) {
+      Alert.alert('Restore failed', errorText(e));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const handleReset = () => {
     haptic.light();
     Alert.alert("Reset Today's Data", "This will uncheck all of today's Habbits and clear today's spending. Are you sure?", [
@@ -402,6 +448,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </Section>
 
         {/* ── About ──────────────────────────────────────────────────── */}
+        {/* ── Subscription ───────────────────────────────────────────── */}
+        <Section title="Subscription">
+          <Row
+            icon="🥕"
+            label={isPro ? 'Habbit Pro' : 'Free plan'}
+            sublabel={isPro ? 'Thanks for supporting Habbit!' : 'Upgrade from your Profile'}
+          />
+          <Row
+            icon="🔄"
+            label={restoring ? 'Restoring…' : 'Restore purchases'}
+            sublabel="Already subscribed on this Apple ID? Bring it back here."
+            onPress={restoring ? undefined : handleRestore}
+            rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+          />
+          <Row
+            icon="🪪"
+            label="Account ID"
+            sublabel={`${accountId ?? '—'}\n${purchasesLinked === null ? '' : purchasesLinked ? 'Purchases linked ✓' : 'Purchases not linked — tap to fix'}`}
+            onPress={purchasesLinked === false ? handleLink : undefined}
+            last
+          />
+        </Section>
+
         <Section title="About">
           <Row
             icon="🐰"

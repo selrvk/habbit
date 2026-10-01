@@ -14,6 +14,7 @@ import { buildCoachContext } from '../utils/buildCoachContext';
 import { buildSystemPrompt } from '../utils/coachPrompt';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 import { getAccessToken, clearSession } from '../utils/supabaseAuth';
+import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 import {
   getRemainingMessages,
   consumeMessage,
@@ -136,10 +137,16 @@ async function sendMessage(
     body,
   });
 
+  // The server checks Pro for the session's user, so RevenueCat must be on that user too.
+  // Done for free users as well: the server's RevenueCat lookup creates the customer if it
+  // doesn't exist, which would stop a later login from carrying purchases over.
+  await syncRevenueCatUser().catch(() => null);
+
   let res = await post();
   if (res.status === 401) {
     // Stale or revoked session: start a fresh anonymous one and try once more.
     await clearSession();
+    await syncRevenueCatUser().catch(() => null);
     res = await post();
   }
 

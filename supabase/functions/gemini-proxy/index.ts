@@ -84,12 +84,22 @@ const hasPro = async (userId: string): Promise<boolean> => {
       return true;
     }
     const data = await res.json();
-    const ent = data.subscriber?.entitlements?.[PRO_ENTITLEMENT];
-    if (!ent) return false;
+    const entitlements = data.subscriber?.entitlements ?? {};
+    const ent = entitlements[PRO_ENTITLEMENT];
     const now = Date.now();
     const activeUntil = (d: string | null | undefined) => d === null || (d !== undefined && Date.parse(d) > now);
     // expires_date is null for lifetime purchases; grace periods count as active.
-    return activeUntil(ent.expires_date) || activeUntil(ent.grace_period_expires_date ?? undefined);
+    const active = !!ent && (activeUntil(ent.expires_date) || activeUntil(ent.grace_period_expires_date ?? undefined));
+    if (!active) {
+      // Diagnostics for "paid but treated as free": which customer and entitlements RevenueCat sees.
+      console.log('not pro', JSON.stringify({
+        userId,
+        originalAppUserId: data.subscriber?.original_app_user_id,
+        entitlements: Object.fromEntries(Object.entries(entitlements).map(([k, v]: [string, any]) => [k, v?.expires_date])),
+        subscriptions: Object.keys(data.subscriber?.subscriptions ?? {}),
+      }));
+    }
+    return active;
   } catch (e) {
     console.error('revenuecat request failed', e);
     return true;
