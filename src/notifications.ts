@@ -194,6 +194,29 @@ export const scheduleEveningCheckins = async (
   } catch {}
 };
 
+// ── Sunday recap ─────────────────────────────────────────────────────────────
+
+/** The link a notification opens (App handles presses). */
+export const WEEKLY_RECAP_LINK = 'habbit://week';
+const WEEKLY_RECAP_ID   = 'weekly-recap';
+const WEEKLY_RECAP_HOUR = 19;
+
+/** Every Sunday at 7 PM, opening the week's recap. */
+export const scheduleWeeklyRecap = async (enabled: boolean) => {
+  try {
+    await notifee.cancelNotification(WEEKLY_RECAP_ID);
+    if (!enabled) return;
+    await notifee.createTriggerNotification(
+      {
+        id: WEEKLY_RECAP_ID, title: 'Habbit 🐰', body: 'Your week in review is ready. Come see how it went!',
+        data: { link: WEEKLY_RECAP_LINK },
+        android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
+      },
+      { type: TriggerType.TIMESTAMP, timestamp: getNextWeeklyTimestamp(0, WEEKLY_RECAP_HOUR, 0), repeatFrequency: RepeatFrequency.WEEKLY },
+    );
+  } catch {}
+};
+
 // ── Bills ────────────────────────────────────────────────────────────────────
 // One-off reminders at 9 AM on each bill's next two due dates, re-planned whenever the
 // app loads or a bill changes (iOS can't repeat monthly).

@@ -12,9 +12,7 @@ import { useFontSize } from '../hooks/useFontSize';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { buildCoachContext } from '../utils/buildCoachContext';
 import { buildSystemPrompt } from '../utils/coachPrompt';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
-import { getAccessToken, invalidateAccessToken } from '../utils/supabaseAuth';
-import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
+import { askBonbon, CoachError } from '../utils/bonbonApi';
 import {
   getRemainingMessages,
   consumeMessage,
@@ -117,47 +115,10 @@ async function sendMessage(
 
   const history_ = recentHistory
     .slice(0, -1)
-    .map(m => ({ role: m.from === 'user' ? 'user' : 'model', text: m.text.slice(0, 2000) }))
+    .map(m => ({ role: m.from === 'user' ? 'user' as const : 'model' as const, text: m.text }))
     .filter((_, i, arr) => !(i === 0 && arr[0].role === 'model'));
 
-  // Must stay within the server's limits (see supabase/functions/gemini-proxy).
-  const body = JSON.stringify({
-    system:  systemPrompt.slice(0, 8000),
-    history: history_,
-    message: userText.slice(0, 1000),
-  });
-
-  const post = async () => fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${await getAccessToken()}`,
-    },
-    body,
-  });
-
-  // The server checks Pro for the session's user, so RevenueCat must be on that user too.
-  // Done for free users as well: the server's RevenueCat lookup creates the customer if it
-  // doesn't exist, which would stop a later login from carrying purchases over.
-  await syncRevenueCatUser().catch(() => null);
-
-  let res = await post();
-  if (res.status === 401) {
-    // Rejected token: refresh it (same user) and try once more.
-    invalidateAccessToken();
-    await syncRevenueCatUser().catch(() => null);
-    res = await post();
-  }
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new CoachError(data.error ?? `http_${res.status}`);
-  return data.text ?? '';
-}
-
-/** Error codes from the gemini-proxy function: daily_limit, rate_limited, busy, … */
-class CoachError extends Error {
-  constructor(public code: string) { super(code); }
+  return askBonbon({ system: systemPrompt, history: history_, message: userText });
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

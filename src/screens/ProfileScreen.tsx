@@ -24,10 +24,11 @@ const C = {
   border: 'rgba(212,149,106,0.18)',
 };
 
-export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, onSetName, onSetAvatar, onOpenSettings }: {
+export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey, onSetName, onSetAvatar, onOpenSettings, onOpenWeekRecap }: {
   name: string; avatar: string; stats: Stats; completionHistory: CompletionRecord[]; todayKey: string;
   onSetName: (v: string) => void; onSetAvatar: (v: string) => void;
   onOpenSettings: () => void;
+  onOpenWeekRecap: () => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -134,6 +135,16 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
             Finish all of today's Habbits to start a streak 🔥
           </Text>
         )}
+
+        <TouchableOpacity onPress={() => { haptic.light(); onOpenWeekRecap(); }} activeOpacity={0.8}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 14, marginTop: 12, borderWidth: 1, borderColor: C.border }}>
+          <Image source={require('../../assets/bonbon/idle.png')} style={{ width: 34, height: 34 }} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: C.cream }}>Weekly recaps</Text>
+            <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>How each week went, with a tip for the next</Text>
+          </View>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
+        </TouchableOpacity>
 
         {/* ── History ── */}
         <SectionTitle>History</SectionTitle>

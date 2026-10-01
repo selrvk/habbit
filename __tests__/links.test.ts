@@ -9,6 +9,7 @@ describe('parseLink', () => {
     expect(parseLink('habbit://finance')).toEqual({ screen: 'finance' });
     expect(parseLink('habbit://add-money')).toEqual({ screen: 'add-money' });
     expect(parseLink('habbit://recap')).toEqual({ screen: 'recap' });
+    expect(parseLink('habbit://week')).toEqual({ screen: 'week' });
     expect(parseLink('HABBIT://Coach')).toEqual({ screen: 'coach' });
     expect(parseLink('habbit://profile/')).toEqual({ screen: 'profile' });
   });

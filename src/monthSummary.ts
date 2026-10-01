@@ -43,6 +43,12 @@ export type MonthSummary = {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Every day's spending, today included (today lives outside dailyTotals until midnight). */
+export const withToday = (dailyTotals: DailyTotal[], todayKey: string, spentToday: number, todayHistory: SpendingEntry[]): DailyTotal[] => [
+  ...dailyTotals.filter(d => d.date !== todayKey),
+  ...(spentToday > 0 ? [{ date: todayKey, total: spentToday, entries: todayHistory }] : []),
+];
 const daysInclusive = (from: string, to: string) =>
   Math.round((parseDateKey(to).getTime() - parseDateKey(from).getTime()) / 86_400_000) + 1;
 
@@ -76,11 +82,7 @@ export const monthSummary = ({ month, todayKey, dailyTotals, todayHistory, spent
   const inProgress = todayKey <= monthEnd && todayKey >= start;
   const end        = inProgress ? todayKey : monthEnd;
 
-  // Today lives outside dailyTotals until midnight.
-  const allDays: DailyTotal[] = [
-    ...dailyTotals.filter(d => d.date !== todayKey),
-    ...(spentToday > 0 ? [{ date: todayKey, total: spentToday, entries: todayHistory }] : []),
-  ];
+  const allDays = withToday(dailyTotals, todayKey, spentToday, todayHistory);
   const daysIn = (from: string, to: string) => allDays.filter(d => d.date >= from && d.date <= to);
   const total  = (days: DailyTotal[]) => round2(days.reduce((s, d) => s + d.total, 0));
 

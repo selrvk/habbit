@@ -15,14 +15,17 @@ import { applyBackup, backUpToICloud, getCloudBackupStatus, loadICloudBackup, ma
 import { describeBackupContents, describeBackupTime, summarizeBackup, type BackupFile } from './src/backupFormat';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
-import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime } from './src/helpers';
+import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime, currencyStr } from './src/helpers';
 import { streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
 import { EMPTY_SAVINGS, leftoverOffer, type Savings } from './src/savings';
 import type { Jar } from './src/components/SavingsJar';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, type Quiet } from './src/notifications';
+import notifee, { EventType } from '@notifee/react-native';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, type Quiet } from './src/notifications';
+import { recapWeek, weekSummary } from './src/weekSummary';
+import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
@@ -68,7 +71,7 @@ const widgetHabits = (items: Commission[], thisWeek: (c: Commission) => number):
 /** The tab each link opens on. */
 const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
   home: 'home', habits: 'tasks', 'new-habit': 'tasks', habit: 'tasks',
-  finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance',
+  finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance', week: 'home',
   coach: 'chat', profile: 'profile',
 };
 
@@ -114,6 +117,9 @@ export default function App() {
   const [stats, setStats]                         = useState<Stats>(defaultStats());
   const [completionHistory, setCompletionHistory] = useState<CompletionRecord[]>([]);
   const [eveningReminder, setEveningReminder]     = useState<EveningReminder>(DEFAULT_EVENING_REMINDER);
+  const [weeklyRecap, setWeeklyRecap]             = useState(true);
+  // The week the recap sheet is open on (its Monday), or null when closed.
+  const [recapOpen, setRecapOpen]                 = useState<string | null>(null);
 
   // The day the in-memory state belongs to. Only advanced by catchUp, so data is
   // never written under a new date before the previous day has been rolled over.
@@ -267,7 +273,9 @@ export default function App() {
         // The midnight "new day" ping was replaced by the evening check-in.
         setEveningReminder(s.eveningReminder ?? { ...DEFAULT_EVENING_REMINDER, enabled: !!s.midnightNotifEnabled });
         if (s.midnightNotifEnabled) cancelMidnightNotif();
+        setWeeklyRecap(s.weeklyRecap ?? true);
       }
+      scheduleWeeklyRecap(storedS ? JSON.parse(storedS).weeklyRecap ?? true : true);
 
       const storedCH = await AsyncStorage.getItem(STORAGE_COMPLETION_HISTORY);
       const storedSt = await AsyncStorage.getItem(STORAGE_STATS);
@@ -363,6 +371,15 @@ export default function App() {
     return () => sub.remove();
   }, [openLater, takeLeftLink]);
 
+  // A notification with a link (the Sunday recap) was tapped.
+  useEffect(() => {
+    const linkOf = (n?: { data?: Record<string, unknown> }) => (typeof n?.data?.link === 'string' ? n.data.link : null);
+    notifee.getInitialNotification().then(n => openLater(linkOf(n?.notification))).catch(() => {});
+    return notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) openLater(linkOf(detail.notification));
+    });
+  }, [openLater]);
+
   // Siri or Shortcuts queued something, or left a link, while the app is running.
   useEffect(() => onInboxChanged(() => { drainInbox(); takeLeftLink(); }), [drainInbox, takeLeftLink]);
 
@@ -378,6 +395,7 @@ export default function App() {
       : t.screen === 'habit' && liveState.current.commissions.some(c => c.id === t.id) ? { mode: 'detail', id: t.id }
       : null,
     );
+    if (t.screen === 'week') setRecapOpen(recapWeek(liveState.current.dayKey));
     setFinanceRequest(
       t.screen === 'spend' ? { kind: 'spend', amount: t.amount, category: t.category, note: t.note }
       : t.screen === 'add-money' ? { kind: 'money' }
@@ -409,6 +427,8 @@ export default function App() {
     setStats(defaultStats());
     setCompletionHistory([]);
     setEveningReminder(DEFAULT_EVENING_REMINDER);
+    setWeeklyRecap(true);
+    setRecapOpen(null);
   }, []);
 
   // Replaces all data with a backup and reloads. Restoring the iCloud backup also lets this
@@ -519,6 +539,7 @@ export default function App() {
       await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: initial, date: todayKey }));
     }
     await AsyncStorage.setItem(STORAGE_ONBOARDED, 'true');
+    scheduleWeeklyRecap(true);
     hasLoaded.current = true; setIsOnboarded(true); setReady(true);
   }, [todayKey]);
 
@@ -682,6 +703,29 @@ export default function App() {
   const handleSetCurrency         = useCallback((v: string)  => { setCurrency(v); saveSettings({ currency: v }); }, []);
   const handleSetName             = useCallback((v: string)  => { setName(v); saveSettings({ name: v }); }, []);
   const handleSetAvatar           = useCallback((v: string)  => { setAvatar(v); saveSettings({ avatar: v }); }, []);
+  const handleSetWeeklyRecap = useCallback((v: boolean) => {
+    setWeeklyRecap(v); saveSettings({ weeklyRecap: v }); scheduleWeeklyRecap(v);
+  }, [saveSettings]);
+
+  // ── Sunday recap ─────────────────────────────────────────────────────────
+  const weekData: WeekRecapData = useMemo(() => ({
+    todayKey: dayKey, commissions, history: completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings,
+    budgetPeriod, budgetAmount, currency, name, streak: stats.currentStreak,
+  }), [dayKey, commissions, completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings, budgetPeriod, budgetAmount, currency, name, stats.currentStreak]);
+
+  // On Home from Sunday evening (this week) through Monday (last week).
+  const homeRecap = useMemo(() => {
+    const dow = parseDateKey(dayKey).getDay();
+    if (!(dow === 1 || (dow === 0 && new Date().getHours() >= 18))) return null;
+    const s = weekSummary(recapWeek(dayKey), weekData);
+    const parts = [
+      s.habits.trackedDays > 0 ? `${s.habits.perfectDays} of ${s.habits.trackedDays} perfect days` : null,
+      s.money.spent > 0 ? `${currencyStr(currency, s.money.spent.toLocaleString('en-US', { maximumFractionDigits: 2 }))} spent` : null,
+    ].filter(Boolean);
+    if (parts.length === 0) return null;
+    return { title: dow === 0 ? 'Your week in review' : 'Last week in review', detail: parts.join(' · ') };
+  }, [dayKey, weekData, currency]);
+
   const handleSetEveningReminder = useCallback((v: EveningReminder) => {
     setEveningReminder(v); saveSettings({ eveningReminder: v, midnightNotifEnabled: false });
   }, [saveSettings]);
@@ -866,6 +910,8 @@ export default function App() {
             onUnskip={handleUnskip}
             onSkipMany={handleSkipMany}
             jar={jar}
+            weekRecap={homeRecap}
+            onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
           />
         );
 
@@ -949,6 +995,7 @@ export default function App() {
             completionHistory={completionHistory} todayKey={todayKey}
             onSetName={handleSetName} onSetAvatar={handleSetAvatar}
             onOpenSettings={() => setActiveTab('settings')}
+            onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
           />
         );
 
@@ -960,6 +1007,8 @@ export default function App() {
             budgetAmount={budgetAmount}
             eveningReminder={eveningReminder}
             onSetEveningReminder={handleSetEveningReminder}
+            weeklyRecap={weeklyRecap}
+            onSetWeeklyRecap={handleSetWeeklyRecap}
             onOpenBudget={() => setActiveTab('finance')}
             onResetToday={handleResetToday}
             onDeleteAllData={handleDeleteAllData}
@@ -982,6 +1031,7 @@ export default function App() {
           <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
             <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
             <View style={{ flex: 1 }}>{renderScreen()}</View>
+            <WeekRecapSheet visible={recapOpen !== null} initialWeek={recapOpen ?? todayKey} data={weekData} onClose={() => setRecapOpen(null)} />
             {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
           </View>
         </SafeAreaProvider>

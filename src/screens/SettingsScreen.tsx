@@ -216,6 +216,8 @@ interface SettingsScreenProps {
   budgetAmount:          number;
   eveningReminder:       EveningReminder;
   onSetEveningReminder:  (v: EveningReminder) => void;
+  weeklyRecap:           boolean;
+  onSetWeeklyRecap:      (v: boolean) => void;
   onOpenBudget:          () => void;
   onSetCurrency:         (v: string) => void;
   onResetToday:          () => void;
@@ -231,6 +233,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   budgetAmount,
   eveningReminder,
   onSetEveningReminder,
+  weeklyRecap,
+  onSetWeeklyRecap,
   onOpenBudget,
   onSetCurrency,
   onResetToday,
@@ -480,6 +484,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         {/* ── Notifications ──────────────────────────────────────────── */}
         <Section title="Notifications">
+          <Row
+            icon="🐰"
+            label="Sunday recap"
+            sublabel="Your week in review, Sundays at 7 PM"
+            rightEl={<Toggle enabled={weeklyRecap} onToggle={() => onSetWeeklyRecap(!weeklyRecap)} />}
+          />
           <Row
             icon="🌙"
             label="Evening check-in"

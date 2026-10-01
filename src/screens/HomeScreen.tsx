@@ -53,7 +53,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar,
+  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -65,6 +65,9 @@ export const HomeScreen = ({
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
   onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
   jar: Jar;
+  /** The Sunday recap card, shown on Sunday evening and Monday; null otherwise. */
+  weekRecap: { title: string; detail: string } | null;
+  onOpenWeekRecap: () => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -194,6 +197,19 @@ export const HomeScreen = ({
         </View>
 
         <LeftoverBanner jar={jar} currency={currency} />
+
+        {weekRecap && (
+          <TouchableOpacity onPress={() => { haptic.light(); onOpenWeekRecap(); }} activeOpacity={0.8}
+            accessibilityLabel={`${weekRecap.title}. ${weekRecap.detail}`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(212,149,106,0.16)', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(212,149,106,0.45)' }}>
+            <Image source={require('../../assets/bonbon/idle.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(15) }}>{weekRecap.title}</Text>
+              <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }} numberOfLines={1}>{weekRecap.detail}</Text>
+            </View>
+            <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Today's habbits ── */}
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>

@@ -58,6 +58,8 @@ export type Settings        = {
   /** Legacy: the old midnight "new day" notification. Migrated to eveningReminder. */
   midnightNotifEnabled: boolean;
   eveningReminder?: EveningReminder;
+  /** The Sunday recap notification. Missing means on. */
+  weeklyRecap?: boolean;
 };
 export type Stats           = {
   currentStreak: number; bestStreak: number; totalCompleted: number; lastFullDate: string;
