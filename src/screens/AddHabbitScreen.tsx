@@ -89,6 +89,8 @@ export const AddHabbitScreen = ({
   const [label, setLabel]             = useState(initialValue?.label ?? '');
   const [days, setDays]               = useState<number[]>(initialValue?.days ?? []);
   const [timesPerDay, setTimesPerDay] = useState(initialValue?.timesPerDay ?? 1);
+  // Once the user picks how many times a day, suggestions only fill in the name.
+  const [timesChosen, setTimesChosen] = useState(isEdit);
 
   const [reminderEnabled, setReminderEnabled] = useState(!!(
     initialValue?.reminderTime || initialValue?.reminderTimes?.length || initialValue?.reminderSplit
@@ -116,6 +118,7 @@ export const AddHabbitScreen = ({
 
   const chooseTimes = (n: number) => {
     haptic.light();
+    setTimesChosen(true);
     setTimesPerDay(n);
     setManualTimes(prev => resizeTimes(n, prev));
   };
@@ -129,6 +132,7 @@ export const AddHabbitScreen = ({
   const pickSuggestion = (s: typeof SUGGESTIONS[number]) => {
     haptic.light();
     setLabel(s.label);
+    if (timesChosen) return;
     setTimesPerDay(s.times);
     setManualTimes(prev => resizeTimes(s.times, prev));
   };
