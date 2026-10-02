@@ -14,5 +14,7 @@ struct HabbitWidgetBundle: WidgetBundle {
         HabbitWidget()
         HabitsWidget()
         BudgetWidget()
+        LogExpenseControl()
+        NextHabitControl()
     }
 }

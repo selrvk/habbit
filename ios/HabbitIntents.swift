@@ -107,28 +107,6 @@ struct TodayIntent: AppIntent {
 
 // MARK: - Opening a screen
 
-enum HabbitScreen: String, AppEnum {
-  case today, habits, logExpense, addHabit, money, bonbon
-
-  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Screen"
-  static var caseDisplayRepresentations: [HabbitScreen: DisplayRepresentation] = [
-    .today: "Today", .habits: "Habits", .logExpense: "Log Expense",
-    .addHabit: "Add Habit", .money: "Money", .bonbon: "Bonbon",
-  ]
-
-  /// The app's link for the screen (src/links.ts).
-  var url: URL {
-    switch self {
-    case .today:      return URL(string: "habbit://home")!
-    case .habits:     return URL(string: "habbit://habits")!
-    case .logExpense: return URL(string: "habbit://spend")!
-    case .addHabit:   return URL(string: "habbit://habits/new")!
-    case .money:      return URL(string: "habbit://finance")!
-    case .bonbon:     return URL(string: "habbit://coach")!
-    }
-  }
-}
-
 struct OpenHabbitIntent: AppIntent {
   static var title: LocalizedStringResource = "Open Habbit"
   static var description = IntentDescription("Opens Habbit to a screen, like the expense pad.")
@@ -140,9 +118,8 @@ struct OpenHabbitIntent: AppIntent {
 
   static var parameterSummary: some ParameterSummary { Summary("Open \(\.$screen) in Habbit") }
 
-  @MainActor
   func perform() async throws -> some IntentResult {
-    HabbitLinkStore.open(screen.url)
+    HabbitStore.leaveLink(screen.url)
     return .result()
   }
 }
@@ -227,22 +204,12 @@ final class HabbitShortcutsHelper: NSObject {
   }
 }
 
-/// A link for the app to open, left by an intent that opened the app. The app may still be
-/// starting, so it takes the link when it's ready (or straight away, told by "changed").
-/// Main thread only.
+/// A link for the app to open, left by an intent that opened the app (HabbitStore.leaveLink).
+/// The app may still be starting, so it takes the link when it's ready (or straight away,
+/// told by "changed", or when it comes to the front).
 @objc(HabbitLinkStore)
 final class HabbitLinkStore: NSObject {
-  private static var pending: String?
-
-  static func open(_ url: URL) {
-    pending = url.absoluteString
-    NotificationCenter.default.post(name: HabbitStore.inboxChanged, object: nil)
-  }
-
-  @objc static func take() -> String? {
-    defer { pending = nil }
-    return pending
-  }
+  @objc static func take() -> String? { HabbitStore.takeLink() }
 }
 
 /// The queue for the HabbitInbox native module (HabbitInbox.m).

@@ -5,6 +5,8 @@
 //   answer from it ("₱350 left today") and update it, so the widget and the next question
 //   see a change before the app has run.
 // - "inbox": what was done outside the app, for the app to apply (src/inbox.ts).
+// - "pendingLink": a screen for the app to open, left by an intent that opens the app
+//   (src/links.ts).
 //
 // Compiled into the app and the widget extension (no UIKit here).
 
@@ -19,6 +21,7 @@ enum HabbitStore {
   private static let group       = "group.com.selrvk.habbit"
   private static let inboxKey    = "inbox"
   private static let snapshotKey = "widgetData"
+  private static let linkKey     = "pendingLink"
   // If the app isn't opened for a long time, keep the newest events only.
   private static let maxQueued   = 500
   private static let lock        = NSLock()
@@ -190,6 +193,7 @@ enum HabbitStore {
     }
     lock.unlock()
     WidgetCenter.shared.reloadAllTimelines()
+    ControlCenter.shared.reloadAllControls()
     if let snapshotDidChange { DispatchQueue.main.async(execute: snapshotDidChange) }
   }
 
@@ -213,6 +217,24 @@ enum HabbitStore {
     let raw = defaults?.string(forKey: inboxKey) ?? "[]"
     defaults?.removeObject(forKey: inboxKey)
     return raw
+  }
+
+  // MARK: Links
+
+  /// Leaves a habbit:// link for the app to open as it comes up. Intents that open the app
+  /// can run in the widget extension (Control Center), so it goes through the App Group.
+  static func leaveLink(_ url: URL) {
+    defaults?.set(["url": url.absoluteString, "at": Date().timeIntervalSince1970], forKey: linkKey)
+    DispatchQueue.main.async { NotificationCenter.default.post(name: inboxChanged, object: nil) }
+  }
+
+  /// The link left by leaveLink, emptying it. One left over a minute ago (the app didn't
+  /// open, say the phone stayed locked) is dropped rather than opened out of the blue later.
+  static func takeLink() -> String? {
+    guard let left = defaults?.dictionary(forKey: linkKey) else { return nil }
+    defaults?.removeObject(forKey: linkKey)
+    let at = (left["at"] as? NSNumber)?.doubleValue ?? 0
+    return Date().timeIntervalSince1970 - at < 60 ? left["url"] as? String : nil
   }
 
   // MARK: Actions (each returns what Siri says)

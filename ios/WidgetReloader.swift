@@ -5,5 +5,6 @@ import Foundation
 class WidgetReloaderHelper: NSObject {
   @objc static func reloadAll() {
     WidgetCenter.shared.reloadAllTimelines()
+    ControlCenter.shared.reloadAllControls()
   }
 }

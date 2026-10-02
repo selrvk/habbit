@@ -368,6 +368,12 @@ export default function App() {
 
   // Siri or Shortcuts queued something, or left a link, while the app is running.
   useEffect(() => onInboxChanged(() => { drainInbox(); takeLeftLink(); }), [drainInbox, takeLeftLink]);
+  // A Control Center or Lock Screen button runs in the widget extension and can't tell a
+  // running app, so look again whenever the app comes to the front.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') takeLeftLink(); });
+    return () => sub.remove();
+  }, [takeLeftLink]);
 
   // Opened once loaded; ignored before onboarding.
   useEffect(() => {
