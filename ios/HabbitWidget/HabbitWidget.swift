@@ -1,9 +1,8 @@
 // HabbitWidget.swift
 //
 // The Habbit widget: today's Habbits and what's left to spend, on the Home Screen (small,
-// medium) and the Lock Screen. It reads the app's snapshot of today (HabbitStore). When the
-// snapshot is from an earlier day (the app hasn't been opened yet today), it shows a fresh
-// day: nothing done, nothing spent, and the allowance the app worked out for that day.
+// medium) and the Lock Screen. It reads the app's snapshot of today (HabbitStore); one from
+// an earlier day (the app hasn't been opened yet today) is shown as a fresh day.
 
 import WidgetKit
 import SwiftUI
@@ -65,41 +64,23 @@ struct Provider: TimelineProvider {
     }
 
     private func loadEntry(at entryDate: Date) -> HabbitEntry {
-        let snap = HabbitStore.snapshot()
-        var completed  = snap.completedCount
-        var total      = snap.totalCount
-        var spent      = snap.spentToday
-        var allowance  = snap.allowance
-        var periodLeft = snap.periodLeft
-        var streak     = snap.streak
+        HabbitEntry(snapshot: HabbitStore.snapshot().freshened(at: entryDate), date: entryDate)
+    }
+}
 
-        // Written on an earlier day: show a fresh one.
-        let entryKey = HabbitStore.dayKey(entryDate)
-        if let dataKey = snap.date, dataKey < entryKey {
-            let yesterdayKey = HabbitStore.dayKey(Calendar.current.date(byAdding: .day, value: -1, to: entryDate)!)
-            // Yesterday ended with Habbits unfinished → the streak is broken.
-            if dataKey == yesterdayKey && total > 0 && completed < total { streak = 0 }
-            let weekday = Calendar.current.component(.weekday, from: entryDate) - 1 // 0 = Sunday
-            if snap.scheduledByDow.count == 7 { total = snap.scheduledByDow[weekday] }
-            completed = 0
-            spent = 0
-            // The app works out the coming days' allowances; past them, keep the last one.
-            if let day = snap.upcoming.first(where: { $0.date == entryKey }) ?? snap.upcoming.last {
-                allowance = day.allowance
-                periodLeft = day.periodLeft
-            }
-        }
-
-        return HabbitEntry(
-            date: entryDate, completed: completed, total: total, hasHabits: !snap.habits.isEmpty || total > 0,
-            spent: spent, allowance: allowance, period: snap.budgetPeriod, periodLeft: periodLeft,
-            currency: snap.currency, streak: streak, avatar: snap.avatar)
+extension HabbitEntry {
+    /** From the app's snapshot, already moved on to `date` (HabbitStore.Snapshot.freshened). */
+    init(snapshot s: HabbitStore.Snapshot, date: Date) {
+        self.init(
+            date: date, completed: s.completedCount, total: s.totalCount, hasHabits: !s.habits.isEmpty || s.totalCount > 0,
+            spent: s.spentToday, allowance: s.allowance, period: s.budgetPeriod, periodLeft: s.periodLeft,
+            currency: s.currency, streak: s.streak, avatar: s.avatar)
     }
 }
 
 // MARK: - Helpers
 
-private func peekImageName(for avatar: String) -> String {
+func peekImageName(for avatar: String) -> String {
     switch avatar {
     case "avatar_bear":    return "BearPeek"
     case "avatar_fox":     return "FoxPeek"
@@ -112,7 +93,7 @@ private func peekImageName(for avatar: String) -> String {
 // Some avatars render visually wider than others — push those further off-screen
 // so they peek less and don't overlap the text block.
 // Lower x = more peek (further left), higher x = less peek.
-private func peekOffsetX(for avatar: String, base: CGFloat) -> CGFloat {
+func peekOffsetX(for avatar: String, base: CGFloat) -> CGFloat {
     switch avatar {
     case "avatar_panda":   return base + 20  // wide — peek less
     case "avatar_bear":    return base + 8
@@ -123,12 +104,12 @@ private func peekOffsetX(for avatar: String, base: CGFloat) -> CGFloat {
 }
 
 // Per-avatar size tweak for the small widget peek.
-private func peekSize(for avatar: String, base: CGFloat) -> CGFloat {
+func peekSize(for avatar: String, base: CGFloat) -> CGFloat {
     return base - 14
 }
 
 /** "₱120", "₱1.5k", "₱2m"; no symbol for the carrot currency (shown as an icon). */
-private func formatAmount(_ value: Double, currency: String) -> String {
+func formatAmount(_ value: Double, currency: String) -> String {
     let prefix = currency == "__carrot__" ? "" : currency
     if value >= 1_000_000 {
         let m = value / 1_000_000
@@ -141,17 +122,17 @@ private func formatAmount(_ value: Double, currency: String) -> String {
 }
 
 /** Text-only amount for the Lock Screen, where the carrot is an emoji. */
-private func plainAmount(_ value: Double, currency: String) -> String {
+func plainAmount(_ value: Double, currency: String) -> String {
     currency == "__carrot__" ? "🥕\(formatAmount(value, currency: currency))" : formatAmount(value, currency: currency)
 }
 
 /** "₱120 left today" or "₱97 over today". */
-private func todayLine(_ entry: HabbitEntry) -> String {
+func todayLine(_ entry: HabbitEntry) -> String {
     "\(plainAmount(abs(entry.left), currency: entry.currency)) \(entry.isOver ? "over" : "left") today"
 }
 
 // Inline carrot icon used when the user's currency is the carrot PNG.
-private struct CarrotIcon: View {
+struct CarrotIcon: View {
     let size: CGFloat
     let color: Color
     var body: some View {
@@ -165,7 +146,7 @@ private struct CarrotIcon: View {
 }
 
 /** An amount in the app's currency, with the carrot as an icon. */
-private struct Amount: View {
+struct Amount: View {
     let value: Double
     let currency: String
     let size: CGFloat
@@ -183,7 +164,7 @@ private struct Amount: View {
 }
 
 /** Progress ring with the count, a tick when all are done, or a dash when nothing's on. */
-private struct HabitRing: View {
+struct HabitRing: View {
     let entry: HabbitEntry
     let size: CGFloat
     let line: CGFloat
@@ -214,7 +195,7 @@ private struct HabitRing: View {
     }
 }
 
-private struct StreakBadge: View {
+struct StreakBadge: View {
     let streak: Int
     let size: CGFloat
     var body: some View {

@@ -13,9 +13,11 @@
 		56086F6C2F6C04470005F64D /* Jua-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6B2F6C04470005F64D /* Jua-Regular.ttf */; };
 		56086F6E2F6C04520005F64D /* DynaPuff-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56086F6D2F6C04520005F64D /* DynaPuff-Regular.ttf */; };
 		65669CB4BB8444B684F4CAD3 /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */; };
+		737DEA57A8577E982736EDF3 /* HabbitWidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A28BFC6F391CA55CD56D0337 /* HabbitIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D00ED533D9E8045315D521 /* HabbitIntents.swift */; };
+		ACE14813FAE057C7BD079CE2 /* HabbitWidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */; };
 		B281A9A4A28FBE1F2EF1E560 /* HabbitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E590E16D45C1EFC66A44F960 /* HabbitStore.swift */; };
 		B7985DA82F98E9BC00759782 /* WidgetReloader.m in Sources */ = {isa = PBXBuildFile; fileRef = B7985DA72F98E9BC00759782 /* WidgetReloader.m */; };
 		B7985DAB2F98E9CF00759782 /* WidgetReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7985DAA2F98E9CF00759782 /* WidgetReloader.swift */; };
@@ -66,6 +68,7 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = DailyTracker/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = DailyTracker/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-DailyTracker.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HabbitWidgetIntents.swift; sourceTree = "<group>"; };
 		A845F56D9BA283A1510D92A1 /* Pods-DailyTracker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-DailyTracker.debug.xcconfig"; path = "Target Support Files/Pods-DailyTracker/Pods-DailyTracker.debug.xcconfig"; sourceTree = "<group>"; };
 		B7985DA72F98E9BC00759782 /* WidgetReloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WidgetReloader.m; sourceTree = "<group>"; };
 		B7985DA92F98E9C100759782 /* DailyTracker-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "DailyTracker-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -82,7 +85,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */ = {
+		B7EBDC412F95C727008FDBCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -92,18 +95,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B7EBDC2D2F95C725008FDBCF /* HabbitWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = HabbitWidget;
-			sourceTree = "<group>";
-		};
+		B7EBDC2D2F95C725008FDBCF /* HabbitWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B7EBDC412F95C727008FDBCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HabbitWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -147,6 +139,7 @@
 				E590E16D45C1EFC66A44F960 /* HabbitStore.swift */,
 				D3D00ED533D9E8045315D521 /* HabbitIntents.swift */,
 				345790A777CFB54C6597A623 /* HabbitInbox.m */,
+				A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */,
 			);
 			name = DailyTracker;
 			sourceTree = "<group>";
@@ -356,9 +349,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -373,9 +370,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-DailyTracker/Pods-DailyTracker-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -396,6 +397,7 @@
 				B281A9A4A28FBE1F2EF1E560 /* HabbitStore.swift in Sources */,
 				A28BFC6F391CA55CD56D0337 /* HabbitIntents.swift in Sources */,
 				3499143B02F401AC73E364DA /* HabbitInbox.m in Sources */,
+				737DEA57A8577E982736EDF3 /* HabbitWidgetIntents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -404,6 +406,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F9657AFAEC6B8420499FA5A3 /* HabbitStore.swift in Sources */,
+				ACE14813FAE057C7BD079CE2 /* HabbitWidgetIntents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

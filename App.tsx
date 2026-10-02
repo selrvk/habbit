@@ -155,11 +155,11 @@ export default function App() {
 
   const updateWidget = useCallback(() => {
     syncWidgetData(widgetPayload({
-      todayKey: dayKey, name, avatar, currency, streak: stats.currentStreak, commissions,
+      todayKey: dayKey, name, avatar, currency, streak: stats.currentStreak, commissions, history: completionHistory,
       thisWeek: c => habitStatsById[c.id]?.thisWeek ?? 0,
       budget: { period: budgetPeriod, amount: budgetAmount, spentToday, todayHistory, dailyTotals, topUps, bills },
     }));
-  }, [dayKey, name, avatar, currency, stats.currentStreak, commissions, habitStatsById, budgetPeriod, budgetAmount, spentToday, todayHistory, dailyTotals, topUps, bills]);
+  }, [dayKey, name, avatar, currency, stats.currentStreak, commissions, completionHistory, habitStatsById, budgetPeriod, budgetAmount, spentToday, todayHistory, dailyTotals, topUps, bills]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
@@ -316,11 +316,18 @@ export default function App() {
       // Re-plan every habit's reminders on a new day, so habits that were done or skipped
       // (and so quiet) yesterday get their repeating reminders back. v3 re-plans once for
       // everyone: quiet reminders are new, and older versions never scheduled split ones.
+      const quietNow = quietMap(migrated, loadedHistory, todayKey);
       if (newDay || (await AsyncStorage.getItem(STORAGE_NOTIF_VERSION)) !== '3') {
-        for (const c of migrated) await scheduleHabitNotifs(c, quietModeOf(c, habitStats(c, loadedHistory, todayKey)));
+        for (const c of migrated) await scheduleHabitNotifs(c, quietNow.get(c.id) ?? null);
         await AsyncStorage.setItem(STORAGE_NOTIF_VERSION, '3');
+      } else if (day.habitsChanged) {
+        // Check-offs from a widget or Siri: quiet those habits' reminders as a tap would.
+        const quietBefore = quietMap(stored.habits.commissions, stored.habits.history, todayKey);
+        for (const c of migrated) {
+          if ((quietBefore.get(c.id) ?? null) !== (quietNow.get(c.id) ?? null)) await scheduleHabitNotifs(c, quietNow.get(c.id) ?? null);
+        }
       }
-      quietById.current = quietMap(migrated, loadedHistory, todayKey);
+      quietById.current = quietNow;
       setStats(loadedStats); saveStats(loadedStats);
       setCompletionHistory(loadedHistory); saveCompletionHistory(loadedHistory);
     } catch { setIsOnboarded(true); }
@@ -328,7 +335,7 @@ export default function App() {
       hasLoaded.current = true; 
       syncWidgetData(widgetPayload({
         todayKey, name: loadedName, avatar: loadedAvatar, currency: loadedCurrency, streak: loadedStats.currentStreak,
-        commissions: migrated, thisWeek: c => habitStats(c, loadedHistory, todayKey).thisWeek,
+        commissions: migrated, history: loadedHistory, thisWeek: c => habitStats(c, loadedHistory, todayKey).thisWeek,
         budget: { period: loadedPeriod, amount: loadedAmount, spentToday: loadedSpent, todayHistory: loadedTodayHistory, dailyTotals: loadedTotals, topUps: loadedTopUps, bills: loadedBills },
       }));
       setReady(true);

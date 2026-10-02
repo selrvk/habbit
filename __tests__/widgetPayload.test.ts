@@ -1,5 +1,5 @@
-import { widgetPayload } from '../src/widgetPayload';
-import type { Commission } from '../src/types';
+import { widgetPayload, widgetWeek } from '../src/widgetPayload';
+import type { Commission, CompletionRecord } from '../src/types';
 
 // 2026-10-01 is a Thursday; the week runs Monday 2026-09-28 to Sunday 2026-10-04.
 const TODAY = '2026-10-01';
@@ -10,7 +10,7 @@ const habit = (id: string, over: Partial<Commission> = {}): Commission => ({
 });
 
 const payload = (over: Partial<Parameters<typeof widgetPayload>[0]['budget']> = {}, commissions: Commission[] = []) => widgetPayload({
-  todayKey: TODAY, name: 'Sam', avatar: 'avatar_bunny', currency: '₱', streak: 3, commissions, thisWeek: () => 0,
+  todayKey: TODAY, name: 'Sam', avatar: 'avatar_bunny', currency: '₱', streak: 3, commissions, history: [], thisWeek: () => 0,
   budget: { period: 'weekly', amount: 700, spentToday: 0, todayHistory: [], dailyTotals: [], topUps: [], bills: [], ...over },
 });
 
@@ -41,5 +41,30 @@ describe('widgetPayload', () => {
     expect(p).toMatchObject({ completedCount: 1, totalCount: 1, upcomingHabbit: '' });
     expect(p.scheduledByDow).toEqual([2, 3, 2, 2, 2, 2, 2]);
     expect(p.habits.map(h => h.id)).toEqual(['Read', 'Gym', 'Swim', 'Water']);
+  });
+});
+
+describe('widgetWeek', () => {
+  const rec = (date: string, done: boolean, scheduled = ['Read']): CompletionRecord =>
+    ({ date, scheduledIds: scheduled, completedIds: done ? scheduled : [], completed: done && scheduled.length > 0 });
+
+  it('marks each day of the week, Monday to Sunday', () => {
+    const commissions = [habit('Read', { days: [1, 2, 3, 4, 5] })]; // weekdays
+    const history = [rec('2026-09-28', true), rec('2026-09-29', false)]; // Wednesday never opened
+    const days = [{ date: '2026-09-28', total: 1200, entries: [{ id: 'r', amount: 1000, time: '', billId: 'rent' }, { id: 'a', amount: 200, time: '' }] }];
+    expect(widgetWeek(TODAY, commissions, history, days)).toEqual([
+      { date: '2026-09-28', state: 'done', spent: 200 },  // rent left out
+      { date: '2026-09-29', state: 'missed', spent: 0 },
+      { date: '2026-09-30', state: 'missed', spent: 0 },  // Habbits were on
+      { date: '2026-10-01', state: 'today', spent: 0 },
+      { date: '2026-10-02', state: 'future', spent: 0 },
+      { date: '2026-10-03', state: 'future', spent: 0 },
+      { date: '2026-10-04', state: 'future', spent: 0 },
+    ]);
+  });
+
+  it('counts days with nothing on, or everything skipped, as rest', () => {
+    const week = widgetWeek(TODAY, [habit('Gym', { days: [1] })], [{ date: '2026-09-28', scheduledIds: ['Gym'], completedIds: [], skippedIds: ['Gym'], completed: false }], []);
+    expect(week.slice(0, 3).map(d => d.state)).toEqual(['rest', 'rest', 'rest']);
   });
 });

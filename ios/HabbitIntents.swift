@@ -202,7 +202,7 @@ enum QuickActions {
   }
 
   static func update(from snap: HabbitStore.Snapshot) {
-    let next = snap.isToday ? snap.todays.first(where: { !$0.done }) : nil
+    let next = snap.date != nil ? snap.todays.first(where: { !$0.done }) : nil
     let items = next.map {
       [UIApplicationShortcutItem(
         type: checkOffType, localizedTitle: $0.label, localizedSubtitle: "Check off",
@@ -223,7 +223,7 @@ enum QuickActions {
 final class HabbitShortcutsHelper: NSObject {
   /// Main thread only (quick actions are UIKit).
   @objc static func snapshotChanged() {
-    QuickActions.update(from: HabbitStore.snapshot())
+    QuickActions.update(from: HabbitStore.snapshot().freshened())
   }
 }
 

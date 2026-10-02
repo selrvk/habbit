@@ -25,6 +25,9 @@ export type WidgetHabit = {
   week: number;
 };
 
+/** A day of this week on the large widget. */
+export type WidgetDay = { date: string; state: 'done' | 'missed' | 'rest' | 'today' | 'future'; spent: number };
+
 export type WidgetData = {
   name: string;
   completedCount: number;
@@ -45,6 +48,8 @@ export type WidgetData = {
   periodLeft: number;
   /** The coming days' allowance and period left, if nothing more is spent today. */
   upcoming: { date: string; allowance: number; periodLeft: number }[];
+  /** This week, Monday to Sunday. */
+  week: WidgetDay[];
 };
 
 let lastSerialized: string | null = null;

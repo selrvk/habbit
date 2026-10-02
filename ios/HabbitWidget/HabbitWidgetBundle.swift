@@ -12,5 +12,7 @@ import SwiftUI
 struct HabbitWidgetBundle: WidgetBundle {
     var body: some Widget {
         HabbitWidget()
+        HabitsWidget()
+        BudgetWidget()
     }
 }

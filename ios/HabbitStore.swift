@@ -52,6 +52,14 @@ enum HabbitStore {
   /** A coming day's allowance, worked out as if nothing more is spent today (src/widgetPayload.ts). */
   struct Upcoming { let date: String; let allowance: Double; let periodLeft: Double }
 
+  /** A day of this week (Monday to Sunday): "done", "missed", "rest", "today" or "future". */
+  struct Day {
+    let date: String
+    let state: String
+    let spent: Double
+    var json: [String: Any] { ["date": date, "state": state, "spent": spent] }
+  }
+
   struct Snapshot {
     var json: [String: Any]
     private func number(_ key: String) -> NSNumber? { json[key] as? NSNumber }
@@ -81,6 +89,13 @@ enum HabbitStore {
       }
     }
 
+    var week: [Day] {
+      (json["week"] as? [[String: Any]] ?? []).compactMap { d in
+        guard let date = d["date"] as? String, let state = d["state"] as? String else { return nil }
+        return Day(date: date, state: state, spent: (d["spent"] as? NSNumber)?.doubleValue ?? 0)
+      }
+    }
+
     var habits: [Habit] {
       (json["habits"] as? [[String: Any]] ?? []).compactMap { h in
         guard let id = h["id"] as? String, let label = h["label"] as? String else { return nil }
@@ -94,10 +109,66 @@ enum HabbitStore {
       }
     }
 
-    /// Today's habits as the app counts them: scheduled today and not skipped.
+    /// The day's habits as the app counts them: scheduled that day and not skipped.
     var todays: [Habit] {
-      let dow = HabbitStore.weekday()
-      return habits.filter { $0.isScheduled(on: dow) && !(isToday && $0.skipped) }
+      let dow = date.map(HabbitStore.weekday(of:)) ?? HabbitStore.weekday()
+      return habits.filter { $0.isScheduled(on: dow) && !$0.skipped }
+    }
+
+    /**
+     * The snapshot as `day` starts, when it was written on an earlier day (the app hasn't
+     * been opened since): nothing done or spent, the allowance the app worked out for that
+     * day, "N× a week" counts reset on a new week, and the week strip moved on. The streak
+     * breaks if the old day was left unfinished or Habbits were on in between, as the app
+     * will decide when it opens. A snapshot from that day comes back unchanged.
+     */
+    func freshened(at day: Date = Date()) -> Snapshot {
+      let key = HabbitStore.dayKey(day)
+      guard let old = date, old < key else { return self }
+      let byDow   = scheduledByDow.count == 7 ? scheduledByDow : Array(repeating: 0, count: 7)
+      let hadOn   = { (k: String) in byDow[HabbitStore.weekday(of: k)] > 0 }
+      let monday  = HabbitStore.mondayKey(key)
+      let newWeek = HabbitStore.mondayKey(old) != monday
+      var s = self
+
+      var broken = totalCount > 0 && completedCount < totalCount
+      var k = HabbitStore.addDays(old, 1)
+      for _ in 0..<31 where k < key { if hadOn(k) { broken = true }; k = HabbitStore.addDays(k, 1) }
+      if broken { s.json["streak"] = 0 }
+
+      let dow = HabbitStore.weekday(of: key)
+      let fresh = habits.map { h -> Habit in
+        var h = h; h.done = false; h.count = 0; h.skipped = false
+        if newWeek { h.week = 0 }
+        return h
+      }
+      s.json["date"]           = key
+      s.json["habits"]         = fresh.map(\.json)
+      s.json["completedCount"] = 0
+      s.json["totalCount"]     = byDow[dow]
+      s.json["upcomingHabbit"] = fresh.first(where: { $0.isScheduled(on: dow) })?.label ?? ""
+      s.json["spentToday"]     = 0
+      if let next = upcoming.first(where: { $0.date == key }) ?? upcoming.last {
+        s.json["allocatedPerDay"] = next.allowance
+        s.json["periodLeft"]      = next.periodLeft
+      }
+
+      // The old day is finished now; days the app never saw count as missed if Habbits were on.
+      let oldState = totalCount == 0 ? "rest" : completedCount >= totalCount ? "done" : "missed"
+      let unseen = { (k: String) in hadOn(k) ? "missed" : "rest" }
+      let days: [Day] = newWeek || week.first?.date != monday
+        ? (0..<7).map { i in
+            let d = HabbitStore.addDays(monday, i)
+            return Day(date: d, state: d < key ? unseen(d) : d == key ? "today" : "future", spent: 0)
+          }
+        : week.map { d in
+            d.date == key ? Day(date: d.date, state: "today", spent: 0)
+            : d.date == old ? Day(date: d.date, state: oldState, spent: d.spent)
+            : d.date < key && d.state == "future" ? Day(date: d.date, state: unseen(d.date), spent: 0)
+            : d
+          }
+      s.json["week"] = days.map(\.json)
+      return s
     }
   }
 
@@ -108,11 +179,11 @@ enum HabbitStore {
     return Snapshot(json: json)
   }
 
-  /// Changes today's snapshot (an older one is left for the app to replace) and reloads widgets.
+  /// Changes the snapshot (moved on to today first, if it's older) and reloads widgets.
   private static func updateSnapshot(_ change: (inout Snapshot) -> Void) {
     lock.lock()
-    var snap = snapshot()
-    guard snap.isToday else { lock.unlock(); return }
+    var snap = snapshot().freshened()
+    guard snap.date != nil else { lock.unlock(); return } // the app hasn't written one yet
     change(&snap)
     if let data = try? JSONSerialization.data(withJSONObject: snap.json) {
       defaults?.set(String(decoding: data, as: UTF8.self), forKey: snapshotKey)
@@ -153,11 +224,15 @@ enum HabbitStore {
     if !note.isEmpty { event["note"] = String(note.prefix(60)) }
     queue(event)
 
-    let snap   = snapshot()
+    let snap   = snapshot().freshened()
     let what   = category.flatMap { $0 == "other" ? nil : " for \($0)" } ?? (note.isEmpty ? "" : " for \(note.prefix(60))")
     let logged = "Logged \(money(amount, snap.currency))\(what)."
-    guard snap.isToday else { return logged }
-    updateSnapshot { $0.json["spentToday"] = $0.spentToday + amount }
+    guard snap.date != nil else { return logged }
+    updateSnapshot { s in
+      s.json["spentToday"] = s.spentToday + amount
+      s.json["periodLeft"] = s.periodLeft - amount
+      s.json["week"] = s.week.map { $0.state == "today" ? Day(date: $0.date, state: $0.state, spent: $0.spent + amount).json : $0.json }
+    }
     let left = snap.allowance - (snap.spentToday + amount)
     return left >= 0
       ? "\(logged) \(money(left, snap.currency)) left today."
@@ -165,7 +240,7 @@ enum HabbitStore {
   }
 
   static func checkOff(habitId: String, label: String) -> String {
-    let snap = snapshot()
+    let snap = snapshot().freshened()
     let dow  = weekday()
     guard let habit = snap.habits.first(where: { $0.id == habitId }) else {
       // Not in the snapshot yet (the app hasn't written one): the app decides.
@@ -173,12 +248,11 @@ enum HabbitStore {
       return "Checked off \(label)."
     }
     if habit.perWeek == nil && !habit.isScheduled(on: dow) { return "\(habit.label) isn’t on for today." }
-    if snap.isToday && habit.done {
+    if habit.done {
       if let goal = habit.perWeek { return "\(habit.label)’s already done today. That’s \(habit.week) of \(goal) this week." }
       return "\(habit.label)’s already done today."
     }
     queue(["id": newId(), "kind": "habit", "date": todayKey(), "habitId": habit.id])
-    guard snap.isToday else { return habit.times > 1 ? "Counted one \(habit.label)." : "Nice, \(habit.label)’s done!" }
 
     var updated = habit
     updated.count   = habit.times > 1 ? habit.count + 1 : habit.count
@@ -211,8 +285,8 @@ enum HabbitStore {
   }
 
   static func budgetLeft() -> String {
-    let snap = snapshot()
-    let spent = snap.isToday ? snap.spentToday : 0
+    let snap = snapshot().freshened()
+    let spent = snap.spentToday
     let left  = snap.allowance - spent
     if left < 0 { return "You’re \(money(-left, snap.currency)) over today’s budget." }
     return spent > 0
@@ -221,10 +295,10 @@ enum HabbitStore {
   }
 
   static func todaySummary() -> String {
-    let snap   = snapshot()
+    let snap   = snapshot().freshened()
     let todays = snap.todays
-    let done   = snap.isToday ? todays.filter(\.done) : []
-    let toGo   = todays.filter { !snap.isToday || !$0.done }
+    let done   = todays.filter(\.done)
+    let toGo   = todays.filter { !$0.done }
     let habits: String
     if todays.isEmpty {
       habits = "No habits on today."
@@ -257,6 +331,15 @@ enum HabbitStore {
   static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
   /// 0 = Sunday, as in the app.
   static func weekday() -> Int { Calendar.current.component(.weekday, from: Date()) - 1 }
+  static func weekday(of key: String) -> Int {
+    dayFormatter.date(from: key).map { Calendar.current.component(.weekday, from: $0) - 1 } ?? weekday()
+  }
+  static func addDays(_ key: String, _ n: Int) -> String {
+    guard let d = dayFormatter.date(from: key), let moved = Calendar.current.date(byAdding: .day, value: n, to: d) else { return key }
+    return dayKey(moved)
+  }
+  /// The Monday of that day's week (weeks run Monday to Sunday, as in the app).
+  static func mondayKey(_ key: String) -> String { addDays(key, -((weekday(of: key) + 6) % 7)) }
   /// "9:05 PM", like the app's formatTime.
   private static func timeLabel() -> String { timeFormatter.string(from: Date()) }
 
