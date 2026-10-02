@@ -12,14 +12,14 @@
 //   habbit://coach                    habbit://profile
 //   habbit://week (the weekly recap)
 
-import { categoryOf, type CategoryKey } from './categories';
+import { categoryOf } from './categories';
 
 type PlainScreen = 'home' | 'habits' | 'new-habit' | 'finance' | 'add-money' | 'recap' | 'week' | 'coach' | 'profile';
 
 export type LinkTarget =
   | { screen: PlainScreen }
   | { screen: 'habit'; id: string }
-  | { screen: 'spend'; amount?: string; category?: CategoryKey; note?: string };
+  | { screen: 'spend'; amount?: string; category?: string; note?: string };
 
 const decode = (s: string) => {
   try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch { return ''; }

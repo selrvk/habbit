@@ -102,6 +102,7 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
         '📜  Longer AI chat memory',
         '🐰  Bonbon’s note on your week, every Sunday',
         '📈  Your last 8 weeks, side by side',
+        '🏷️  Your own spending categories',
         '📊  & more soon!',
       ].map(f => (
         <Text key={f} style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, marginBottom: 12 }}>

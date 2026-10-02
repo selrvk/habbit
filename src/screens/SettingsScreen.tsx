@@ -17,6 +17,8 @@ import { TimeField } from '../components/TimePicker';
 import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
 import type { EveningReminder } from '../types';
 import { useProStatus } from '../context/ProContext';
+import { useCategories } from '../context/CategoriesContext';
+import { CategoriesSheet } from '../components/CategoriesSheet';
 import { getUserId } from '../utils/supabaseAuth';
 import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 import Purchases from 'react-native-purchases';
@@ -247,6 +249,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const { isPro, restorePurchases } = useProStatus();
   const [restoring, setRestoring] = useState(false);
+  const ownCategories = useCategories().custom.filter(c => !c.archived);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
   // RevenueCat must be logged in as the account id for the coach to recognise Pro.
   const [purchasesLinked, setPurchasesLinked] = useState<boolean | null>(null);
@@ -387,6 +391,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <CategoriesSheet visible={categoriesOpen} onClose={() => setCategoriesOpen(false)} />
+
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
@@ -457,6 +463,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           label="Budget"
           sublabel={`${PERIOD_LABELS[budgetPeriod].adjective} · ${currencyStr(currency, budgetAmount.toLocaleString('en-US'))} — edit in Finance`}
           onPress={() => { haptic.light(); onOpenBudget(); }}
+          rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
+        />
+        <Row
+          icon="🏷️"
+          label="Spending categories"
+          sublabel={ownCategories.length > 0
+            ? `${ownCategories.map(c => c.emoji).join(' ')} and the 7 built in`
+            : isPro ? 'Make your own, like Coffee or Pets' : 'Make your own with Pro'}
+          onPress={() => { haptic.light(); setCategoriesOpen(true); }}
           rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
         />
         <View>

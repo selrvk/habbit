@@ -22,6 +22,8 @@ import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
 import { EMPTY_SAVINGS, leftoverOffer, type Savings } from './src/savings';
+import { parseCustomCategories, setCustomCategories, type Category, type CustomCategory } from './src/categories';
+import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, type Quiet } from './src/notifications';
@@ -30,7 +32,7 @@ import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSh
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -104,6 +106,7 @@ export default function App() {
   const [topUps, setTopUps]                       = useState<TopUp[]>([]);
   const [bills, setBills]                         = useState<Bill[]>([]);
   const [savings, setSavings]                     = useState<Savings>(EMPTY_SAVINGS);
+  const [customCategories, setCustomCats]         = useState<CustomCategory[]>([]);
   const [currency, setCurrency]                 = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
   const [avatar, setAvatar]                       = useState<string>(DEFAULT_AVATAR);
@@ -305,6 +308,10 @@ export default function App() {
       setEarned(earnedRef.current);
       const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
       setSavings(storedSv ? JSON.parse(storedSv) : EMPTY_SAVINGS);
+      const storedCats = await AsyncStorage.getItem(STORAGE_CATEGORIES);
+      const loadedCats = parseCustomCategories(storedCats ? JSON.parse(storedCats) : []);
+      setCustomCategories(loadedCats);
+      setCustomCats(loadedCats);
       const storedT = await AsyncStorage.getItem(STORAGE_TOPUPS);
       loadedTopUps  = storedT ? JSON.parse(storedT) as TopUp[] : [];
       setTopUps(loadedTopUps);
@@ -413,6 +420,7 @@ export default function App() {
     setTopUps([]);
     setBills([]);
     setSavings(EMPTY_SAVINGS);
+    setCustomCategories([]); setCustomCats([]);
     setCurrency(DEFAULT_CURRENCY);
     setName('Friend');
     setAvatar(DEFAULT_AVATAR);
@@ -671,6 +679,30 @@ export default function App() {
       return next;
     });
   }, []);
+
+  // ── Custom spending categories (Pro to add; categories.ts) ──────────────
+  const updateCategories = useCallback((fn: (list: CustomCategory[]) => CustomCategory[]) => {
+    setCustomCats(prev => {
+      const next = fn(prev);
+      setCustomCategories(next); // before the re-render, so categoryOf sees the change
+      AsyncStorage.setItem(STORAGE_CATEGORIES, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const categoriesValue: CategoriesValue = useMemo(() => ({
+    custom: customCategories,
+    save: (c: Category) => {
+      // A new one named like a removed one brings that back, so its old expenses join up.
+      const isNew   = !customCategories.some(k => k.key === c.key);
+      const revived = isNew ? customCategories.find(k => k.archived && k.label.toLowerCase() === c.label.toLowerCase()) : undefined;
+      const key     = revived?.key ?? c.key;
+      const saved: CustomCategory = { key, label: c.label, emoji: c.emoji, color: c.color };
+      updateCategories(list => (list.some(k => k.key === key) ? list.map(k => (k.key === key ? saved : k)) : [...list, saved]));
+      return key;
+    },
+    remove: (key: string) => updateCategories(list => list.map(k => (k.key === key ? { ...k, archived: true } : k))),
+  }), [customCategories, updateCategories]);
 
   // What was left of last week's or month's budget, offered once.
   const offer = useMemo(
@@ -1062,6 +1094,7 @@ export default function App() {
   return (
     <ProProvider>  
       <SettingsProvider>
+      <CategoriesContext.Provider value={categoriesValue}>
         <SafeAreaProvider>
           <View style={{ flex: 1, backgroundColor: '#2A1A18', paddingTop: Platform.OS === 'ios' ? 58 : 28 }}>
             <StatusBar barStyle="light-content" backgroundColor="#3B2220" />
@@ -1075,6 +1108,7 @@ export default function App() {
             {showBottomNav && <BottomNav active={activeTab} onPress={setActiveTab} avatar={avatar} />}
           </View>
         </SafeAreaProvider>
+      </CategoriesContext.Provider>
       </SettingsProvider>
     </ProProvider>  
   );
