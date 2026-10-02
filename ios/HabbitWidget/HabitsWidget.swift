@@ -71,6 +71,7 @@ struct HabitsProvider: TimelineProvider {
 private struct HabitRowView: View {
     let row: HabitsEntry.Row
     var compact = false
+    @Environment(\.widgetRenderingMode) private var mode
 
     private var detail: String? {
         if row.times > 1 { return "\(row.count)/\(row.times)" }
@@ -83,6 +84,7 @@ private struct HabitRowView: View {
             Image(systemName: row.done ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: compact ? 17 : 19, weight: .semibold))
                 .foregroundColor(row.done ? .habbitGreen : .habbitAccent)
+                .widgetAccentable(!row.done)
             Text(row.label)
                 .font(.system(size: compact ? 12 : 14, weight: .bold))
                 .foregroundColor(row.done ? Color.habbitCream.opacity(0.45) : .habbitCream)
@@ -98,7 +100,7 @@ private struct HabitRowView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, compact ? 5 : 7)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.habbitCard))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.habbitCardFill(mode)))
     }
 
     var body: some View {
@@ -115,13 +117,21 @@ private struct HabitRowView: View {
 /** Shown instead of the list when there's nothing to tick. */
 private struct EmptyHabits: View {
     let summary: HabbitEntry
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
         VStack(spacing: 4) {
-            Text(!summary.hasHabits ? "🐣" : summary.total == 0 ? "😴" : "🎉").font(.system(size: 26))
+            // Emoji would be blobs on tinted and clear Home Screens: symbols there.
+            if mode.isAccented {
+                Image(systemName: !summary.hasHabits ? "plus.circle" : summary.total == 0 ? "moon.zzz.fill" : "party.popper.fill")
+                    .font(.system(size: 24, weight: .semibold)).foregroundColor(.habbitAccent).widgetAccentable()
+            } else {
+                Text(!summary.hasHabits ? "🐣" : summary.total == 0 ? "😴" : "🎉").font(.system(size: 26))
+            }
             Text(!summary.hasHabits ? "No Habbits yet" : summary.total == 0 ? "Rest day" : "All done for today")
                 .font(.system(size: 14, weight: .heavy)).foregroundColor(.habbitCream)
-            Text(!summary.hasHabits ? "Tap to add your first one" : summary.total == 0 ? "Nothing on today" : "Nice work 🐰")
-                .font(.system(size: 11, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.5))
+            Text(!summary.hasHabits ? "Tap to add your first one" : summary.total == 0 ? "Nothing on today" : mode.isAccented ? "Nice work" : "Nice work 🐰")
+                .font(.system(size: 11, weight: .semibold)).foregroundStyle(HabbitMuted(0.5))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -133,14 +143,14 @@ private struct HabitsHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Today's Habbits").font(.system(size: 13, weight: .heavy)).foregroundColor(.habbitAccent)
+            Text("Today's Habbits").font(.system(size: 13, weight: .heavy)).foregroundColor(.habbitAccent).widgetAccentable()
             if entry.summary.total > 0 {
                 Text("\(entry.summary.completed)/\(entry.summary.total)")
                     .font(.system(size: 12, weight: .heavy))
                     .foregroundColor(entry.summary.allDone ? .habbitGreen : Color.habbitCream.opacity(0.6))
             }
             if hidden > 0 {
-                Text("+\(hidden) more").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.4))
+                Text("+\(hidden) more").font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.4))
             }
             Spacer(minLength: 0)
             StreakBadge(streak: entry.summary.streak, size: 13)
@@ -180,26 +190,29 @@ private struct HabitsMediumView: View {
 private struct WeekStrip: View {
     let days: [HabbitStore.Day]
     private let letters = ["M", "T", "W", "T", "F", "S", "S"]
+    @Environment(\.widgetRenderingMode) private var mode
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(days.prefix(7).enumerated()), id: \.offset) { i, day in
                 VStack(spacing: 4) {
-                    Text(letters[i]).font(.system(size: 10, weight: .bold)).foregroundColor(Color.habbitCream.opacity(0.45))
+                    Text(letters[i]).font(.system(size: 10, weight: .bold)).foregroundStyle(HabbitMuted(0.45))
                     ZStack {
+                        // On tinted and clear Home Screens only transparency tells days apart.
                         switch day.state {
                         case "done":
-                            Circle().fill(Color.habbitGreen)
-                            Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundColor(.habbitBg)
+                            Circle().fill(Color.habbitGreen.opacity(mode.isAccented ? 0.5 : 1)).widgetAccentable()
+                            Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy))
+                                .foregroundColor(mode.isAccented ? .habbitCream : .habbitBg)
                         case "missed":
-                            Circle().fill(Color.habbitRed.opacity(0.35))
+                            Circle().fill(Color.habbitRed.opacity(mode.isAccented ? 0.25 : 0.35))
                         case "today":
-                            Circle().stroke(Color.habbitAccent, lineWidth: 2)
+                            Circle().stroke(Color.habbitAccent, lineWidth: 2).widgetAccentable()
                         case "rest":
-                            Circle().fill(Color.habbitBar)
-                            Text("–").font(.system(size: 10, weight: .bold)).foregroundColor(Color.habbitCream.opacity(0.4))
+                            Circle().fill(mode.isAccented ? Color.clear : Color.habbitBar)
+                            Text("–").font(.system(size: 10, weight: .bold)).foregroundStyle(HabbitMuted(0.4))
                         default:
-                            Circle().stroke(Color.habbitBar, lineWidth: 1.5)
+                            Circle().stroke(Color.habbitTrack(mode), lineWidth: 1.5)
                         }
                     }
                     .frame(width: 22, height: 22)
@@ -223,8 +236,8 @@ private struct HabitsLargeView: View {
             HStack(spacing: 10) {
                 HabitRing(entry: s, size: 38, line: 3, font: 14)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(s.title).font(.system(size: 16, weight: .heavy)).foregroundColor(s.allDone ? .habbitCream : .habbitAccent)
-                    Text(s.subtitle).font(.system(size: 11, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.5))
+                    Text(s.title).font(.system(size: 16, weight: .heavy)).foregroundColor(s.allDone ? .habbitCream : .habbitAccent).widgetAccentable()
+                    Text(s.subtitle).font(.system(size: 11, weight: .semibold)).foregroundStyle(HabbitMuted(0.5))
                 }
                 Spacer(minLength: 0)
                 StreakBadge(streak: s.streak, size: 15)
@@ -236,7 +249,7 @@ private struct HabitsLargeView: View {
                 VStack(spacing: 5) { ForEach(shown) { HabitRowView(row: $0) } }
                 if entry.rows.count > shown.count {
                     Text("+\(entry.rows.count - shown.count) more in the app")
-                        .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.4))
+                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.4))
                 }
             }
 
@@ -248,26 +261,21 @@ private struct HabitsLargeView: View {
 
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(s.isOver ? "OVER TODAY" : "LEFT TODAY").font(.system(size: 9, weight: .bold)).foregroundColor(Color.habbitCream.opacity(0.45))
-                    Amount(value: abs(s.left), currency: s.currency, size: 15, color: s.isOver ? .habbitRed : .habbitAccent)
+                    Text(s.isOver ? "OVER TODAY" : "LEFT TODAY").font(.system(size: 9, weight: .bold)).foregroundStyle(HabbitMuted(0.45))
+                    Amount(value: abs(s.left), currency: s.currency, size: 15, color: s.isOver ? .habbitRed : .habbitAccent).widgetAccentable()
                 }
                 if let noun = s.periodNoun {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(noun.uppercased()).font(.system(size: 9, weight: .bold)).foregroundColor(Color.habbitCream.opacity(0.45))
+                        Text(noun.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(HabbitMuted(0.45))
                         HStack(alignment: .firstTextBaseline, spacing: 3) {
                             Amount(value: max(s.periodLeft, 0), currency: s.currency, size: 15, color: .habbitCream)
-                            Text("left").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.45))
+                            Text("left").font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.45))
                         }
                     }
                 }
                 Spacer(minLength: 0)
                 Link(destination: URL(string: "habbit://spend")!) {
-                    Text("+ Log")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundColor(.habbitBg)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.habbitAccent))
+                    LogPill(title: "+ Log", size: 12, horizontal: 10, vertical: 6)
                 }
                 .accessibilityLabel("Log an expense")
             }

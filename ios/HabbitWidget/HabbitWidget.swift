@@ -170,18 +170,24 @@ struct HabitRing: View {
     let line: CGFloat
     let font: CGFloat
     var showTotal = false
+    @Environment(\.widgetRenderingMode) private var mode
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.habbitBar, lineWidth: line)
+            Circle().stroke(Color.habbitTrack(mode), lineWidth: line)
             Circle()
                 .trim(from: 0, to: entry.habitShare)
                 .stroke(entry.allDone ? Color.habbitGreen : Color.habbitAccent, style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .widgetAccentable()
             if entry.allDone {
-                Image(systemName: "checkmark").font(.system(size: font, weight: .heavy)).foregroundColor(.habbitGreen)
+                Image(systemName: "checkmark").font(.system(size: font, weight: .heavy)).foregroundColor(.habbitGreen).widgetAccentable()
             } else if entry.total == 0 {
-                Text(entry.hasHabits ? "😴" : "+").font(.system(size: font, weight: .black)).foregroundColor(Color.habbitCream.opacity(0.6))
+                if entry.hasHabits && mode.isAccented {
+                    Image(systemName: "moon.zzz.fill").font(.system(size: font * 0.8, weight: .bold)).foregroundStyle(HabbitMuted(0.6))
+                } else {
+                    Text(entry.hasHabits ? "😴" : "+").font(.system(size: font, weight: .black)).foregroundStyle(HabbitMuted(0.6))
+                }
             } else {
                 VStack(spacing: 0) {
                     Text("\(entry.completed)").font(.system(size: font, weight: .black)).foregroundColor(.habbitAccent).lineLimit(1)
@@ -189,6 +195,7 @@ struct HabitRing: View {
                         Text("of \(entry.total)").font(.system(size: 9, weight: .bold)).foregroundColor(Color.habbitAccent.opacity(0.5))
                     }
                 }
+                .widgetAccentable()
             }
         }
         .frame(width: size, height: size)
@@ -221,6 +228,59 @@ extension Color {
     static let habbitRed      = Color(red: 0.94, green: 0.56, blue: 0.56)
     static let habbitGreen    = Color(red: 0.62, green: 0.83, blue: 0.53)
     static let habbitCard     = Color(red: 0.16, green: 0.06, blue: 0.03)   // slightly lighter than bg
+
+    /** Behind a row of text. */
+    static func habbitCardFill(_ mode: WidgetRenderingMode) -> Color { mode.isAccented ? habbitCream.opacity(0.12) : habbitCard }
+    /** The unfilled part of a ring or bar. */
+    static func habbitTrack(_ mode: WidgetRenderingMode) -> Color { mode.isAccented ? habbitCream.opacity(0.22) : habbitBar }
+}
+
+// MARK: - Tinted and clear Home Screens
+//
+// There the system drops the widget's background and draws everything in one colour, keeping
+// only transparency: a solid shape hides what's drawn on it, and pictures turn into
+// silhouettes. So fills behind text and progress tracks go faint, the avatar is greyscale,
+// and .widgetAccentable() marks what takes the tint (progress, amounts, the Log button).
+
+extension WidgetRenderingMode {
+    var isAccented: Bool { self == .accented }
+}
+
+/** Secondary text: faint cream, but stronger on tinted and clear Home Screens, where it sits on glass. */
+struct HabbitMuted: ShapeStyle {
+    var opacity: Double
+
+    init(_ opacity: Double) { self.opacity = opacity }
+
+    func resolve(in environment: EnvironmentValues) -> Color {
+        Color.habbitCream.opacity(environment.widgetRenderingMode.isAccented ? max(opacity, 0.7) : opacity)
+    }
+}
+
+/** The avatar peeking in: greyscale on tinted and clear Home Screens. */
+func peekImage(for avatar: String) -> some View {
+    Image(peekImageName(for: avatar)).resizable().widgetAccentedRenderingMode(.desaturated)
+}
+
+/** "+ Log": an accent pill, or a faint one with light text on tinted and clear Home Screens. */
+struct LogPill: View {
+    let title: String
+    let size: CGFloat
+    var horizontal: CGFloat = 9
+    var vertical: CGFloat = 5
+    var fullWidth = false
+    @Environment(\.widgetRenderingMode) private var mode
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: size, weight: .heavy))
+            .foregroundColor(mode.isAccented ? .habbitCream : .habbitBg)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background(Capsule().fill(Color.habbitAccent.opacity(mode.isAccented ? 0.25 : 1)))
+            .widgetAccentable()
+    }
 }
 
 // MARK: - Widget Entry View (Router)
@@ -249,8 +309,7 @@ struct SmallWidgetView: View {
     var body: some View {
         ZStack {
             // Avatar peek — rotated left 90°, hugging the right edge
-            Image(peekImageName(for: entry.avatar))
-                .resizable()
+            peekImage(for: entry.avatar)
                 .scaledToFit()
                 .frame(width: peekSize(for: entry.avatar, base: 140), height: peekSize(for: entry.avatar, base: 140))
                 .rotationEffect(.degrees(-90), anchor: .center)
@@ -262,7 +321,7 @@ struct SmallWidgetView: View {
                 HStack(alignment: .center, spacing: 0) {
                     Text(entry.date, format: .dateTime.month(.abbreviated).day())
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color.habbitCream.opacity(0.45))
+                        .foregroundStyle(HabbitMuted(0.45))
                     Spacer(minLength: 0)
                     StreakBadge(streak: entry.streak, size: 14)
                 }
@@ -277,9 +336,10 @@ struct SmallWidgetView: View {
                             .font(.system(size: 13, weight: .heavy))
                             .foregroundColor(entry.allDone ? .habbitCream : .habbitAccent)
                             .lineLimit(1)
+                            .widgetAccentable()
                         Text(entry.subtitle)
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(Color.habbitCream.opacity(0.45))
+                            .foregroundStyle(HabbitMuted(0.45))
                             .lineLimit(1)
                     }
                 }
@@ -291,8 +351,9 @@ struct SmallWidgetView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.isOver ? "Over today" : "Left today")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(Color.habbitCream.opacity(0.45))
+                        .foregroundStyle(HabbitMuted(0.45))
                     Amount(value: abs(entry.left), currency: entry.currency, size: 17, color: entry.isOver ? .habbitRed : .habbitAccent)
+                        .widgetAccentable()
                 }
                 .frame(maxWidth: 100, alignment: .leading)
                 .padding(.top, 8)
@@ -311,16 +372,16 @@ struct SmallWidgetView: View {
 struct MediumWidgetView: View {
     var entry: HabbitEntry
 
-    private func column(_ label: String, _ value: Double, _ color: Color, suffix: String? = nil) -> some View {
+    private func column(_ label: String, _ value: Double, _ color: Color, suffix: String? = nil, accent: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.system(size: 9, weight: .bold))
-                .foregroundColor(Color.habbitCream.opacity(0.45))
+                .foregroundStyle(HabbitMuted(0.45))
                 .tracking(0.3)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Amount(value: value, currency: entry.currency, size: 13, color: color)
+                Amount(value: value, currency: entry.currency, size: 13, color: color).widgetAccentable(accent)
                 if let suffix {
-                    Text(suffix).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.habbitCream.opacity(0.45))
+                    Text(suffix).font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.45))
                 }
             }
         }
@@ -332,7 +393,7 @@ struct MediumWidgetView: View {
             HStack(alignment: .center, spacing: 10) {
                 Text(entry.date, format: .dateTime.month(.abbreviated).day())
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Color.habbitCream.opacity(0.45))
+                    .foregroundStyle(HabbitMuted(0.45))
                     .textCase(.uppercase)
                 StreakBadge(streak: entry.streak, size: 14)
                 Spacer(minLength: 0)
@@ -348,9 +409,10 @@ struct MediumWidgetView: View {
                         .font(.system(size: 18, weight: .heavy))
                         .foregroundColor(entry.allDone ? .habbitCream : .habbitAccent)
                         .lineLimit(1)
+                        .widgetAccentable()
                     Text(entry.subtitle)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color.habbitCream.opacity(0.45))
+                        .foregroundStyle(HabbitMuted(0.45))
                         .lineLimit(1)
                 }
             }
@@ -359,19 +421,14 @@ struct MediumWidgetView: View {
 
             // Bottom: today's money, then the week's (or month's) or what's been spent
             HStack(alignment: .bottom, spacing: 18) {
-                column(entry.isOver ? "OVER TODAY" : "LEFT TODAY", abs(entry.left), entry.isOver ? .habbitRed : .habbitAccent)
+                column(entry.isOver ? "OVER TODAY" : "LEFT TODAY", abs(entry.left), entry.isOver ? .habbitRed : .habbitAccent, accent: true)
                 if let noun = entry.periodNoun {
                     column(noun.uppercased(), max(entry.periodLeft, 0), .habbitCream, suffix: "left")
                 } else {
                     column("SPENT", entry.spent, .habbitCream)
                 }
                 Link(destination: URL(string: "habbit://spend")!) {
-                    Text("+ Log")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundColor(.habbitBg)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.habbitAccent))
+                    LogPill(title: "+ Log", size: 11)
                 }
                 .accessibilityLabel("Log an expense")
             }
@@ -381,8 +438,7 @@ struct MediumWidgetView: View {
         // Avatar peek — large, hugging the right edge. A background, so its size can't
         // stretch the layout past the widget (it used to push the top and bottom rows out).
         .background(alignment: .trailing) {
-            Image(peekImageName(for: entry.avatar))
-                .resizable()
+            peekImage(for: entry.avatar)
                 .scaledToFit()
                 .frame(width: 240, height: 240)
                 .offset(x: 70, y: 0)
