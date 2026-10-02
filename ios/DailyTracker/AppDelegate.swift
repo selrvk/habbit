@@ -22,6 +22,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeFactory = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
+    HabbitStore.snapshotDidChange = { HabbitShortcutsHelper.snapshotChanged() }
 
     // A quick action that launched the app does its part now, and its link becomes the
     // launch URL (Linking.getInitialURL). Returning false stops iOS calling performActionFor too.

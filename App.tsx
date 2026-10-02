@@ -7,7 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { ProProvider } from './src/context/ProContext';
-import { syncWidgetData, flushWidgetData, type WidgetHabit } from "./src/utils/syncWidget";
+import { syncWidgetData, flushWidgetData } from "./src/utils/syncWidget";
+import { widgetPayload } from './src/widgetPayload';
 import { takeInbox, takeLink, onInboxChanged } from './src/utils/habbitInbox';
 import { catchUpDay, type InboxEvent } from './src/inbox';
 import { parseLink, type LinkTarget } from './src/links';
@@ -15,7 +16,7 @@ import { applyBackup, backUpToICloud, getCloudBackupStatus, loadICloudBackup, ma
 import { describeBackupContents, describeBackupTime, summarizeBackup, type BackupFile } from './src/backupFormat';
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
-import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, countsToday, defaultStats, migrateCommissions, formatTime, currencyStr } from './src/helpers';
+import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime, currencyStr } from './src/helpers';
 import { streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
@@ -39,9 +40,6 @@ import { HabitDetailScreen } from './src/screens/HabitDetailScreen';
 import { BottomNav } from './src/components/BottomNav';
 import { CoachScreen } from "./src/screens/Coachscreen";
 
-const scheduledByDow = (items: Commission[]) =>
-  [0, 1, 2, 3, 4, 5, 6].map(dow => items.filter(c => isScheduledForDay(c, dow)).length);
-
 /**
  * How long a habit's reminders are quiet: until Monday once an "N× a week" habit has met
  * its goal, until tomorrow once a habit is done or skipped today.
@@ -62,14 +60,6 @@ const formFields = (data: HabbitFormData) => ({
   reminderTimes: data.reminderTimes,
   reminderSplit: data.reminderSplit,
 });
-
-/** Habits as Siri and quick actions see them. `thisWeek` gives an "N× a week" habit's count. */
-const widgetHabits = (items: Commission[], thisWeek: (c: Commission) => number): WidgetHabit[] =>
-  items.map(c => ({
-    id: c.id, label: c.label, days: c.days ?? [], ...(c.perWeek ? { perWeek: c.perWeek } : {}),
-    times: c.timesPerDay ?? 1, count: c.completionCount ?? 0, done: c.completed, skipped: !!c.skipped,
-    week: c.perWeek ? thisWeek(c) : 0,
-  }));
 
 /** The tab each link opens on. */
 const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
@@ -164,23 +154,12 @@ export default function App() {
   const saveCompletionHistory = useCallback((r: CompletionRecord[]) => AsyncStorage.setItem(STORAGE_COMPLETION_HISTORY, JSON.stringify(r)).catch(() => {}), []);
 
   const updateWidget = useCallback(() => {
-          const todaysScheduled = commissions.filter(c => countsToday(c, dayDow));
-
-          syncWidgetData({
-            name,
-            date: dayKey,
-            scheduledByDow: scheduledByDow(commissions),
-            completedCount: todaysScheduled.filter(c => c.completed).length,
-            totalCount: todaysScheduled.length,
-            spentToday: budget.spentToday,
-            allocatedPerDay,
-            currency,
-            streak: stats.currentStreak,
-            avatar,
-            upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
-            habits: widgetHabits(commissions, c => habitStatsById[c.id]?.thisWeek ?? 0),
-          });
-        }, [commissions, habitStatsById, budget, stats, name, allocatedPerDay, currency, avatar, dayDow, dayKey]);
+    syncWidgetData(widgetPayload({
+      todayKey: dayKey, name, avatar, currency, streak: stats.currentStreak, commissions,
+      thisWeek: c => habitStatsById[c.id]?.thisWeek ?? 0,
+      budget: { period: budgetPeriod, amount: budgetAmount, spentToday, todayHistory, dailyTotals, topUps, bills },
+    }));
+  }, [dayKey, name, avatar, currency, stats.currentStreak, commissions, habitStatsById, budgetPeriod, budgetAmount, spentToday, todayHistory, dailyTotals, topUps, bills]);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
@@ -347,27 +326,11 @@ export default function App() {
     } catch { setIsOnboarded(true); }
     finally { 
       hasLoaded.current = true; 
-      const todayDow = new Date().getDay();
-      const todaysScheduled = migrated.filter(c => countsToday(c, todayDow));
-      syncWidgetData({
-        name: loadedName,
-        date: todayKey,
-        scheduledByDow: scheduledByDow(migrated),
-        completedCount: todaysScheduled.filter(c => c.completed).length,
-        totalCount: todaysScheduled.length,
-        ...(() => {
-          const b = computeBudget({
-            period: loadedPeriod, amount: loadedAmount, todayKey, spentToday: loadedSpent, todayHistory: loadedTodayHistory,
-            dailyTotals: loadedTotals, topUps: loadedTopUps, bills: loadedBills,
-          });
-          return { spentToday: b.spentToday, allocatedPerDay: b.dailyAllowance };
-        })(),
-        currency: loadedCurrency,
-        streak: loadedStats.currentStreak,
-        avatar: loadedAvatar,
-        upcomingHabbit: todaysScheduled.find(c => !c.completed)?.label ?? '',
-        habits: widgetHabits(migrated, c => habitStats(c, loadedHistory, todayKey).thisWeek),
-      });
+      syncWidgetData(widgetPayload({
+        todayKey, name: loadedName, avatar: loadedAvatar, currency: loadedCurrency, streak: loadedStats.currentStreak,
+        commissions: migrated, thisWeek: c => habitStats(c, loadedHistory, todayKey).thisWeek,
+        budget: { period: loadedPeriod, amount: loadedAmount, spentToday: loadedSpent, todayHistory: loadedTodayHistory, dailyTotals: loadedTotals, topUps: loadedTopUps, bills: loadedBills },
+      }));
       setReady(true);
     }
   }, [saveStats, saveCompletionHistory]);

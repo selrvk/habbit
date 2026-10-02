@@ -5,12 +5,16 @@
 //   answer from it ("₱350 left today") and update it, so the widget and the next question
 //   see a change before the app has run.
 // - "inbox": what was done outside the app, for the app to apply (src/inbox.ts).
+//
+// Compiled into the app and the widget extension (no UIKit here).
 
 import Foundation
 import WidgetKit
 
 enum HabbitStore {
   static let inboxChanged = Notification.Name("HabbitInboxChanged")
+  /** Set by the app: refreshes its quick actions after an intent changes the snapshot. */
+  static var snapshotDidChange: (() -> Void)?
 
   private static let group       = "group.com.selrvk.habbit"
   private static let inboxKey    = "inbox"
@@ -45,12 +49,37 @@ enum HabbitStore {
     }
   }
 
+  /** A coming day's allowance, worked out as if nothing more is spent today (src/widgetPayload.ts). */
+  struct Upcoming { let date: String; let allowance: Double; let periodLeft: Double }
+
   struct Snapshot {
     var json: [String: Any]
-    var isToday: Bool { json["date"] as? String == todayKey() }
+    private func number(_ key: String) -> NSNumber? { json[key] as? NSNumber }
+
+    /** The day the app wrote this for, "yyyy-MM-dd". */
+    var date: String? { json["date"] as? String }
+    var isToday: Bool { date == todayKey() }
+    var name: String { json["name"] as? String ?? "Friend" }
+    var avatar: String { json["avatar"] as? String ?? "avatar_bunny" }
+    var streak: Int { number("streak")?.intValue ?? 0 }
     var currency: String { json["currency"] as? String ?? "₱" }
-    var spentToday: Double { (json["spentToday"] as? NSNumber)?.doubleValue ?? 0 }
-    var allowance: Double { (json["allocatedPerDay"] as? NSNumber)?.doubleValue ?? 0 }
+    var completedCount: Int { number("completedCount")?.intValue ?? 0 }
+    var totalCount: Int { number("totalCount")?.intValue ?? 0 }
+    /** Habits on each weekday (0 = Sunday). */
+    var scheduledByDow: [Int] { (json["scheduledByDow"] as? [NSNumber])?.map(\.intValue) ?? [] }
+    var spentToday: Double { number("spentToday")?.doubleValue ?? 0 }
+    var allowance: Double { number("allocatedPerDay")?.doubleValue ?? 0 }
+    /** "daily", "weekly" or "monthly". */
+    var budgetPeriod: String { json["budgetPeriod"] as? String ?? "daily" }
+    var periodLeft: Double { number("periodLeft")?.doubleValue ?? allowance - spentToday }
+    var upcoming: [Upcoming] {
+      (json["upcoming"] as? [[String: Any]] ?? []).compactMap { u in
+        guard let date = u["date"] as? String else { return nil }
+        return Upcoming(date: date,
+                        allowance: (u["allowance"] as? NSNumber)?.doubleValue ?? 0,
+                        periodLeft: (u["periodLeft"] as? NSNumber)?.doubleValue ?? 0)
+      }
+    }
 
     var habits: [Habit] {
       (json["habits"] as? [[String: Any]] ?? []).compactMap { h in
@@ -90,7 +119,7 @@ enum HabbitStore {
     }
     lock.unlock()
     WidgetCenter.shared.reloadAllTimelines()
-    DispatchQueue.main.async { HabbitShortcutsHelper.snapshotChanged() }
+    if let snapshotDidChange { DispatchQueue.main.async(execute: snapshotDidChange) }
   }
 
   // MARK: Inbox
@@ -225,6 +254,7 @@ enum HabbitStore {
   }()
 
   static func todayKey() -> String { dayFormatter.string(from: Date()) }
+  static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
   /// 0 = Sunday, as in the app.
   static func weekday() -> Int { Calendar.current.component(.weekday, from: Date()) - 1 }
   /// "9:05 PM", like the app's formatTime.

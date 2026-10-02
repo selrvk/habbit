@@ -25,6 +25,7 @@
 		CAA1A648E1CD9958760B0F42 /* CloudBackup.m in Sources */ = {isa = PBXBuildFile; fileRef = 217152F79F97680852A14ACD /* CloudBackup.m */; };
 		CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		DBB4CF2054119AAF8B387047 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */; };
+		F9657AFAEC6B8420499FA5A3 /* HabbitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E590E16D45C1EFC66A44F960 /* HabbitStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -402,6 +403,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F9657AFAEC6B8420499FA5A3 /* HabbitStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

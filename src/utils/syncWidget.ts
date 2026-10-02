@@ -40,6 +40,11 @@ export type WidgetData = {
   /** Habits scheduled on each weekday (0 = Sunday), for the widget's fresh-day view. */
   scheduledByDow: number[];
   habits: WidgetHabit[];
+  budgetPeriod: 'daily' | 'weekly' | 'monthly';
+  /** What's left of this week's or month's budget (today's, for daily budgets). */
+  periodLeft: number;
+  /** The coming days' allowance and period left, if nothing more is spent today. */
+  upcoming: { date: string; allowance: number; periodLeft: number }[];
 };
 
 let lastSerialized: string | null = null;
