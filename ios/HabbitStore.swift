@@ -7,6 +7,7 @@
 // - "inbox": what was done outside the app, for the app to apply (src/inbox.ts).
 // - "pendingLink": a screen for the app to open, left by an intent that opens the app
 //   (src/links.ts).
+// - "isPro": whether the widgets may use the Pro looks.
 //
 // Compiled into the app and the widget extension (no UIKit here).
 
@@ -22,6 +23,7 @@ enum HabbitStore {
   private static let inboxKey    = "inbox"
   private static let snapshotKey = "widgetData"
   private static let linkKey     = "pendingLink"
+  private static let proKey      = "isPro"
   // If the app isn't opened for a long time, keep the newest events only.
   private static let maxQueued   = 500
   private static let lock        = NSLock()
@@ -218,6 +220,10 @@ enum HabbitStore {
     defaults?.removeObject(forKey: inboxKey)
     return raw
   }
+
+  /// Whether the user has Pro, as the app last saw it (WidgetReloader.setPro): the widgets'
+  /// Pro looks need it.
+  static func isPro() -> Bool { defaults?.bool(forKey: proKey) ?? false }
 
   // MARK: Links
 

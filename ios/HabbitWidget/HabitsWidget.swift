@@ -34,23 +34,26 @@ struct HabitsEntry: TimelineEntry {
             Row(id: "4", label: "Meditate", done: true, count: 0, times: 1, goal: nil, week: 0),
         ],
         week: [])
+
+    func with(_ look: WidgetLook) -> HabitsEntry {
+        HabitsEntry(date: date, summary: summary.with(look), rows: rows, week: week)
+    }
 }
 
-struct HabitsProvider: TimelineProvider {
+struct HabitsProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> HabitsEntry { .placeholder }
 
-    func getSnapshot(in context: Context, completion: @escaping (HabitsEntry) -> Void) {
-        completion(context.isPreview && HabbitStore.snapshot().date == nil ? .placeholder : load(at: Date()))
+    func snapshot(for config: WidgetLookConfig, in context: Context) async -> HabitsEntry {
+        let look = WidgetLook.resolved(config.theme)
+        return context.isPreview && HabbitStore.snapshot().date == nil ? .placeholder.with(look) : load(at: Date(), look: look)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<HabitsEntry>) -> Void) {
-        let now = Date()
-        let midnight = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 1, to: now)!)
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: now)!
-        completion(Timeline(entries: [load(at: now), load(at: midnight)], policy: .after(nextUpdate)))
+    func timeline(for config: WidgetLookConfig, in context: Context) async -> Timeline<HabitsEntry> {
+        let look = WidgetLook.resolved(config.theme)
+        return habbitTimeline { load(at: $0, look: look) }
     }
 
-    private func load(at date: Date) -> HabitsEntry {
+    private func load(at date: Date, look: WidgetLook) -> HabitsEntry {
         let s   = HabbitStore.snapshot().freshened(at: date)
         let dow = HabbitStore.weekday(of: HabbitStore.dayKey(date))
         // The day's Habbits (skipped ones aside), then "N× a week" ones still to do this week.
@@ -60,7 +63,7 @@ struct HabitsProvider: TimelineProvider {
             return h.isScheduled(on: dow) && !h.skipped ? row : nil
         }
         return HabitsEntry(
-            date: date, summary: HabbitEntry(snapshot: s, date: date),
+            date: date, summary: HabbitEntry(snapshot: s, date: date).with(look),
             rows: rows.filter { !$0.done } + rows.filter(\.done), week: s.week)
     }
 }
@@ -69,6 +72,7 @@ struct HabitsProvider: TimelineProvider {
 
 /** One Habbit: tapping an unfinished one checks it off (one step for "3× a day" ones). */
 private struct HabitRowView: View {
+    @Environment(\.habbit) private var c
     let row: HabitsEntry.Row
     var compact = false
     @Environment(\.widgetRenderingMode) private var mode
@@ -83,24 +87,24 @@ private struct HabitRowView: View {
         HStack(spacing: 7) {
             Image(systemName: row.done ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: compact ? 17 : 19, weight: .semibold))
-                .foregroundColor(row.done ? .habbitGreen : .habbitAccent)
+                .foregroundColor(row.done ? c.green : c.accent)
                 .widgetAccentable(!row.done)
             Text(row.label)
                 .font(.system(size: compact ? 12 : 14, weight: .bold))
-                .foregroundColor(row.done ? Color.habbitCream.opacity(0.45) : .habbitCream)
-                .strikethrough(row.done, color: Color.habbitCream.opacity(0.45))
+                .foregroundColor(row.done ? c.text.opacity(0.45) : c.text)
+                .strikethrough(row.done, color: c.text.opacity(0.45))
                 .lineLimit(1)
             Spacer(minLength: 2)
             if let detail {
                 Text(detail)
                     .font(.system(size: compact ? 10 : 11, weight: .heavy))
-                    .foregroundColor(Color.habbitAccent.opacity(row.done ? 0.5 : 0.9))
+                    .foregroundColor(c.accent.opacity(row.done ? 0.5 : 0.9))
                     .lineLimit(1)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, compact ? 5 : 7)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.habbitCardFill(mode)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(c.cardFill(mode)))
     }
 
     var body: some View {
@@ -116,6 +120,7 @@ private struct HabitRowView: View {
 
 /** Shown instead of the list when there's nothing to tick. */
 private struct EmptyHabits: View {
+    @Environment(\.habbit) private var c
     let summary: HabbitEntry
     @Environment(\.widgetRenderingMode) private var mode
 
@@ -124,12 +129,12 @@ private struct EmptyHabits: View {
             // Emoji would be blobs on tinted and clear Home Screens: symbols there.
             if mode.isAccented {
                 Image(systemName: !summary.hasHabits ? "plus.circle" : summary.total == 0 ? "moon.zzz.fill" : "party.popper.fill")
-                    .font(.system(size: 24, weight: .semibold)).foregroundColor(.habbitAccent).widgetAccentable()
+                    .font(.system(size: 24, weight: .semibold)).foregroundColor(c.accent).widgetAccentable()
             } else {
                 Text(!summary.hasHabits ? "🐣" : summary.total == 0 ? "😴" : "🎉").font(.system(size: 26))
             }
             Text(!summary.hasHabits ? "No Habbits yet" : summary.total == 0 ? "Rest day" : "All done for today")
-                .font(.system(size: 14, weight: .heavy)).foregroundColor(.habbitCream)
+                .font(.system(size: 14, weight: .heavy)).foregroundColor(c.text)
             Text(!summary.hasHabits ? "Tap to add your first one" : summary.total == 0 ? "Nothing on today" : mode.isAccented ? "Nice work" : "Nice work 🐰")
                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(HabbitMuted(0.5))
         }
@@ -138,16 +143,17 @@ private struct EmptyHabits: View {
 }
 
 private struct HabitsHeader: View {
+    @Environment(\.habbit) private var c
     let entry: HabitsEntry
     var hidden = 0
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Today's Habbits").font(.system(size: 13, weight: .heavy)).foregroundColor(.habbitAccent).widgetAccentable()
+            Text("Today's Habbits").font(.system(size: 13, weight: .heavy)).foregroundColor(c.accent).widgetAccentable()
             if entry.summary.total > 0 {
                 Text("\(entry.summary.completed)/\(entry.summary.total)")
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(entry.summary.allDone ? .habbitGreen : Color.habbitCream.opacity(0.6))
+                    .foregroundColor(entry.summary.allDone ? c.green : c.text.opacity(0.6))
             }
             if hidden > 0 {
                 Text("+\(hidden) more").font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.4))
@@ -188,6 +194,7 @@ private struct HabitsMediumView: View {
 // MARK: - Large: the list, the week, and money
 
 private struct WeekStrip: View {
+    @Environment(\.habbit) private var c
     let days: [HabbitStore.Day]
     private let letters = ["M", "T", "W", "T", "F", "S", "S"]
     @Environment(\.widgetRenderingMode) private var mode
@@ -201,18 +208,18 @@ private struct WeekStrip: View {
                         // On tinted and clear Home Screens only transparency tells days apart.
                         switch day.state {
                         case "done":
-                            Circle().fill(Color.habbitGreen.opacity(mode.isAccented ? 0.5 : 1)).widgetAccentable()
+                            Circle().fill(c.green.opacity(mode.isAccented ? 0.5 : 1)).widgetAccentable()
                             Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy))
-                                .foregroundColor(mode.isAccented ? .habbitCream : .habbitBg)
+                                .foregroundColor(mode.isAccented ? c.text : c.onAccent)
                         case "missed":
-                            Circle().fill(Color.habbitRed.opacity(mode.isAccented ? 0.25 : 0.35))
+                            Circle().fill(c.red.opacity(mode.isAccented ? 0.25 : 0.35))
                         case "today":
-                            Circle().stroke(Color.habbitAccent, lineWidth: 2).widgetAccentable()
+                            Circle().stroke(c.accent, lineWidth: 2).widgetAccentable()
                         case "rest":
-                            Circle().fill(mode.isAccented ? Color.clear : Color.habbitBar)
+                            Circle().fill(mode.isAccented ? Color.clear : c.bar)
                             Text("–").font(.system(size: 10, weight: .bold)).foregroundStyle(HabbitMuted(0.4))
                         default:
-                            Circle().stroke(Color.habbitTrack(mode), lineWidth: 1.5)
+                            Circle().stroke(c.track(mode), lineWidth: 1.5)
                         }
                     }
                     .frame(width: 22, height: 22)
@@ -226,6 +233,7 @@ private struct WeekStrip: View {
 }
 
 private struct HabitsLargeView: View {
+    @Environment(\.habbit) private var c
     let entry: HabitsEntry
     private let maxRows = 6
 
@@ -236,7 +244,7 @@ private struct HabitsLargeView: View {
             HStack(spacing: 10) {
                 HabitRing(entry: s, size: 38, line: 3, font: 14)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(s.title).font(.system(size: 16, weight: .heavy)).foregroundColor(s.allDone ? .habbitCream : .habbitAccent).widgetAccentable()
+                    Text(s.title).font(.system(size: 16, weight: .heavy)).foregroundColor(s.allDone ? c.text : c.accent).widgetAccentable()
                     Text(s.subtitle).font(.system(size: 11, weight: .semibold)).foregroundStyle(HabbitMuted(0.5))
                 }
                 Spacer(minLength: 0)
@@ -262,13 +270,13 @@ private struct HabitsLargeView: View {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(s.isOver ? "OVER TODAY" : "LEFT TODAY").font(.system(size: 9, weight: .bold)).foregroundStyle(HabbitMuted(0.45))
-                    Amount(value: abs(s.left), currency: s.currency, size: 15, color: s.isOver ? .habbitRed : .habbitAccent).widgetAccentable()
+                    Amount(value: abs(s.left), currency: s.currency, size: 15, color: s.isOver ? c.red : c.accent).widgetAccentable()
                 }
                 if let noun = s.periodNoun {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(noun.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(HabbitMuted(0.45))
                         HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Amount(value: max(s.periodLeft, 0), currency: s.currency, size: 15, color: .habbitCream)
+                            Amount(value: max(s.periodLeft, 0), currency: s.currency, size: 15, color: c.text)
                             Text("left").font(.system(size: 10, weight: .semibold)).foregroundStyle(HabbitMuted(0.45))
                         }
                     }
@@ -284,6 +292,7 @@ private struct HabitsLargeView: View {
 }
 
 struct HabitsWidgetView: View {
+    @Environment(\.habbit) private var c
     var entry: HabitsEntry
     @Environment(\.widgetFamily) var family
 
@@ -292,7 +301,7 @@ struct HabitsWidgetView: View {
             if family == .systemLarge { HabitsLargeView(entry: entry) } else { HabitsMediumView(entry: entry) }
         }
         .widgetURL(entry.summary.url)
-        .containerBackground(Color.habbitBg, for: .widget)
+        .containerBackground(c.bg, for: .widget)
     }
 }
 
@@ -300,8 +309,8 @@ struct HabitsWidget: Widget {
     let kind = "HabbitHabits"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: HabitsProvider()) { entry in
-            HabitsWidgetView(entry: entry)
+        AppIntentConfiguration(kind: kind, intent: WidgetLookConfig.self, provider: HabitsProvider()) { entry in
+            HabitsWidgetView(entry: entry).habbitLook(entry.summary.look)
         }
         .configurationDisplayName("Today's Habbits")
         .description("Check off your Habbits right from the Home Screen.")

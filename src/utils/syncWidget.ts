@@ -7,6 +7,8 @@ const DEBOUNCE_MS = 1500;
 interface WidgetReloaderModule extends TurboModule {
   setData(data: object): void;
   reloadAll(): void;
+  /** Whether the widgets may use the Pro looks. */
+  setPro?(pro: boolean): void;
 }
 
 const WidgetReloader = TurboModuleRegistry.get<WidgetReloaderModule>('WidgetReloader');
@@ -83,6 +85,9 @@ export const syncWidgetData = (data: WidgetData) => {
   if (timer) return;
   timer = setTimeout(flush, DEBOUNCE_MS);
 };
+
+/** Unlocks the Pro widget looks (Cream, Match iPhone), or locks them again. */
+export const syncWidgetPro = (pro: boolean) => { WidgetReloader?.setPro?.(pro); };
 
 export const flushWidgetData = () => {
   if (timer) {

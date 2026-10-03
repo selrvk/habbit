@@ -45,6 +45,14 @@ RCT_EXPORT_METHOD(setData:(NSDictionary *)data) {
   });
 }
 
+/** Whether the widgets may use the Pro looks (HabbitStore.isPro). Reloads them when it changes. */
+RCT_EXPORT_METHOD(setPro:(BOOL)pro) {
+  NSUserDefaults *defaults = [[NSUserDefaults alloc] initWithSuiteName:@"group.com.selrvk.habbit"];
+  if (!defaults || ([defaults objectForKey:@"isPro"] != nil && [defaults boolForKey:@"isPro"] == pro)) return;
+  [defaults setBool:pro forKey:@"isPro"];
+  reloadWidgetTimelines();
+}
+
 RCT_EXPORT_METHOD(reloadAll) {
   reloadWidgetTimelines();
 }

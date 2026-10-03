@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { CustomerInfo } from 'react-native-purchases';
 import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
+import { syncWidgetPro } from '../utils/syncWidget';
 
 const PRO_ENTITLEMENT = 'Habbit: Habits & Finance Pro'; 
 
@@ -89,6 +90,8 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await checkStatus(customerInfo);
     };
 
+  // The widgets' Pro looks follow Pro (once it's known, so they don't flicker at launch).
+  useEffect(() => { if (!isLoading) syncWidgetPro(isPro); }, [isPro, isLoading]);
 
   return (
     <ProContext.Provider value={{ isPro, isLoading, monthlyPrice, yearlyPrice, restorePurchases, purchasePro }}>

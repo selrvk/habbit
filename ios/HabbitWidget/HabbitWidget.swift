@@ -23,6 +23,8 @@ struct HabbitEntry: TimelineEntry {
     let currency: String
     let streak: Int
     let avatar: String
+    /** From the widget's settings (WidgetLook.swift). */
+    var look = WidgetLook()
 
     var left: Double { allowance - spent }
     var isOver: Bool { left < 0 }
@@ -48,23 +50,44 @@ struct HabbitEntry: TimelineEntry {
 
 // MARK: - Provider
 
-struct Provider: TimelineProvider {
+/**
+ * Entries for now and for midnight, which flips the widget to a fresh day even if the app
+ * isn't opened, refreshed every 15 minutes.
+ */
+func habbitTimeline<Entry: TimelineEntry>(_ entry: (Date) -> Entry) -> Timeline<Entry> {
+    let now = Date()
+    let midnight = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 1, to: now)!)
+    let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: now)!
+    return Timeline(entries: [entry(now), entry(midnight)], policy: .after(nextUpdate))
+}
+
+/** The Habbit widget's: the day's summary, in the look from its settings. */
+struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> HabbitEntry { .placeholder }
 
-    func getSnapshot(in context: Context, completion: @escaping (HabbitEntry) -> Void) {
-        completion(context.isPreview && HabbitStore.snapshot().date == nil ? .placeholder : loadEntry(at: Date()))
+    func snapshot(for config: HabbitWidgetConfig, in context: Context) async -> HabbitEntry {
+        (context.isPreview && HabbitStore.snapshot().date == nil ? .placeholder : HabbitEntry.load(at: Date()))
+            .with(.resolved(config.theme, showAvatar: config.showAvatar))
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<HabbitEntry>) -> Void) {
-        let now = Date()
-        // A second entry at midnight flips the widget to a fresh day even if the app isn't opened.
-        let midnight = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 1, to: now)!)
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: now)!
-        completion(Timeline(entries: [loadEntry(at: now), loadEntry(at: midnight)], policy: .after(nextUpdate)))
+    func timeline(for config: HabbitWidgetConfig, in context: Context) async -> Timeline<HabbitEntry> {
+        let look = WidgetLook.resolved(config.theme, showAvatar: config.showAvatar)
+        return habbitTimeline { HabbitEntry.load(at: $0).with(look) }
+    }
+}
+
+/** The Budget widget's: the same summary, with just a look. */
+struct BudgetProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> HabbitEntry { .placeholder }
+
+    func snapshot(for config: WidgetLookConfig, in context: Context) async -> HabbitEntry {
+        (context.isPreview && HabbitStore.snapshot().date == nil ? .placeholder : HabbitEntry.load(at: Date()))
+            .with(.resolved(config.theme))
     }
 
-    private func loadEntry(at entryDate: Date) -> HabbitEntry {
-        HabbitEntry(snapshot: HabbitStore.snapshot().freshened(at: entryDate), date: entryDate)
+    func timeline(for config: WidgetLookConfig, in context: Context) async -> Timeline<HabbitEntry> {
+        let look = WidgetLook.resolved(config.theme)
+        return habbitTimeline { HabbitEntry.load(at: $0).with(look) }
     }
 }
 
@@ -75,6 +98,17 @@ extension HabbitEntry {
             date: date, completed: s.completedCount, total: s.totalCount, hasHabits: !s.habits.isEmpty || s.totalCount > 0,
             spent: s.spentToday, allowance: s.allowance, period: s.budgetPeriod, periodLeft: s.periodLeft,
             currency: s.currency, streak: s.streak, avatar: s.avatar)
+    }
+
+    /** The app's snapshot as of `date`. */
+    static func load(at date: Date) -> HabbitEntry {
+        HabbitEntry(snapshot: HabbitStore.snapshot().freshened(at: date), date: date)
+    }
+
+    func with(_ look: WidgetLook) -> HabbitEntry {
+        var entry = self
+        entry.look = look
+        return entry
     }
 }
 
@@ -165,6 +199,7 @@ struct Amount: View {
 
 /** Progress ring with the count, a tick when all are done, or a dash when nothing's on. */
 struct HabitRing: View {
+    @Environment(\.habbit) private var c
     let entry: HabbitEntry
     let size: CGFloat
     let line: CGFloat
@@ -174,14 +209,14 @@ struct HabitRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.habbitTrack(mode), lineWidth: line)
+            Circle().stroke(c.track(mode), lineWidth: line)
             Circle()
                 .trim(from: 0, to: entry.habitShare)
-                .stroke(entry.allDone ? Color.habbitGreen : Color.habbitAccent, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .stroke(entry.allDone ? c.green : c.accent, style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .widgetAccentable()
             if entry.allDone {
-                Image(systemName: "checkmark").font(.system(size: font, weight: .heavy)).foregroundColor(.habbitGreen).widgetAccentable()
+                Image(systemName: "checkmark").font(.system(size: font, weight: .heavy)).foregroundColor(c.green).widgetAccentable()
             } else if entry.total == 0 {
                 if entry.hasHabits && mode.isAccented {
                     Image(systemName: "moon.zzz.fill").font(.system(size: font * 0.8, weight: .bold)).foregroundStyle(HabbitMuted(0.6))
@@ -190,9 +225,9 @@ struct HabitRing: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    Text("\(entry.completed)").font(.system(size: font, weight: .black)).foregroundColor(.habbitAccent).lineLimit(1)
+                    Text("\(entry.completed)").font(.system(size: font, weight: .black)).foregroundColor(c.accent).lineLimit(1)
                     if showTotal {
-                        Text("of \(entry.total)").font(.system(size: 9, weight: .bold)).foregroundColor(Color.habbitAccent.opacity(0.5))
+                        Text("of \(entry.total)").font(.system(size: 9, weight: .bold)).foregroundColor(c.accent.opacity(0.5))
                     }
                 }
                 .widgetAccentable()
@@ -203,14 +238,17 @@ struct HabitRing: View {
 }
 
 struct StreakBadge: View {
+    @Environment(\.habbit) private var c
     let streak: Int
     let size: CGFloat
     var body: some View {
         HStack(spacing: 3) {
-            Image("StreakFire").resizable().scaledToFit().frame(height: size).opacity(streak > 0 ? 1 : 0.3)
+            // A cream silhouette: drawn in the look's text colour, so it shows on Cream too.
+            Image("StreakFire").renderingMode(.template).resizable().scaledToFit().frame(height: size)
+                .foregroundStyle(c.text).opacity(streak > 0 ? 1 : 0.3)
             Text("\(streak)")
                 .font(.system(size: size - 1, weight: .black))
-                .foregroundColor(streak > 0 ? .habbitCream : Color.habbitCream.opacity(0.4))
+                .foregroundColor(streak > 0 ? c.text : c.text.opacity(0.4))
                 .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)
@@ -229,10 +267,6 @@ extension Color {
     static let habbitGreen    = Color(red: 0.62, green: 0.83, blue: 0.53)
     static let habbitCard     = Color(red: 0.16, green: 0.06, blue: 0.03)   // slightly lighter than bg
 
-    /** Behind a row of text. */
-    static func habbitCardFill(_ mode: WidgetRenderingMode) -> Color { mode.isAccented ? habbitCream.opacity(0.12) : habbitCard }
-    /** The unfilled part of a ring or bar. */
-    static func habbitTrack(_ mode: WidgetRenderingMode) -> Color { mode.isAccented ? habbitCream.opacity(0.22) : habbitBar }
 }
 
 // MARK: - Tinted and clear Home Screens
@@ -246,14 +280,14 @@ extension WidgetRenderingMode {
     var isAccented: Bool { self == .accented }
 }
 
-/** Secondary text: faint cream, but stronger on tinted and clear Home Screens, where it sits on glass. */
+/** Secondary text: faint, but stronger on tinted and clear Home Screens, where it sits on glass. */
 struct HabbitMuted: ShapeStyle {
     var opacity: Double
 
     init(_ opacity: Double) { self.opacity = opacity }
 
     func resolve(in environment: EnvironmentValues) -> Color {
-        Color.habbitCream.opacity(environment.widgetRenderingMode.isAccented ? max(opacity, 0.7) : opacity)
+        environment.habbit.text.opacity(environment.widgetRenderingMode.isAccented ? max(opacity, 0.7) : opacity)
     }
 }
 
@@ -264,6 +298,7 @@ func peekImage(for avatar: String) -> some View {
 
 /** "+ Log": an accent pill, or a faint one with light text on tinted and clear Home Screens. */
 struct LogPill: View {
+    @Environment(\.habbit) private var c
     let title: String
     let size: CGFloat
     var horizontal: CGFloat = 9
@@ -274,11 +309,11 @@ struct LogPill: View {
     var body: some View {
         Text(title)
             .font(.system(size: size, weight: .heavy))
-            .foregroundColor(mode.isAccented ? .habbitCream : .habbitBg)
+            .foregroundColor(mode.isAccented ? c.text : c.onAccent)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.horizontal, horizontal)
             .padding(.vertical, vertical)
-            .background(Capsule().fill(Color.habbitAccent.opacity(mode.isAccented ? 0.25 : 1)))
+            .background(Capsule().fill(c.accent.opacity(mode.isAccented ? 0.25 : 1)))
             .widgetAccentable()
     }
 }
@@ -304,17 +339,20 @@ struct HabbitWidgetView: View {
 // MARK: - Small Widget
 
 struct SmallWidgetView: View {
+    @Environment(\.habbit) private var c
     var entry: HabbitEntry
 
     var body: some View {
         ZStack {
             // Avatar peek — rotated left 90°, hugging the right edge
-            peekImage(for: entry.avatar)
-                .scaledToFit()
-                .frame(width: peekSize(for: entry.avatar, base: 140), height: peekSize(for: entry.avatar, base: 140))
-                .rotationEffect(.degrees(-90), anchor: .center)
-                .offset(x: peekOffsetX(for: entry.avatar, base: 30), y: 10)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            if entry.look.showAvatar {
+                peekImage(for: entry.avatar)
+                    .scaledToFit()
+                    .frame(width: peekSize(for: entry.avatar, base: 140), height: peekSize(for: entry.avatar, base: 140))
+                    .rotationEffect(.degrees(-90), anchor: .center)
+                    .offset(x: peekOffsetX(for: entry.avatar, base: 30), y: 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 // Top: date + streak
@@ -334,7 +372,7 @@ struct SmallWidgetView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(entry.title)
                             .font(.system(size: 13, weight: .heavy))
-                            .foregroundColor(entry.allDone ? .habbitCream : .habbitAccent)
+                            .foregroundColor(entry.allDone ? c.text : c.accent)
                             .lineLimit(1)
                             .widgetAccentable()
                         Text(entry.subtitle)
@@ -352,7 +390,7 @@ struct SmallWidgetView: View {
                     Text(entry.isOver ? "Over today" : "Left today")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(HabbitMuted(0.45))
-                    Amount(value: abs(entry.left), currency: entry.currency, size: 17, color: entry.isOver ? .habbitRed : .habbitAccent)
+                    Amount(value: abs(entry.left), currency: entry.currency, size: 17, color: entry.isOver ? c.red : c.accent)
                         .widgetAccentable()
                 }
                 .frame(maxWidth: 100, alignment: .leading)
@@ -363,13 +401,14 @@ struct SmallWidgetView: View {
             .padding(.vertical, 2)
         }
         .widgetURL(entry.url)
-        .containerBackground(Color.habbitBg, for: .widget)
+        .containerBackground(c.bg, for: .widget)
     }
 }
 
 // MARK: - Medium Widget
 
 struct MediumWidgetView: View {
+    @Environment(\.habbit) private var c
     var entry: HabbitEntry
 
     private func column(_ label: String, _ value: Double, _ color: Color, suffix: String? = nil, accent: Bool = false) -> some View {
@@ -407,7 +446,7 @@ struct MediumWidgetView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.title)
                         .font(.system(size: 18, weight: .heavy))
-                        .foregroundColor(entry.allDone ? .habbitCream : .habbitAccent)
+                        .foregroundColor(entry.allDone ? c.text : c.accent)
                         .lineLimit(1)
                         .widgetAccentable()
                     Text(entry.subtitle)
@@ -421,11 +460,11 @@ struct MediumWidgetView: View {
 
             // Bottom: today's money, then the week's (or month's) or what's been spent
             HStack(alignment: .bottom, spacing: 18) {
-                column(entry.isOver ? "OVER TODAY" : "LEFT TODAY", abs(entry.left), entry.isOver ? .habbitRed : .habbitAccent, accent: true)
+                column(entry.isOver ? "OVER TODAY" : "LEFT TODAY", abs(entry.left), entry.isOver ? c.red : c.accent, accent: true)
                 if let noun = entry.periodNoun {
-                    column(noun.uppercased(), max(entry.periodLeft, 0), .habbitCream, suffix: "left")
+                    column(noun.uppercased(), max(entry.periodLeft, 0), c.text, suffix: "left")
                 } else {
-                    column("SPENT", entry.spent, .habbitCream)
+                    column("SPENT", entry.spent, c.text)
                 }
                 Link(destination: URL(string: "habbit://spend")!) {
                     LogPill(title: "+ Log", size: 11)
@@ -438,13 +477,15 @@ struct MediumWidgetView: View {
         // Avatar peek — large, hugging the right edge. A background, so its size can't
         // stretch the layout past the widget (it used to push the top and bottom rows out).
         .background(alignment: .trailing) {
-            peekImage(for: entry.avatar)
-                .scaledToFit()
-                .frame(width: 240, height: 240)
-                .offset(x: 70, y: 0)
+            if entry.look.showAvatar {
+                peekImage(for: entry.avatar)
+                    .scaledToFit()
+                    .frame(width: 240, height: 240)
+                    .offset(x: 70, y: 0)
+            }
         }
         .widgetURL(entry.url)
-        .containerBackground(Color.habbitBg, for: .widget)
+        .containerBackground(c.bg, for: .widget)
     }
 }
 
@@ -538,8 +579,8 @@ struct HabbitWidget: Widget {
     let kind: String = "HabbitWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            HabbitWidgetView(entry: entry)
+        AppIntentConfiguration(kind: kind, intent: HabbitWidgetConfig.self, provider: Provider()) { entry in
+            HabbitWidgetView(entry: entry).habbitLook(entry.look)
         }
         .configurationDisplayName("Habbit")
         .description("Your daily Habbits and what's left to spend.")

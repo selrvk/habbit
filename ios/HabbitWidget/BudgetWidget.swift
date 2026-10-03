@@ -6,6 +6,7 @@ import WidgetKit
 import SwiftUI
 
 struct BudgetWidgetView: View {
+    @Environment(\.habbit) private var c
     var entry: HabbitEntry
     @Environment(\.widgetRenderingMode) private var mode
 
@@ -18,15 +19,15 @@ struct BudgetWidgetView: View {
             Text(entry.isOver ? "Over today" : "Left today")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(HabbitMuted(0.5))
-            Amount(value: abs(entry.left), currency: entry.currency, size: 28, color: entry.isOver ? .habbitRed : .habbitAccent)
+            Amount(value: abs(entry.left), currency: entry.currency, size: 28, color: entry.isOver ? c.red : c.accent)
                 .widgetAccentable()
                 .padding(.top, 2)
 
             // Today's spending against today's allowance.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.habbitTrack(mode))
-                    Capsule().fill(entry.isOver ? Color.habbitRed : Color.habbitAccent).frame(width: geo.size.width * spentShare)
+                    Capsule().fill(c.track(mode))
+                    Capsule().fill(entry.isOver ? c.red : c.accent).frame(width: geo.size.width * spentShare)
                         .widgetAccentable()
                 }
             }
@@ -48,7 +49,7 @@ struct BudgetWidgetView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(todayLine(entry)). Tap to log an expense.")
         .widgetURL(URL(string: "habbit://spend")!)
-        .containerBackground(Color.habbitBg, for: .widget)
+        .containerBackground(c.bg, for: .widget)
     }
 }
 
@@ -56,8 +57,8 @@ struct BudgetWidget: Widget {
     let kind = "HabbitBudget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            BudgetWidgetView(entry: entry)
+        AppIntentConfiguration(kind: kind, intent: WidgetLookConfig.self, provider: BudgetProvider()) { entry in
+            BudgetWidgetView(entry: entry).habbitLook(entry.look)
         }
         .configurationDisplayName("Budget")
         .description("What's left to spend today. Tap to log an expense.")
