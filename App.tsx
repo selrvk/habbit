@@ -881,9 +881,9 @@ export default function App() {
 
   // ── Achievements ─────────────────────────────────────────────────────────
   const achievementData: AchievementData = useMemo(() => ({
-    todayKey: dayKey, stats, history: completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings,
+    todayKey: dayKey, stats, history: completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings, focusLog,
     budgetPeriod, budgetAmount,
-  }), [dayKey, stats, completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings, budgetPeriod, budgetAmount]);
+  }), [dayKey, stats, completionHistory, commissions, dailyTotals, todayHistory, spentToday, topUps, bills, savings, focusLog, budgetPeriod, budgetAmount]);
 
   /** Saves newly earned achievements and announces them (several from past history in one banner). */
   const award = useCallback((ids: string[], fromHistory = false) => {

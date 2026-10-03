@@ -17,7 +17,7 @@ const stats = (over: Partial<Stats> = {}): Stats => ({ currentStreak: 0, bestStr
 
 const data = (over: Partial<AchievementData> = {}): AchievementData => ({
   todayKey: TODAY, stats: stats(), history: [], commissions: [habit('Read')],
-  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS,
+  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS, focusLog: [],
   budgetPeriod: 'weekly', budgetAmount: 1000, ...over,
 });
 const progress = (id: string, d: AchievementData) => achievementById(id)!.progress!(d);
@@ -62,6 +62,14 @@ describe('achievements', () => {
     const swim = habit('Swim', { perWeek: 2, completed: true });
     expect(progress('weekly-goal', data({ commissions: [swim], history: [rec(day(30), [], ['Swim'])] })).value).toBe(1);
     expect(progress('weekly-goal', data({ commissions: [swim], history: [rec(day(27), [], ['Swim'])] })).value).toBe(0);
+  });
+
+  it('adds up focus time', () => {
+    const focusLog = [{ date: day(22), habitId: 'Study', minutes: 25 }, { date: day(23), habitId: 'Gone', minutes: 545 }];
+    expect(newlyEarned(data({ focusLog: focusLog.slice(0, 1) }), {})).toEqual(['focus-first']);
+    const d = data({ focusLog }); // a deleted habit's time still counts
+    expect(progressText(achievementById('focus-10h')!, progress('focus-10h', d))).toBe('9/10 hours');
+    expect(newlyEarned(data({ focusLog: [...focusLog, { date: day(24), habitId: 'Study', minutes: 30 }] }), {})).toEqual(['focus-first', 'focus-10h']);
   });
 
   it('tracks logging: first expense, days in a row and categories (bills aside)', () => {

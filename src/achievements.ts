@@ -12,6 +12,7 @@ import { allJarEntries, fullestJar, type Savings } from './savings';
 import type { Bill } from './bills';
 import { withToday } from './monthSummary';
 import { liveRecord } from './weekSummary';
+import type { FocusLogEntry } from './focus';
 
 export type AchievementGroup = 'habits' | 'money' | 'bonbon';
 
@@ -26,6 +27,7 @@ export type AchievementData = {
   topUps: TopUp[];
   bills: Bill[];
   savings: Savings;
+  focusLog: FocusLogEntry[];
   budgetPeriod: BudgetPeriod;
   budgetAmount: number;
 };
@@ -77,6 +79,9 @@ const longestRun = (days: string[]) => {
   }
   return best;
 };
+
+/** Minutes on the focus timer, all time (the log keeps about a year). */
+const focusTotal = (d: AchievementData) => d.focusLog.reduce((sum, e) => sum + e.minutes, 0);
 
 /** A finished Monday-to-Sunday week where every day with Habbits on was perfect (3 or more of them). */
 const hadPerfectWeek = (d: AchievementData) => {
@@ -157,6 +162,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'perfect-week', group: 'habits', emoji: '🌟', title: 'Perfect Week',     description: 'Every Habbit, every day, Monday to Sunday',  progress: d => yes(hadPerfectWeek(d)) },
   { id: 'comeback',     group: 'habits', emoji: '🌱', title: 'Comeback',         description: 'Have a perfect day right after missing one', progress: d => yes(hadComeback(d)) },
   { id: 'weekly-goal',  group: 'habits', emoji: '🎯', title: 'Goal Getter',      description: 'Hit an “N× a week” goal',                    progress: d => yes(metWeeklyGoal(d)) },
+  { id: 'focus-first',  group: 'habits', emoji: '⏱️', title: 'In the Zone',      description: 'Finish a focus block',                       progress: d => yes(focusTotal(d) > 0) },
+  { id: 'focus-10h',    group: 'habits', emoji: '🧠', title: 'Deep Focus',       description: 'Focus for 10 hours in all',
+    progressLabel: p => `${p.value}/${p.target} hours`,
+    progress: d => count(Math.floor(focusTotal(d) / 60), 10) },
   { id: 'done-100',     group: 'habits', emoji: '🥕', title: 'Carrot Collector', description: 'Check off 100 Habbits',                      progress: d => count(d.stats.totalCompleted, 100) },
   { id: 'done-500',     group: 'habits', emoji: '🧺', title: 'Big Harvest',      description: 'Check off 500 Habbits',                      progress: d => count(d.stats.totalCompleted, 500) },
   // Money
