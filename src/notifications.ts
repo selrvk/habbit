@@ -5,6 +5,7 @@ import { addDaysToKey, computeSplitTimes, currencyStr, getTodayKey, isScheduledF
 import { nextDueDate, type Bill } from './bills';
 import notifee, { TriggerType, RepeatFrequency, AndroidImportance } from '@notifee/react-native';
 import type { Commission, ReminderTime } from './types';
+import type { FocusSession } from './focus';
 
 export const NOTIF_CHANNEL     = 'habbits';
 export const MIDNIGHT_NOTIF_ID = 'hr-midnight';
@@ -247,6 +248,45 @@ export const scheduleBillReminders = async (bills: Bill[], currency: string) => 
         );
         n++;
       }
+    }
+  } catch {}
+};
+
+// ── Focus timer ──────────────────────────────────────────────────────────────
+// When a block ends (and its break, if there is one), so the timer can run with the app
+// closed. Re-planned whenever the session changes; paused sessions have none.
+
+export const FOCUS_LINK = 'habbit://focus';
+const FOCUS_END_ID   = 'focus-end';
+const FOCUS_BREAK_ID = 'focus-break';
+
+export const cancelFocusNotifs = async () => {
+  try { await notifee.cancelTriggerNotifications([FOCUS_END_ID, FOCUS_BREAK_ID]); } catch {}
+};
+
+export const scheduleFocusNotifs = async (s: FocusSession | null) => {
+  await cancelFocusNotifs();
+  if (!s || s.pausedLeft !== undefined) return;
+  const now = Date.now();
+  const note = (id: string, title: string, body: string, at: number) => at > now && notifee.createTriggerNotification(
+    {
+      id, title, body, data: { link: FOCUS_LINK },
+      android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
+    },
+    { type: TriggerType.TIMESTAMP, timestamp: at },
+  );
+  const lastBlock = s.block >= s.blocks;
+  const breakEnds = s.phase === 'focus' ? s.endsAt + s.breakMinutes * 60_000 : s.endsAt;
+  try {
+    if (s.phase === 'focus') {
+      await note(FOCUS_END_ID, 'Focus block done 🥕',
+        lastBlock
+          ? `${s.label} is done for today. Great focus!`
+          : `${s.label}: ${s.block} of ${s.blocks} done.${s.breakMinutes > 0 ? ` Enjoy a ${s.breakMinutes}-minute break.` : ''}`,
+        s.endsAt);
+    }
+    if (!lastBlock && s.breakMinutes > 0) {
+      await note(FOCUS_BREAK_ID, 'Break’s over 🐰', `Ready for block ${s.block + 1} of ${s.label}?`, breakEnds);
     }
   } catch {}
 };

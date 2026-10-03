@@ -6,6 +6,7 @@ import { getFormattedDate, isScheduledForDay, avatarImage, currencyStr } from '.
 import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
+import type { FocusSession } from '../focus';
 import type { Commission } from '../types';
 import type { HabitSummary } from '../habitStats';
 import { LeftoverBanner, type Jar } from '../components/SavingsJar';
@@ -53,7 +54,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap,
+  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -68,6 +69,9 @@ export const HomeScreen = ({
   /** The Sunday recap card, shown on Sunday evening and Monday; null otherwise. */
   weekRecap: { title: string; detail: string } | null;
   onOpenWeekRecap: () => void;
+  /** The running focus timer, if any, and starting (or showing) one for a habit. */
+  focusSession: FocusSession | null;
+  onStartFocus: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -132,7 +136,8 @@ export const HomeScreen = ({
       week={item.perWeek ? { done: habitStats[item.id]?.thisWeek ?? 0, target: item.perWeek } : undefined}
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
       onSkip={item.perWeek ? undefined : onSkip} onUnskip={onUnskip}
-      onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd} />
+      onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd}
+      focus={item.focus ? { running: focusSession?.habitId === item.id ? focusSession : null, onPress: onStartFocus } : undefined} />
   );
 
   const tile = { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: C.border } as const;

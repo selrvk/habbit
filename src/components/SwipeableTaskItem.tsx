@@ -1,13 +1,31 @@
 // src/components/SwipeableTaskItem.tsx
 
-import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, PanResponder, Pressable, Alert } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { View, Text, Animated, PanResponder, Pressable, Alert, TouchableOpacity } from 'react-native';
 import { formatTime12, daysLabel } from '../helpers';
 import type { Commission } from '../types';
 import type { SkipAllowance } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
+import { clock, timeLeft, type FocusSession } from '../focus';
 
 const SWIPE_THRESHOLD = 60;
+
+/** "⏱ 18:42" (or "☕ 3:10" on a break) for the habit whose focus timer is running. */
+const FocusCountdown = ({ session }: { session: FocusSession }) => {
+  const fs = useFontSize();
+  const [now, setNow] = useState(Date.now());
+  const paused = session.pausedLeft !== undefined;
+  useEffect(() => {
+    if (paused) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [paused, session.id, session.phase]);
+  const left = timeLeft(session, now);
+  const text = session.phase === 'break'
+    ? (left > 0 ? `☕ break ${clock(left)}` : '☕ break’s over')
+    : paused ? `⏸ ${clock(left)}` : `⏱ ${clock(left)}`;
+  return <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: session.phase === 'break' ? '#9de087' : '#D4956A', fontVariant: ['tabular-nums'] }}>{text}</Text>;
+};
 
 const haptic = {
   success: () => require('react-native-haptic-feedback').default.trigger('notificationSuccess', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -26,6 +44,7 @@ export const SwipeableTaskItem = ({
   onUnskip,
   onSwipeStart,
   onSwipeEnd,
+  focus,
 }: {
   item: Commission;
   /** This habit's current streak; shown once it's running. */
@@ -40,6 +59,8 @@ export const SwipeableTaskItem = ({
   onUnskip?: (id: string) => void;
   onSwipeStart: () => void;
   onSwipeEnd: () => void;
+  /** Focus-timer habits: the running session for this habit (if any), and the ▶︎ button. */
+  focus?: { running: FocusSession | null; onPress: (id: string) => void };
 }) => {
   const fs          = useFontSize();
   const timesPerDay = item.timesPerDay ?? 1;
@@ -194,7 +215,9 @@ export const SwipeableTaskItem = ({
     return null;
   })();
 
-  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week;
+  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week || !!focus?.running;
+  // ▶︎ starts a block; it stays while a session runs for this habit, to get back to it.
+  const showPlay = !!focus && (!!focus.running || (canComplete && !weekMet));
 
   return (
     <View style={{ marginBottom: 10 }}>
@@ -260,6 +283,7 @@ export const SwipeableTaskItem = ({
             </Text>
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                {focus?.running && <FocusCountdown session={focus.running} />}
                 {streak > 0 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}{week ? ' wk' : ''}</Text>
                 )}
@@ -281,6 +305,17 @@ export const SwipeableTaskItem = ({
               </View>
             )}
           </View>
+
+          {showPlay && (
+            <TouchableOpacity onPress={() => { haptic.light(); focus?.onPress(item.id); }} activeOpacity={0.7} hitSlop={8}
+              accessibilityRole="button" accessibilityLabel={focus?.running ? `Show the ${item.label} focus timer` : `Start a focus block for ${item.label}`}
+              style={{
+                width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                backgroundColor: focus?.running ? '#D4956A' : 'rgba(212,149,106,0.14)', borderWidth: 1.5, borderColor: '#D4956A',
+              }}>
+              <Text style={{ fontSize: 13, color: focus?.running ? '#fff' : '#D4956A', marginLeft: focus?.running ? 0 : 2 }}>{focus?.running ? '⏱' : '▶'}</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Right: skipped tag, progress or done checkmark */}
           {isSkipped ? (

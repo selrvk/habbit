@@ -12,6 +12,8 @@ import { habitDays, skipAllowance, statsFromDays } from '../habitStats';
 import { HabitCalendar } from '../components/HabitCalendar';
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, CompletionRecord } from '../types';
+import { addDaysToKey } from '../helpers';
+import { durationLabel, focusMinutes, type FocusLogEntry } from '../focus';
 
 const C = {
   bg:     '#2A1A18',
@@ -26,7 +28,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip }: {
+export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip, focusLog, focusRunning, onStartFocus }: {
   habit: Commission;
   history: CompletionRecord[];
   todayKey: string;
@@ -34,6 +36,10 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
   onEdit: () => void;
   onSkip: () => void;
   onUnskip: () => void;
+  /** Focus-timer habits: time focused, whether its timer is running, and starting it. */
+  focusLog: FocusLogEntry[];
+  focusRunning: boolean;
+  onStartFocus: () => void;
 }) => {
   const fs = useFontSize();
   const days  = useMemo(() => habitDays(habit, history, todayKey), [habit, history, todayKey]);
@@ -122,6 +128,39 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
               ? `Tracking since ${sinceStr}`
               : `Done ${stats.done} of ${tracked} scheduled day${tracked === 1 ? '' : 's'} since ${sinceStr}`}
         </Text>
+
+        {/* ── Focus timer ── */}
+        {habit.focus && (() => {
+          const monday = addDaysToKey(todayKey, -((parseDateKey(todayKey).getDay() + 6) % 7));
+          const todayMin = focusMinutes(focusLog, todayKey, todayKey, habit.id);
+          const weekMin  = focusMinutes(focusLog, monday, todayKey, habit.id);
+          const allMin   = focusMinutes(focusLog, '0000-00-00', todayKey, habit.id);
+          const canStart = focusRunning || today === 'pending';
+          return (
+            <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>⏱ Focus</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>
+                  {habit.focus.minutes}-min blocks{habit.focus.breakMinutes > 0 ? ` · ${habit.focus.breakMinutes}-min breaks` : ''}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: allMin > 0 ? C.cream : C.muted, marginTop: 8 }}>
+                {allMin === 0
+                  ? 'No focus time yet. Finished blocks add up here.'
+                  : `Today ${durationLabel(todayMin)}  ·  This week ${durationLabel(weekMin)}  ·  All time ${durationLabel(allMin)}`}
+              </Text>
+              {canStart && (
+                <TouchableOpacity onPress={() => { haptic(); onStartFocus(); }} activeOpacity={0.8}
+                  accessibilityRole="button"
+                  style={{ marginTop: 12, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: '#fff' }}>
+                    {focusRunning ? '⏱ Back to the timer' : `▶︎ Start a ${habit.focus.minutes}-minute block`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()}
 
         {/* ── Calendar ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>

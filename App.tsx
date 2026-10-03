@@ -24,15 +24,17 @@ import { logDueBills, type Bill } from './src/bills';
 import { EMPTY_SAVINGS, leftoverOffer, parseSavings, storedSavings, type Savings, type SavingsJar } from './src/savings';
 import { parseCustomCategories, setCustomCategories, type Category, type CustomCategory } from './src/categories';
 import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
+import { focusMinutes, logFocus, nextBlock, parseFocusLog, parseFocusSession, pause as pauseFocus, resume as resumeFocus, settle, startBlock, type FocusLogEntry, type FocusSession } from './src/focus';
+import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, type Quiet } from './src/notifications';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -61,13 +63,14 @@ const formFields = (data: HabbitFormData) => ({
   reminderTime:  data.reminderTime,
   reminderTimes: data.reminderTimes,
   reminderSplit: data.reminderSplit,
+  focus:         data.focus ?? undefined,
 });
 
 /** The tab each link opens on. */
 const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
   home: 'home', habits: 'tasks', 'new-habit': 'tasks', habit: 'tasks',
   finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance', week: 'home',
-  coach: 'chat', profile: 'profile',
+  coach: 'chat', profile: 'profile', focus: 'home',
 };
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
@@ -107,6 +110,12 @@ export default function App() {
   const [bills, setBills]                         = useState<Bill[]>([]);
   const [savings, setSavings]                     = useState<Savings>(EMPTY_SAVINGS);
   const [customCategories, setCustomCats]         = useState<CustomCategory[]>([]);
+  const [focusSession, setFocusSession]           = useState<FocusSession | null>(null);
+  const focusRef                                  = useRef<FocusSession | null>(null);
+  const [focusLog, setFocusLog]                   = useState<FocusLogEntry[]>([]);
+  const focusLogRef                               = useRef<FocusLogEntry[]>([]);
+  const [focusOpen, setFocusOpen]                 = useState(false);
+  const [focusDone, setFocusDone]                 = useState<FocusDone | null>(null);
   const [currency, setCurrency]                 = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
   const [avatar, setAvatar]                       = useState<string>(DEFAULT_AVATAR);
@@ -202,10 +211,90 @@ export default function App() {
     if (r.history !== s.completionHistory) { setCompletionHistory(r.history); saveCompletionHistory(r.history); }
   }, [saveStats, saveCompletionHistory]);
 
+  // ── Focus timer (focus.ts) ─────────────────────────────────────────────────
+  /** Saves the running session (or clears it) and plans its notifications. */
+  const saveFocusSession = useCallback((next: FocusSession | null) => {
+    focusRef.current = next;
+    setFocusSession(next);
+    (next ? AsyncStorage.setItem(STORAGE_FOCUS, JSON.stringify(next)) : AsyncStorage.removeItem(STORAGE_FOCUS)).catch(() => {});
+    scheduleFocusNotifs(next);
+  }, []);
+
+  const addFocusTime = useCallback((entry: FocusLogEntry) => {
+    focusLogRef.current = logFocus(focusLogRef.current, entry);
+    setFocusLog(focusLogRef.current);
+    AsyncStorage.setItem(STORAGE_FOCUS_LOG, JSON.stringify(focusLogRef.current)).catch(() => {});
+  }, []);
+
+  /** "Study · 4 blocks · 1h 40m": the day's last block is done. */
+  const finishFocus = useCallback((s: FocusSession) => {
+    const day = getTodayKey();
+    setFocusDone({ label: s.label, blocks: s.block, minutes: focusMinutes(focusLogRef.current, day, day, s.habitId) });
+  }, []);
+
+  /**
+   * A block that has run out becomes a check-off (returned, for catchUp, so it counts on the
+   * day it ended) and its minutes, then its break starts. Safe to call any time.
+   */
+  const settleFocus = useCallback((): InboxEvent[] => {
+    const before = focusRef.current;
+    const r = settle(before, Date.now(), getTodayKey());
+    if (r.session === before) return [];
+    if (r.logged) addFocusTime(r.logged);
+    if (before && r.logged && !r.session) finishFocus(before);
+    saveFocusSession(r.session);
+    return r.events;
+  }, [addFocusTime, finishFocus, saveFocusSession]);
+
+  const startFocus = useCallback((habitId: string) => {
+    const running = focusRef.current;
+    if (running?.habitId === habitId) { setFocusOpen(true); return; }
+    const habit = liveState.current.commissions.find(c => c.id === habitId);
+    if (!habit?.focus) return;
+    const focus = habit.focus;
+    const begin = () => {
+      setFocusDone(null);
+      saveFocusSession(startBlock({ ...habit, focus }, Date.now(), generateId()));
+      setFocusOpen(true);
+    };
+    if (!running) { begin(); return; }
+    Alert.alert(`Stop the ${running.label} timer?`, 'One focus timer runs at a time.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: `Start ${habit.label}`, onPress: begin },
+    ]);
+  }, [saveFocusSession]);
+
+  const focusHandlers = useMemo(() => ({
+    onPause:  () => { if (focusRef.current) saveFocusSession(pauseFocus(focusRef.current, Date.now())); },
+    onResume: () => { if (focusRef.current) saveFocusSession(resumeFocus(focusRef.current, Date.now())); },
+    onStop:   () => { saveFocusSession(null); setFocusOpen(false); },
+    onNext:   () => {
+      const s = focusRef.current;
+      if (!s) return;
+      const next = nextBlock(s, liveState.current.commissions.find(c => c.id === s.habitId), Date.now(), generateId());
+      if (!next) finishFocus(s);
+      saveFocusSession(next);
+    },
+    onClose:  () => { setFocusOpen(false); setFocusDone(null); },
+  }), [saveFocusSession, finishFocus]);
+
   const drainInbox = useCallback(async () => {
     if (!hasLoaded.current) return;
-    catchUp(await takeInbox());
-  }, [catchUp]);
+    const events = await takeInbox();
+    catchUp([...events, ...settleFocus()]);
+  }, [catchUp, settleFocus]);
+
+  /** The block ran out with the app open. */
+  const onFocusElapsed = useCallback(() => {
+    if (hasLoaded.current) catchUp(settleFocus());
+  }, [catchUp, settleFocus]);
+
+  // Count the block when it runs out with the app open, even with the timer closed.
+  useEffect(() => {
+    if (!focusSession || focusSession.phase !== 'focus' || focusSession.pausedLeft !== undefined) return;
+    const t = setTimeout(onFocusElapsed, Math.max(0, focusSession.endsAt - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [focusSession, onFocusElapsed]);
 
 
   useEffect(() => {
@@ -290,8 +379,17 @@ export default function App() {
         bills:       storedB ? JSON.parse(storedB) as Bill[] : [],
       };
 
+      // The focus timer: a block that ran out while the app was closed counts below.
+      const storedFL = await AsyncStorage.getItem(STORAGE_FOCUS_LOG);
+      focusLogRef.current = parseFocusLog(storedFL ? JSON.parse(storedFL) : []);
+      setFocusLog(focusLogRef.current);
+      const storedFS = await AsyncStorage.getItem(STORAGE_FOCUS);
+      focusRef.current = parseFocusSession(storedFS ? JSON.parse(storedFS) : null);
+      setFocusSession(focusRef.current);
+      const focusEvents = settleFocus();
+
       // Up to today: the new day, bills that came due, and what Siri and quick actions did.
-      const day = catchUpDay(stored, todayKey, await takeInbox());
+      const day = catchUpDay(stored, todayKey, [...await takeInbox(), ...focusEvents]);
 
       loadedTotals = day.dailyTotals; loadedSpent = day.finance.spentToday; loadedTodayHistory = day.finance.history; loadedBills = day.bills;
       setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills); setDailyTotals(loadedTotals);
@@ -347,7 +445,7 @@ export default function App() {
       }));
       setReady(true);
     }
-  }, [saveStats, saveCompletionHistory]);
+  }, [saveStats, saveCompletionHistory, settleFocus]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -395,6 +493,7 @@ export default function App() {
       : null,
     );
     if (t.screen === 'week') setRecapOpen(recapWeek(liveState.current.dayKey));
+    if (t.screen === 'focus') setFocusOpen(true);
     setFinanceRequest(
       t.screen === 'spend' ? { kind: 'spend', amount: t.amount, category: t.category, note: t.note }
       : t.screen === 'add-money' ? { kind: 'money' }
@@ -421,6 +520,9 @@ export default function App() {
     setBills([]);
     setSavings(EMPTY_SAVINGS);
     setCustomCategories([]); setCustomCats([]);
+    focusRef.current = null; setFocusSession(null); setFocusOpen(false); setFocusDone(null);
+    focusLogRef.current = []; setFocusLog([]);
+    AsyncStorage.removeItem(STORAGE_FOCUS).catch(() => {});
     setCurrency(DEFAULT_CURRENCY);
     setName('Friend');
     setAvatar(DEFAULT_AVATAR);
@@ -877,8 +979,9 @@ export default function App() {
   const handleDelete = useCallback((id: string) => {
     setCommissions(p => p.filter(c => c.id !== id));
     cancelHabitNotifs(id);
+    if (focusRef.current?.habitId === id) saveFocusSession(null);
     setTasksSubScreen(null);
-  }, []);
+  }, [saveFocusSession]);
 
   const handleSetEntryCategory = useCallback((id: string, category: string | undefined) => {
     setTodayHistory(prev => {
@@ -985,6 +1088,8 @@ export default function App() {
             jar={jar}
             weekRecap={homeRecap}
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
+            focusSession={focusSession}
+            onStartFocus={startFocus}
           />
         );
 
@@ -1000,6 +1105,9 @@ export default function App() {
               onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
               onSkip={() => handleSkip(detailHabit.id)}
               onUnskip={() => handleUnskip(detailHabit.id)}
+              focusLog={focusLog}
+              focusRunning={focusSession?.habitId === detailHabit.id}
+              onStartFocus={() => startFocus(detailHabit.id)}
             />
           );
         }
@@ -1110,6 +1218,14 @@ export default function App() {
             {/* Closing a recap (not opening it) earns "Look Back", so its banner isn't hidden behind the sheet. */}
             <WeekRecapSheet visible={recapOpen !== null} initialWeek={recapOpen ?? todayKey} data={weekData} onClose={() => { setRecapOpen(null); award(['look-back']); }} />
             <AchievementsSheet visible={achievementsOpen} earned={earned ?? {}} data={achievementData} onClose={() => setAchievementsOpen(false)} />
+            <FocusSheet
+              visible={focusOpen && (!!focusSession || !!focusDone)}
+              session={focusSession} done={focusDone} avatar={avatar}
+              doneSoFar={commissions.find(c => c.id === focusSession?.habitId)?.completionCount ?? 0}
+              todayMinutes={focusMinutes(focusLog, todayKey, todayKey)}
+              {...focusHandlers}
+              onElapsed={onFocusElapsed}
+            />
             {toasts.length > 0 && (
               <AchievementToast item={toasts[0]} avatar={avatar} onPress={() => setAchievementsOpen(true)} onDone={() => setToasts(q => q.slice(1))} />
             )}

@@ -12,6 +12,7 @@ import { TimeField } from '../components/TimePicker';
 import { daysLabel, formatTime12, computeSplitTimes } from '../helpers';
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, HabbitFormData, ReminderTime } from '../types';
+import { BREAK_LENGTHS, DEFAULT_FOCUS, FOCUS_LENGTHS, type FocusSettings } from '../focus';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -24,11 +25,12 @@ const TIMES_OPTIONS = Array.from({ length: MAX_TIMES }, (_, i) => i + 1);
 // 7× a week is just every day, which the "Set days" mode already covers.
 const PER_WEEK_OPTIONS = [1, 2, 3, 4, 5, 6];
 
-const SUGGESTIONS = [
+const SUGGESTIONS: { label: string; times: number; focus?: FocusSettings }[] = [
   { label: 'Drink water',  times: 8 },
   { label: 'Read',         times: 1 },
+  { label: 'Study',        times: 4, focus: { minutes: 25, breakMinutes: 5 } },
   { label: 'Exercise',     times: 1 },
-  { label: 'Meditate',     times: 1 },
+  { label: 'Meditate',     times: 1, focus: { minutes: 10, breakMinutes: 0 } },
   { label: 'Take vitamins', times: 1 },
   { label: 'Stretch',      times: 2 },
 ];
@@ -98,6 +100,12 @@ export const AddHabbitScreen = ({
   // Once the user picks how many times a day, suggestions only fill in the name.
   const [timesChosen, setTimesChosen] = useState(isEdit);
 
+  // Focus timer: blocks that each count as one check-off. Suggestions set it until it's touched.
+  const [focusOn, setFocusOn]         = useState(!!initialValue?.focus);
+  const [focus, setFocus]             = useState<FocusSettings>(initialValue?.focus ?? DEFAULT_FOCUS);
+  const [focusChosen, setFocusChosen] = useState(isEdit);
+  const chooseFocus = (change: () => void) => { haptic.light(); setFocusChosen(true); change(); };
+
   const [reminderEnabled, setReminderEnabled] = useState(!!(
     initialValue?.reminderTime || initialValue?.reminderTimes?.length || initialValue?.reminderSplit
   ));
@@ -138,6 +146,7 @@ export const AddHabbitScreen = ({
   const pickSuggestion = (s: typeof SUGGESTIONS[number]) => {
     haptic.light();
     setLabel(s.label);
+    if (!focusChosen) { setFocusOn(!!s.focus); if (s.focus) setFocus(s.focus); }
     if (timesChosen) return;
     setTimesPerDay(s.times);
     setManualTimes(prev => resizeTimes(s.times, prev));
@@ -157,7 +166,11 @@ export const AddHabbitScreen = ({
       else reminderSplit = { startHour: splitFrom.hour, startMinute: splitFrom.minute, endHour: splitTo.hour, endMinute: splitTo.minute };
     }
 
-    onSave({ label: label.trim(), days, perWeek: weekly ? perWeek : null, timesPerDay: dailyTimes, reminderTime, reminderTimes, reminderSplit });
+    onSave({
+      label: label.trim(), days, perWeek: weekly ? perWeek : null, timesPerDay: dailyTimes, reminderTime, reminderTimes, reminderSplit,
+      // A break only comes between blocks, so once-a-day habits have none.
+      focus: focusOn ? { minutes: focus.minutes, breakMinutes: dailyTimes > 1 ? focus.breakMinutes : 0 } : null,
+    });
   };
 
   const rowText = { fontFamily: 'Jua', fontSize: fs(15), color: '#e8d5c0' } as const;
@@ -271,6 +284,76 @@ export const AddHabbitScreen = ({
           </Text>
         </Card>}
 
+        {/* ── Focus timer ── */}
+        <Label>Focus timer</Label>
+        <Card>
+          <Pressable
+            onPress={() => chooseFocus(() => setFocusOn(v => !v))}
+            accessibilityRole="switch" accessibilityState={{ checked: focusOn }}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={rowText}>Time it in focus blocks</Text>
+              {!focusOn && <Text style={[subText, { marginTop: 2 }]}>Great for studying, reading or meditating</Text>}
+            </View>
+            <Switch
+              value={focusOn}
+              onValueChange={v => chooseFocus(() => setFocusOn(v))}
+              trackColor={{ false: 'rgba(212,149,106,0.2)', true: '#D4956A' }}
+              thumbColor="#fff"
+              ios_backgroundColor="rgba(212,149,106,0.2)"
+            />
+          </Pressable>
+
+          {focusOn && (
+            <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
+              <Text style={[subText, { marginBottom: 8 }]}>Each block</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {FOCUS_LENGTHS.map(m => {
+                  const active = m === focus.minutes;
+                  return (
+                    <TouchableOpacity key={m} onPress={() => chooseFocus(() => setFocus(f => ({ ...f, minutes: m })))} activeOpacity={0.7}
+                      accessibilityLabel={`${m} minute blocks`} accessibilityState={{ selected: active }}
+                      style={{
+                        flexBasis: '14%', flexGrow: 1, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
+                        backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
+                        borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
+                      }}>
+                      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {dailyTimes > 1 && (
+                <>
+                  <Text style={[subText, { marginTop: 14, marginBottom: 8 }]}>Break between blocks</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {BREAK_LENGTHS.map(m => {
+                      const active = m === focus.breakMinutes;
+                      return (
+                        <TouchableOpacity key={m} onPress={() => chooseFocus(() => setFocus(f => ({ ...f, breakMinutes: m })))} activeOpacity={0.7}
+                          accessibilityLabel={m === 0 ? 'No break' : `${m} minute break`} accessibilityState={{ selected: active }}
+                          style={{
+                            flex: 1, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center',
+                            backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
+                            borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
+                          }}>
+                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m === 0 ? 'None' : `${m} min`}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+              <Text style={[subText, { marginTop: 12 }]}>
+                {dailyTimes > 1
+                  ? `Tap ▶︎ on Home to start a ${focus.minutes}-minute block. Each one counts 1 of ${dailyTimes}${focus.breakMinutes > 0 ? `, with a ${focus.breakMinutes}-minute break between` : ''}.`
+                  : `Tap ▶︎ on Home to start a ${focus.minutes}-minute block. Finishing it checks the habbit off.`}
+                {' '}You can still tap it off without the timer.
+              </Text>
+            </View>
+          )}
+        </Card>
+
         {/* ── Reminder ── */}
         <Label>Reminder</Label>
         <Card>
@@ -340,6 +423,7 @@ export const AddHabbitScreen = ({
 
         <Text style={[subText, { textAlign: 'center', marginTop: 18 }]}>
           {weekly ? `${perWeek}× a week · any days` : `${daysLabel(days)} · ${timesPerDay === 1 ? 'once a day' : `${timesPerDay}× a day`}`}
+          {focusOn ? ` · ${focus.minutes}-min focus` : ''}
           {reminderEnabled ? ' · with reminders' : ''}
         </Text>
 

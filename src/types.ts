@@ -25,6 +25,8 @@ export type Commission      = {
   completionCount: number;             // current swipe count; resets to 0 at midnight
   reminderTimes: ReminderTime[];       // manual multi-reminder list
   reminderSplit: ReminderSplit | null; // "split evenly between X and Y" config
+  /** Focus timer: each block of this many minutes counts as one check-off (focus.ts). */
+  focus?: { minutes: number; breakMinutes: number };
 };
 
 /** Shape produced by AddHabbitScreen and consumed by App handlers */
@@ -36,6 +38,7 @@ export type HabbitFormData  = {
   reminderTime: ReminderTime | null;
   reminderTimes: ReminderTime[];
   reminderSplit: ReminderSplit | null;
+  focus: { minutes: number; breakMinutes: number } | null;
 };
 
 

@@ -18,6 +18,10 @@ export const STORAGE_SAVINGS            = '@habbit_rabbit_savings';
 export const STORAGE_ACHIEVEMENTS       = '@habbit_rabbit_achievements';
 /** Custom spending categories (CustomCategory[], categories.ts). */
 export const STORAGE_CATEGORIES         = '@habbit_rabbit_categories';
+/** The running focus timer (FocusSession, focus.ts). Not backed up. */
+export const STORAGE_FOCUS              = '@habbit_rabbit_focus';
+/** Minutes focused per day and habit (FocusLogEntry[]). */
+export const STORAGE_FOCUS_LOG          = '@habbit_rabbit_focus_log';
 /** Bonbon's weekly notes, by week. Not backed up: they can be written again. */
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
 
@@ -35,6 +39,8 @@ export const CONTENT_STORAGE_KEYS = [
   STORAGE_WEEK_NOTES,
   STORAGE_ACHIEVEMENTS,
   STORAGE_CATEGORIES,
+  STORAGE_FOCUS,
+  STORAGE_FOCUS_LOG,
 ];
 
 // ── Full wipe — only used if you ever need a true factory reset ───────────────
