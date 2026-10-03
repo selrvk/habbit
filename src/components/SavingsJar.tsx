@@ -1,16 +1,18 @@
 // src/components/SavingsJar.tsx
 //
-// The savings jar: the Finance card (progress, add / take out), the goal editor, and the
-// "you had money left over" banner shown on Home and Finance.
+// Savings jars: the Finance cards (progress, add / take out; several jars swipe side to
+// side), the goal editor, and the "you had money left over" banner shown on Home and Finance.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from './CurrencyAmount';
 import { NumpadModal } from './NumpadModal';
-import { jarTotal, type JarEntry, type LeftoverOffer, type Savings, type SavingsGoal } from '../savings';
+import { PaywallScreen } from '../screens/PaywallScreen';
+import { useProStatus } from '../context/ProContext';
+import { MAX_JARS, jarTotal, type JarEntry, type LeftoverOffer, type Savings, type SavingsGoal, type SavingsJar } from '../savings';
 
 export type GoalFormData = Omit<SavingsGoal, 'createdAt'>;
 
@@ -18,11 +20,13 @@ export type GoalFormData = Omit<SavingsGoal, 'createdAt'>;
 export type Jar = {
   savings: Savings;
   offer: LeftoverOffer | null;
-  saveGoal: (goal: GoalFormData) => void;
-  deleteJar: () => void;
-  add: (amount: number, note?: string) => void;
-  takeOut: (amount: number, note?: string) => void;
-  takeOffer: () => void;
+  /** Saves a jar's goal, or starts a new jar (id null). Returns the jar's id. */
+  saveJar: (id: string | null, goal: GoalFormData) => string;
+  deleteJar: (id: string) => void;
+  add: (id: string, amount: number, note?: string) => void;
+  takeOut: (id: string, amount: number, note?: string) => void;
+  /** Puts the leftover on offer into that jar. */
+  takeOffer: (id: string) => void;
   skipOffer: () => void;
 };
 
@@ -127,7 +131,7 @@ export const JarEditor = ({ visible, goal, entries, currency, onSave, onDelete, 
             <TouchableOpacity
               onPress={() => {
                 haptic.light();
-                Alert.alert('Empty the jar?', `This deletes "${goal.name}" and its history. It doesn't touch your budget or spending.`, [
+                Alert.alert('Delete this jar?', `This deletes "${goal.name}" and its history. It doesn't touch your budget or spending.`, [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Delete', style: 'destructive', onPress: onDelete },
                 ]);
@@ -150,68 +154,54 @@ export const JarEditor = ({ visible, goal, entries, currency, onSave, onDelete, 
   );
 };
 
-// ─── Finance card ─────────────────────────────────────────────────────────────
+// ─── Finance cards ────────────────────────────────────────────────────────────
 
-export const SavingsJarCard = ({ jar, currency }: { jar: Jar; currency: string }) => {
+const ProPill = () => {
   const fs = useFontSize();
-  const [editor, setEditor]     = useState(false);
-  const [numpad, setNumpad]     = useState<'add' | 'take' | null>(null);
-  const [input, setInput]       = useState('');
-  const { goal, entries } = jar.savings;
-  const saved = jarTotal(jar.savings);
+  return (
+    <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
+      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
+    </View>
+  );
+};
+
+/** One jar: its goal and progress (tap to edit and see its history), with Add and Take out. */
+const JarCard = ({ jar, api, currency }: { jar: SavingsJar; api: Jar; currency: string }) => {
+  const fs = useFontSize();
+  const [editor, setEditor] = useState(false);
+  const [numpad, setNumpad] = useState<'add' | 'take' | null>(null);
+  const [input, setInput]   = useState('');
+  const { goal, entries } = jar;
+  const saved   = jarTotal(jar);
+  const pct     = goal.target > 0 ? Math.min(saved / goal.target, 1) : 0;
+  const reached = saved >= goal.target;
 
   const closeNumpad = () => { setNumpad(null); setInput(''); };
 
-  const modals = (
+  return (
     <>
       <JarEditor visible={editor} goal={goal} entries={entries} currency={currency}
-        onSave={g => { jar.saveGoal(g); setEditor(false); }}
-        onDelete={() => { jar.deleteJar(); setEditor(false); }}
+        onSave={g => { api.saveJar(jar.id, g); setEditor(false); }}
+        onDelete={() => { api.deleteJar(jar.id); setEditor(false); }}
         onClose={() => setEditor(false)} />
       <NumpadModal
         visible={numpad !== null}
         title={numpad === 'take' ? 'Take out of the jar' : 'Add to the jar'}
-        hint={numpad === 'take' ? `${goal?.emoji ?? ''} ${currency === '__carrot__' ? '🥕' : currency}${money(saved)} in the jar` : 'Money you’ve put aside'}
+        hint={numpad === 'take' ? `${goal.emoji} ${currency === '__carrot__' ? '🥕' : currency}${money(saved)} in the jar` : `${goal.emoji} ${goal.name}`}
         confirmLabel={numpad === 'take' ? 'Take out' : 'Add'}
         amount={input}
         currency={currency}
         onChangeAmount={setInput}
         onConfirm={note => {
           const value = parseFloat(input || '0');
-          if (value > 0) (numpad === 'take' ? jar.takeOut : jar.add)(Math.min(value, numpad === 'take' ? saved : Infinity), note);
+          if (value > 0) (numpad === 'take' ? api.takeOut : api.add)(jar.id, Math.min(value, numpad === 'take' ? saved : Infinity), note);
           closeNumpad();
         }}
         onClose={closeNumpad}
         withNote
         notePlaceholder={numpad === 'take' ? 'What for? (optional)' : 'Where’s it from? (optional)'}
       />
-    </>
-  );
-
-  if (!goal) {
-    return (
-      <>
-        {modals}
-        <TouchableOpacity onPress={() => { haptic.light(); setEditor(true); }} activeOpacity={0.8}
-          style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Text style={{ fontSize: fs(24) }}>🫙</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Saving for something?</Text>
-            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Start a jar and watch it fill up.</Text>
-          </View>
-          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>+</Text>
-        </TouchableOpacity>
-      </>
-    );
-  }
-
-  const pct     = goal.target > 0 ? Math.min(saved / goal.target, 1) : 0;
-  const reached = saved >= goal.target;
-
-  return (
-    <>
-      {modals}
-      <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: reached ? 'rgba(157,224,135,0.4)' : C.border }}>
+      <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: reached ? 'rgba(157,224,135,0.4)' : C.border }}>
         <TouchableOpacity onPress={() => { haptic.light(); setEditor(true); }} activeOpacity={0.8} accessibilityHint="Edit the jar and see its history">
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <Text style={{ fontSize: fs(22), marginRight: 8 }}>{goal.emoji}</Text>
@@ -248,24 +238,119 @@ export const SavingsJarCard = ({ jar, currency }: { jar: Jar; currency: string }
   );
 };
 
+/** Finance's savings: a prompt to start a jar, or the jars (side by side to swipe through). */
+export const SavingsJars = ({ jar, currency }: { jar: Jar; currency: string }) => {
+  const fs = useFontSize();
+  const { isPro } = useProStatus();
+  const jars = jar.savings.jars;
+  const [editor, setEditor]   = useState(false);
+  const [paywall, setPaywall] = useState(false);
+  const [width, setWidth]     = useState(0);
+  const [page, setPage]       = useState(0);
+  const scroller = useRef<ScrollView>(null);
+
+  // A new jar is added at the end: show it. A deleted one can leave the page past the end.
+  const count = useRef(jars.length);
+  useEffect(() => {
+    const grew = jars.length > count.current;
+    count.current = jars.length;
+    const to = grew ? jars.length - 1 : Math.min(page, Math.max(jars.length - 1, 0));
+    if (to !== page) setPage(to);
+    if (width > 0) requestAnimationFrame(() => scroller.current?.scrollTo({ x: to * width, animated: grew }));
+  }, [jars.length]);
+
+  const editorModal = (
+    <JarEditor visible={editor} goal={null} entries={[]} currency={currency}
+      onSave={g => { jar.saveJar(null, g); setEditor(false); }}
+      onClose={() => setEditor(false)} />
+  );
+
+  if (jars.length === 0) {
+    return (
+      <>
+        {editorModal}
+        <TouchableOpacity onPress={() => { haptic.light(); setEditor(true); }} activeOpacity={0.8}
+          style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: fs(24) }}>🫙</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Saving for something?</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Start a jar and watch it fill up.</Text>
+          </View>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>+</Text>
+        </TouchableOpacity>
+      </>
+    );
+  }
+
+  const total = Math.round(jars.reduce((s, j) => s + jarTotal(j), 0) * 100) / 100;
+
+  return (
+    <View style={{ marginBottom: 24 }} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+      {editorModal}
+      <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
+        <PaywallScreen onClose={() => setPaywall(false)} />
+      </Modal>
+
+      {/* The pages need the width, so until it's measured show the first jar on its own. */}
+      {jars.length === 1 || width === 0 ? (
+        <JarCard jar={jars[Math.min(page, jars.length - 1)]} api={jar} currency={currency} />
+      ) : (
+        <>
+          <ScrollView ref={scroller} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+            contentOffset={{ x: page * width, y: 0 }}
+            onMomentumScrollEnd={e => width > 0 && setPage(Math.round(e.nativeEvent.contentOffset.x / width))}>
+            {jars.map(j => (
+              <View key={j.id} style={{ width }}>
+                <JarCard jar={j} api={jar} currency={currency} />
+              </View>
+            ))}
+          </ScrollView>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 10 }}
+            accessibilityLabel={`Jar ${page + 1} of ${jars.length}`}>
+            {jars.map((j, i) => (
+              <View key={j.id} style={{ width: i === page ? 16 : 6, height: 6, borderRadius: 3, backgroundColor: i === page ? C.accent : 'rgba(212,149,106,0.3)' }} />
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 6 }}>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>{currency === '__carrot__' ? '🥕 ' : currency}{money(total)} saved across {jars.length} jars</Text>
+          </View>
+        </>
+      )}
+
+      {jars.length < MAX_JARS && (
+        <TouchableOpacity onPress={() => { haptic.light(); if (isPro) setEditor(true); else setPaywall(true); }} activeOpacity={0.7}
+          accessibilityRole="button" accessibilityLabel={isPro ? 'Start another jar' : 'Start another jar, with Habbit Pro'}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'center', marginTop: 10, paddingVertical: 6, paddingHorizontal: 12 }}>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(13) }}>＋ Start another jar</Text>
+          {!isPro && <ProPill />}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
 // ─── Leftover banner ──────────────────────────────────────────────────────────
 
-/** "You had ₱340 left over last week" with Add / Skip (or Start a jar when there isn't one). */
+/**
+ * "You had ₱340 left over last week" with Skip and Add (or Start a jar when there isn't one,
+ * or a choice of jars when there are several).
+ */
 export const LeftoverBanner = ({ jar, currency }: { jar: Jar; currency: string }) => {
   const fs = useFontSize();
   const [editor, setEditor] = useState(false);
   const offer = jar.offer;
   if (!offer) return null;
-  const goal = jar.savings.goal;
+  const jars = jar.savings.jars;
+  const only = jars.length === 1 ? jars[0] : null;
 
   return (
     <>
       <JarEditor visible={editor} goal={null} entries={[]} currency={currency}
-        onSave={g => { jar.saveGoal(g); jar.takeOffer(); setEditor(false); }}
+        onSave={g => { jar.takeOffer(jar.saveJar(null, g)); setEditor(false); }}
         onClose={() => setEditor(false)} />
       <View style={{ backgroundColor: 'rgba(100,160,90,0.14)', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(157,224,135,0.3)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ fontSize: fs(26) }}>{goal?.emoji ?? '🫙'}</Text>
+          <Text style={{ fontSize: fs(26) }}>{only?.goal.emoji ?? '🫙'}</Text>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
               <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(14) }}>You had </Text>
@@ -274,19 +359,33 @@ export const LeftoverBanner = ({ jar, currency }: { jar: Jar; currency: string }
               <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(14) }}> left {offer.label}! 🎉</Text>
             </View>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>
-              {goal ? `Put it in your "${goal.name}" jar?` : 'Start a savings jar with it?'}
+              {only ? `Put it in your "${only.goal.name}" jar?` : jars.length > 1 ? 'Which jar should it go in?' : 'Start a savings jar with it?'}
             </Text>
           </View>
         </View>
+        {jars.length > 1 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {jars.map(j => (
+              <TouchableOpacity key={j.id} onPress={() => { haptic.success(); jar.takeOffer(j.id); }} activeOpacity={0.85}
+                accessibilityLabel={`Add it to ${j.goal.name}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: 'rgba(157,224,135,0.22)', borderWidth: 1, borderColor: 'rgba(157,224,135,0.45)' }}>
+                <Text style={{ fontSize: fs(15) }}>{j.goal.emoji}</Text>
+                <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(13) }} numberOfLines={1}>{j.goal.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
           <TouchableOpacity onPress={() => { haptic.light(); jar.skipOffer(); }} activeOpacity={0.8}
             style={{ flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(232,213,192,0.2)' }}>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13) }}>Not this time</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { if (goal) { haptic.success(); jar.takeOffer(); } else { haptic.light(); setEditor(true); } }} activeOpacity={0.85}
-            style={{ flex: 2, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(157,224,135,0.22)', borderWidth: 1, borderColor: 'rgba(157,224,135,0.45)' }}>
-            <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(13) }}>{goal ? 'Add to jar' : 'Start a jar'}</Text>
-          </TouchableOpacity>
+          {jars.length <= 1 && (
+            <TouchableOpacity onPress={() => { if (only) { haptic.success(); jar.takeOffer(only.id); } else { haptic.light(); setEditor(true); } }} activeOpacity={0.85}
+              style={{ flex: 2, borderRadius: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: 'rgba(157,224,135,0.22)', borderWidth: 1, borderColor: 'rgba(157,224,135,0.45)' }}>
+              <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(13) }}>{only ? 'Add to jar' : 'Start a jar'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </>

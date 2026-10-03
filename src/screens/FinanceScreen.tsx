@@ -14,7 +14,7 @@ import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
 import { CategoryGrid } from '../components/CategoryGrid';
 import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
-import { LeftoverBanner, SavingsJarCard, type Jar } from '../components/SavingsJar';
+import { LeftoverBanner, SavingsJars, type Jar } from '../components/SavingsJar';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
 
@@ -457,7 +457,7 @@ export const FinanceScreen = ({
           </TouchableOpacity>
         </View>
 
-        <SavingsJarCard jar={jar} currency={currency} />
+        <SavingsJars jar={jar} currency={currency} />
 
         {/* ── Today's activity ── */}
         <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17), marginBottom: 10 }}>Today</Text>

@@ -1,8 +1,8 @@
 // src/savings.ts
 //
-// The savings jar: one goal, and a ledger of money put in or taken out. The jar tracks
-// money the user has actually set aside, so it never touches the budget, and leftovers
-// are offered rather than moved automatically.
+// Savings jars: each one a goal and a ledger of money put in or taken out. Free users get
+// one jar, Pro up to MAX_JARS. Jars track money the user has actually set aside, so they
+// never touch the budget, and leftovers are offered rather than moved automatically.
 
 import type { DailyTotal } from './types';
 import { addDaysToKey } from './helpers';
@@ -20,17 +20,56 @@ export type JarEntry = {
   note?: string;
 };
 
+export type SavingsJar = { id: string; goal: SavingsGoal; entries: JarEntry[] };
+
 export type Savings = {
-  goal: SavingsGoal | null;
-  entries: JarEntry[];
+  jars: SavingsJar[];
   /** Start of the last budget period whose leftover was offered (taken or skipped). */
   lastOffered?: string;
 };
 
-export const EMPTY_SAVINGS: Savings = { goal: null, entries: [] };
+export const EMPTY_SAVINGS: Savings = { jars: [] };
 
-export const jarTotal = (s: Savings): number =>
-  Math.round(s.entries.reduce((sum, e) => sum + e.amount, 0) * 100) / 100;
+/** Jars at once with Pro. Free users get one; jars made with Pro stay if it ends. */
+export const MAX_JARS = 6;
+
+export const jarTotal = (jar: { entries: JarEntry[] }): number =>
+  Math.round(jar.entries.reduce((sum, e) => sum + e.amount, 0) * 100) / 100;
+
+/** Every jar's entries together, for totals over a period. */
+export const allJarEntries = (s: Savings): JarEntry[] => s.jars.flatMap(j => j.entries);
+
+/** The fullest jar's share of its goal (0 with no jars), for the jar achievements. */
+export const fullestJar = (s: Savings): number =>
+  Math.max(0, ...s.jars.map(j => (j.goal.target > 0 ? jarTotal(j) / j.goal.target : 0)));
+
+/**
+ * Savings as stored or restored. Before there could be several jars it was one goal and its
+ * entries, { goal, entries }; that becomes the first jar.
+ */
+export const parseSavings = (raw: unknown): Savings => {
+  if (typeof raw !== 'object' || raw === null) return EMPTY_SAVINGS;
+  const r = raw as { jars?: unknown; goal?: SavingsGoal | null; entries?: JarEntry[]; lastOffered?: unknown };
+  const lastOffered = typeof r.lastOffered === 'string' ? { lastOffered: r.lastOffered } : {};
+  if (Array.isArray(r.jars)) {
+    const jars = r.jars.filter((j): j is SavingsJar =>
+      typeof j === 'object' && j !== null && typeof j.id === 'string'
+      && typeof j.goal?.name === 'string' && typeof j.goal?.target === 'number' && Array.isArray(j.entries));
+    return { jars, ...lastOffered };
+  }
+  const jars = r.goal && typeof r.goal.name === 'string'
+    ? [{ id: 'jar-1', goal: r.goal, entries: Array.isArray(r.entries) ? r.entries : [] }]
+    : [];
+  return { jars, ...lastOffered };
+};
+
+/**
+ * Savings to store. The first jar is also written the old way ({ goal, entries }), so a
+ * backup made now still restores on an older version of the app (as that one jar).
+ */
+export const storedSavings = (s: Savings) => ({
+  ...s, goal: s.jars[0]?.goal ?? null, entries: s.jars[0]?.entries ?? [],
+});
 
 export type LeftoverOffer = { periodStart: string; amount: number; label: 'last week' | 'last month' };
 

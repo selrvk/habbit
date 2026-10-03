@@ -38,8 +38,8 @@ export function buildSystemPrompt(ctx: CoachContext): string {
       + (ctx.lastMonth.prevSpent !== null ? ` (vs ${sym}${ctx.lastMonth.prevSpent} in ${ctx.lastMonth.prevName})` : '')
       + (ctx.lastMonth.topCategory ? `, most on ${ctx.lastMonth.topCategory}` : '') + '. '
     : '';
-  const savingsStatus = ctx.savingsGoal
-    ? `Saving for "${ctx.savingsGoal.name}": ${sym}${ctx.savingsGoal.saved} of ${sym}${ctx.savingsGoal.target} in their savings jar. `
+  const savingsStatus = ctx.savingsGoals.length > 0
+    ? `Savings jars: ${ctx.savingsGoals.map(g => `"${g.name}" ${sym}${g.saved} of ${sym}${g.target}`).join(', ')}. `
     : '';
   const financeStatus = periodStatus + billsStatus + savingsStatus + lastMonthStatus + (ctx.dailyBudget === 0
     ? `Spent ${sym}${ctx.finance.spentToday} today. No daily budget set.`

@@ -17,7 +17,7 @@ const september: DailyTotal[] = [
 const base = {
   todayKey: '2026-10-05', dailyTotals: [...august, ...september], todayHistory: [], spentToday: 0,
   topUps: [{ id: 't', amount: 1000, date: '2026-09-15' }], bills: [],
-  savings: { goal: null, entries: [{ id: 'j', amount: 1500, date: '2026-09-28', kind: 'leftover' as const }] },
+  savings: { jars: [{ id: 'jar-1', goal: { name: 'Trip', emoji: '✈️', target: 9000, createdAt: '2026-09-01' }, entries: [{ id: 'j', amount: 1500, date: '2026-09-28', kind: 'leftover' as const }] }] },
   history: [
     { date: '2026-09-02', completed: true, completedIds: ['h'], scheduledIds: ['h'] },
     { date: '2026-09-03', completed: false, completedIds: [], scheduledIds: ['h'] },

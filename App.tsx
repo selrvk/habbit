@@ -21,7 +21,7 @@ import { streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
-import { EMPTY_SAVINGS, leftoverOffer, type Savings } from './src/savings';
+import { EMPTY_SAVINGS, leftoverOffer, parseSavings, storedSavings, type Savings, type SavingsJar } from './src/savings';
 import { parseCustomCategories, setCustomCategories, type Category, type CustomCategory } from './src/categories';
 import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
 import type { Jar } from './src/components/SavingsJar';
@@ -307,7 +307,7 @@ export default function App() {
       earnedRef.current = savedAchievements?.earned ?? {};
       setEarned(earnedRef.current);
       const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
-      setSavings(storedSv ? JSON.parse(storedSv) : EMPTY_SAVINGS);
+      setSavings(parseSavings(storedSv ? JSON.parse(storedSv) : null));
       const storedCats = await AsyncStorage.getItem(STORAGE_CATEGORIES);
       const loadedCats = parseCustomCategories(storedCats ? JSON.parse(storedCats) : []);
       setCustomCategories(loadedCats);
@@ -675,7 +675,7 @@ export default function App() {
   const updateSavings = useCallback((fn: (s: Savings) => Savings) => {
     setSavings(prev => {
       const next = fn(prev);
-      AsyncStorage.setItem(STORAGE_SAVINGS, JSON.stringify(next)).catch(() => {});
+      AsyncStorage.setItem(STORAGE_SAVINGS, JSON.stringify(storedSavings(next))).catch(() => {});
       return next;
     });
   }, []);
@@ -713,16 +713,24 @@ export default function App() {
   const jar: Jar = useMemo(() => {
     const entry = (amount: number, kind: 'leftover' | 'deposit' | 'withdraw', note?: string) =>
       ({ id: generateId(), amount, date: dayKey, kind, ...(note ? { note } : {}) });
+    const inJar = (id: string, fn: (j: SavingsJar) => SavingsJar) => (s: Savings): Savings =>
+      ({ ...s, jars: s.jars.map(j => (j.id === id ? fn(j) : j)) });
     return {
       savings,
       offer,
-      saveGoal: goal => updateSavings(s => ({ ...s, goal: { ...goal, createdAt: s.goal?.createdAt ?? dayKey } })),
-      deleteJar: () => updateSavings(s => ({ goal: null, entries: [], lastOffered: s.lastOffered })),
-      add:       (amount, note) => updateSavings(s => ({ ...s, entries: [...s.entries, entry(amount, 'deposit', note)] })),
-      takeOut:   (amount, note) => updateSavings(s => ({ ...s, entries: [...s.entries, entry(-amount, 'withdraw', note)] })),
-      takeOffer: () => {
+      saveJar: (id, goal) => {
+        if (id) { updateSavings(inJar(id, j => ({ ...j, goal: { ...goal, createdAt: j.goal.createdAt } }))); return id; }
+        const newId = `jar-${generateId()}`;
+        updateSavings(s => ({ ...s, jars: [...s.jars, { id: newId, goal: { ...goal, createdAt: dayKey }, entries: [] }] }));
+        return newId;
+      },
+      deleteJar: id => updateSavings(s => ({ ...s, jars: s.jars.filter(j => j.id !== id) })),
+      add:       (id, amount, note) => updateSavings(inJar(id, j => ({ ...j, entries: [...j.entries, entry(amount, 'deposit', note)] }))),
+      takeOut:   (id, amount, note) => updateSavings(inJar(id, j => ({ ...j, entries: [...j.entries, entry(-amount, 'withdraw', note)] }))),
+      takeOffer: id => {
         if (!offer) return;
-        updateSavings(s => ({ ...s, lastOffered: offer.periodStart, entries: [...s.entries, entry(offer.amount, 'leftover', `Left over ${offer.label}`)] }));
+        const put = inJar(id, j => ({ ...j, entries: [...j.entries, entry(offer.amount, 'leftover', `Left over ${offer.label}`)] }));
+        updateSavings(s => ({ ...put(s), lastOffered: offer.periodStart }));
       },
       skipOffer: () => { if (offer) updateSavings(s => ({ ...s, lastOffered: offer.periodStart })); },
     };

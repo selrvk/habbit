@@ -10,7 +10,7 @@ import { addDaysToKey, isRestRecord, parseDateKey, toDateKey } from './helpers';
 import { computeBudget, periodEnd, periodStart, type BudgetPeriod, type TopUp } from './budget';
 import { spendingByCategory, type CategoryTotal } from './categories';
 import { billSpending, type Bill } from './bills';
-import type { Savings } from './savings';
+import { allJarEntries, type Savings } from './savings';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -147,7 +147,7 @@ export const monthSummary = ({ month, todayKey, dailyTotals, todayHistory, spent
     avgPerDay: round2(spent / daysInclusive(start, end)),
     billsPaid: round2(days.reduce((s, d) => s + billSpending(d.entries), 0)),
     added: round2(topUps.filter(t => inMonth(t.date)).reduce((s, t) => s + t.amount, 0)),
-    saved: round2(savings.entries.filter(e => inMonth(e.date)).reduce((s, e) => s + e.amount, 0)),
+    saved: round2(allJarEntries(savings).filter(e => inMonth(e.date)).reduce((s, e) => s + e.amount, 0)),
     byCategory,
     topExpenses: entries.filter(e => !e.billId).sort((a, b) => b.amount - a.amount).slice(0, 5),
     busiestDay,

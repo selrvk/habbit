@@ -10,7 +10,7 @@ import { computeBudget, periodStart, type BudgetPeriod, type TopUp } from './bud
 import { categoryOf, spendingByCategory, type CategoryTotal } from './categories';
 import { billSpending, type Bill } from './bills';
 import { monthLabel, withToday } from './monthSummary';
-import type { Savings } from './savings';
+import { allJarEntries, type Savings } from './savings';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -209,7 +209,7 @@ export const weekSummary = (week: string, d: WeekData): WeekSummary => {
       budget,
       topCategory,
       biggest: entries.filter(e => !e.billId).sort((a, b) => b.amount - a.amount)[0] ?? null,
-      saved: round2(d.savings.entries.filter(e => e.date >= start && e.date <= end).reduce((s, e) => s + e.amount, 0)),
+      saved: round2(allJarEntries(d.savings).filter(e => e.date >= start && e.date <= end).reduce((s, e) => s + e.amount, 0)),
     },
     bestDay,
   };

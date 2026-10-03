@@ -57,7 +57,7 @@ const VALIDATORS: Record<BackupSection, (v: any) => boolean> = {
   spending:      v => isObject(v) && Array.isArray(v.dailyTotals),
   topUps:        v => Array.isArray(v),
   bills:         v => Array.isArray(v),
-  savings:       v => isObject(v) && Array.isArray(v.entries),
+  savings:       v => isObject(v) && (Array.isArray(v.jars) || Array.isArray(v.entries)),
   coachMessages: v => Array.isArray(v),
   achievements:  v => isObject(v) && isObject(v.earned),
   categories:    v => Array.isArray(v),

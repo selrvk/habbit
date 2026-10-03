@@ -8,7 +8,7 @@
 import type { Commission, CompletionRecord, DailyTotal, SpendingEntry, Stats } from './types';
 import { addDaysToKey, isRestRecord, isScheduledForDay, parseDateKey } from './helpers';
 import { computeBudget, periodEnd, periodStart, type BudgetPeriod, type TopUp } from './budget';
-import { jarTotal, type Savings } from './savings';
+import { allJarEntries, fullestJar, type Savings } from './savings';
 import type { Bill } from './bills';
 import { withToday } from './monthSummary';
 import { liveRecord } from './weekSummary';
@@ -167,13 +167,13 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: d => (d.budgetPeriod === 'monthly' ? 'End a month under budget' : d.budgetPeriod === 'weekly' ? 'End a week under budget' : 'Stay under your daily budget for a whole week'),
     progress: d => yes(endedUnderBudget(d)) },
   { id: 'bills',        group: 'money',  emoji: '🧾', title: 'Bill Wrangler',    description: 'Set up a recurring bill',                    progress: d => count(d.bills.length, 1) },
-  { id: 'saver',        group: 'money',  emoji: '🫙', title: 'Saver',            description: 'Put money in your savings jar',              progress: d => yes(d.savings.entries.some(e => e.amount > 0)) },
-  { id: 'jar-half',     group: 'money',  emoji: '🐷', title: 'Halfway There',    description: 'Fill your savings jar halfway',
+  { id: 'saver',        group: 'money',  emoji: '🫙', title: 'Saver',            description: 'Put money in a savings jar',              progress: d => yes(allJarEntries(d.savings).some(e => e.amount > 0)) },
+  { id: 'jar-half',     group: 'money',  emoji: '🐷', title: 'Halfway There',    description: 'Fill a savings jar halfway',
     progressLabel: p => `${p.value}% full`,
-    progress: d => (d.savings.goal ? count(Math.floor((jarTotal(d.savings) / d.savings.goal.target) * 100), 50) : count(0, 50)) },
-  { id: 'jar-full',     group: 'money',  emoji: '🎉', title: 'Goal!',            description: 'Reach your savings goal',
+    progress: d => count(Math.floor(fullestJar(d.savings) * 100), 50) },
+  { id: 'jar-full',     group: 'money',  emoji: '🎉', title: 'Goal!',            description: 'Reach a savings goal',
     progressLabel: p => `${p.value}% full`,
-    progress: d => (d.savings.goal ? count(Math.floor((jarTotal(d.savings) / d.savings.goal.target) * 100), 100) : count(0, 100)) },
+    progress: d => count(Math.floor(fullestJar(d.savings) * 100), 100) },
   // Bonbon (events)
   { id: 'hello-bonbon', group: 'bonbon', emoji: '🐰', title: 'Hi, Bonbon!',      description: 'Chat with Bonbon' },
   { id: 'look-back',    group: 'bonbon', emoji: '🪞', title: 'Look Back',        description: 'Open a weekly recap' },

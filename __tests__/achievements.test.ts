@@ -88,7 +88,7 @@ describe('achievements', () => {
   });
 
   it('follows the savings jar', () => {
-    const savings = { goal: { name: 'Phone', emoji: '📱', target: 1000, createdAt: day(1) }, entries: [{ id: 'j', amount: 600, date: day(2), kind: 'deposit' as const }] };
+    const savings = { jars: [{ id: 'jar-1', goal: { name: 'Phone', emoji: '📱', target: 1000, createdAt: day(1) }, entries: [{ id: 'j', amount: 600, date: day(2), kind: 'deposit' as const }] }] };
     const d = data({ savings });
     expect(newlyEarned(d, {})).toEqual(expect.arrayContaining(['saver', 'jar-half']));
     expect(newlyEarned(d, {})).not.toContain('jar-full');
