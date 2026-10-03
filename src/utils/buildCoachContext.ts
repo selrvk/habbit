@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   STORAGE_COMMISSIONS, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY,
   STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS, STORAGE_BILLS, STORAGE_SAVINGS,
+  STORAGE_FOCUS, STORAGE_FOCUS_LOG,
 } from '../storage';
 import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
@@ -15,6 +16,7 @@ import type { BudgetState } from '../budget';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 import { jarTotal, parseSavings } from '../savings';
 import { monthStart, monthSummary } from '../monthSummary';
+import { focusMinutes, focusOverview, parseFocusLog, parseFocusSession, type FocusOverview } from '../focus';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -23,6 +25,8 @@ export interface WeeklySnapshotDay {
   habitsScheduled: number;
   habitLabelsCompleted: string[];
   spent: number;
+  /** Minutes on the focus timer. */
+  focusMinutes: number;
 }
 
 // A single spending entry surfaced to the coach
@@ -62,6 +66,8 @@ export interface CoachContext {
   bills: { name: string; amount: number; schedule: string; next: string | null }[];
   /** Each savings jar's goal and how much is in it. */
   savingsGoals: { name: string; target: number; saved: number }[];
+  /** The focus timer: what's running, and time focused lately; null if it's never been set up or used. */
+  focus: FocusOverview | null;
   /** Last month's spending against the month before it, and its biggest category. */
   lastMonth: { name: string; spent: number; prevSpent: number | null; prevName: string; topCategory: string | null } | null;
   weeklySnapshot: WeeklySnapshotDay[];
@@ -81,7 +87,7 @@ export async function buildCoachContext(
 
   const [
     commissionsRaw, financeRaw, financeHistoryRaw,
-    completionHistoryRaw, statsRaw, settingsRaw, billsRaw, savingsRaw,
+    completionHistoryRaw, statsRaw, settingsRaw, billsRaw, savingsRaw, focusRaw, focusLogRaw,
   ] = await Promise.all([
     AsyncStorage.getItem(STORAGE_COMMISSIONS),
     AsyncStorage.getItem(STORAGE_FINANCE),
@@ -91,9 +97,13 @@ export async function buildCoachContext(
     AsyncStorage.getItem(STORAGE_SETTINGS),
     AsyncStorage.getItem(STORAGE_BILLS),
     AsyncStorage.getItem(STORAGE_SAVINGS),
+    AsyncStorage.getItem(STORAGE_FOCUS),
+    AsyncStorage.getItem(STORAGE_FOCUS_LOG),
   ]);
   const savings = parseSavings(savingsRaw ? JSON.parse(savingsRaw) : null);
   const bills: Bill[] = billsRaw ? JSON.parse(billsRaw) : [];
+  const focusLog = parseFocusLog(focusLogRaw ? JSON.parse(focusLogRaw) : []);
+  const focusSession = parseFocusSession(focusRaw ? JSON.parse(focusRaw) : null);
 
   const commissionsData: CommissionsData | null = commissionsRaw ? JSON.parse(commissionsRaw) : null;
   const financeData: FinanceData | null         = financeRaw ? JSON.parse(financeRaw) : null;
@@ -199,6 +209,7 @@ export async function buildCoachContext(
       habitsScheduled: scheduledIds.length,
       habitLabelsCompleted,
       spent: finance?.total ?? (date === todayStr ? spentToday : 0),
+      focusMinutes: focusMinutes(focusLog, date, date),
     };
   });
 
@@ -232,6 +243,7 @@ export async function buildCoachContext(
           billsSetAside: Math.round(budget.billsSetAside * 100) / 100,
         }
       : null,
+    focus: focusOverview(focusLog, focusSession, habits, todayStr, Date.now()),
     lastMonth: (() => {
       const today = last7[last7.length - 1];
       const m = monthSummary({

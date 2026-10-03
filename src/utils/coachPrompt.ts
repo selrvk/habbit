@@ -2,6 +2,31 @@
 
 import type { CoachContext } from './buildCoachContext';
 import { getTodayKey } from '../helpers';
+import { durationLabel, type FocusOverview } from '../focus';
+
+/** The FOCUS TIMER section: what's running, and time focused lately. */
+export function focusStatus(f: FocusOverview): string {
+  const lines: string[] = [];
+  const r = f.running;
+  if (r) {
+    const time  = new Date(f.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const block = r.blocks > 1 ? `block ${r.block} of ${r.blocks}` : 'a block';
+    lines.push(`Running as of ${time}: ${r.label}, `
+      + (r.phase === 'focus'
+        ? `${block} ${r.paused ? `paused with ${r.minutesLeft} min left` : r.minutesLeft > 0 ? `with ${r.minutesLeft} min left` : 'just finished'}.`
+        : `on a break after ${block}, ${r.minutesLeft > 0 ? `${r.minutesLeft} min left` : 'ready for the next block'}.`));
+  }
+  lines.push(`Focused today: ${f.todayMinutes > 0 ? durationLabel(f.todayMinutes) : 'nothing yet'}.`);
+  lines.push(f.weekMinutes > 0
+    ? `Last 7 days: ${durationLabel(f.weekMinutes)} over ${f.weekDays} day${f.weekDays === 1 ? '' : 's'}`
+      + (f.byHabit.length > 0 ? ` (${f.byHabit.map(h => `${h.label} ${durationLabel(h.minutes)}`).join(', ')})` : '')
+      + `; the 7 days before: ${f.prevWeekMinutes > 0 ? `${durationLabel(f.prevWeekMinutes)}, so ${f.weekMinutes >= f.prevWeekMinutes ? 'up' : 'down'} ${Math.round(Math.abs(f.weekMinutes - f.prevWeekMinutes) / f.prevWeekMinutes * 100)}%` : 'none'}.`
+    : 'Nothing focused in the last 7 days.');
+  if (f.timed.length > 0) {
+    lines.push(`Habits with a focus timer: ${f.timed.map(t => `${t.label} (${t.minutes}-min blocks${t.breakMinutes > 0 ? `, ${t.breakMinutes}-min breaks` : ''})`).join(', ')}.`);
+  }
+  return lines.join('\n');
+}
 
 export function buildSystemPrompt(ctx: CoachContext): string {
   const sym = ctx.currency === 'USD' ? '$'
@@ -50,7 +75,7 @@ export function buildSystemPrompt(ctx: CoachContext): string {
 
   // ── Weekly snapshot table ──────────────────────────────────────────────────
   const snapshotLines = ctx.weeklySnapshot
-    .filter(day => day.habitsScheduled > 0 || day.spent > 0)
+    .filter(day => day.habitsScheduled > 0 || day.spent > 0 || day.focusMinutes > 0)
     .map(day => {
       const isToday  = day.date === getTodayKey();
       const label    = isToday ? 'Today' : day.dayName;
@@ -61,7 +86,8 @@ export function buildSystemPrompt(ctx: CoachContext): string {
       const names    = day.habitLabelsCompleted.length > 0
         ? ` (${day.habitLabelsCompleted.join(', ')})`
         : '';
-      return `  ${label}: ${habStr}${names} — ${spendStr}`;
+      const focusStr = day.focusMinutes > 0 ? ` — ${durationLabel(day.focusMinutes)} focused` : '';
+      return `  ${label}: ${habStr}${names} — ${spendStr}${focusStr}`;
     });
 
   // ── Individual spending entries ────────────────────────────────────────────
@@ -90,6 +116,7 @@ Never repeat the raw numbers back robotically. Interpret them and give one clear
 Look for patterns between habit completion and spending — e.g. days where habits were skipped often show higher spend. Only mention this if the data actually supports it, don't force it.
 When the user asks a vague question like "how did my week go?", lead with the most interesting pattern you see, not a list of stats.
 When the user asks what they spent money on, use the SPENDING ENTRIES section below — it contains the actual items and notes.
+Habits can be timed with the focus timer (set up when editing a habit, started with the ▶︎ on it): blocks of focused time, each finished block counting as one check-off. The FOCUS TIMER section has the user's numbers; it's a good thing to suggest for habits like studying or reading.
 If no note was recorded for an entry, say so honestly rather than guessing.
 If the user asks something completely unrelated to habits or finances, gently redirect them.
 
@@ -100,11 +127,11 @@ Best streak ever: ${ctx.bestStreak} day${ctx.bestStreak === 1 ? '' : 's'}
 
 HABITS TODAY
 ${habitStatus}
-
+${ctx.focus ? `\nFOCUS TIMER\n${focusStatus(ctx.focus)}\n` : ''}
 SPENDING TODAY
 ${financeStatus}
 
-LAST 7 DAYS (habits + spending per day)
+LAST 7 DAYS (habits + spending + focus per day)
 ${snapshotLines.join('\n')}
 
 SPENDING ENTRIES (last 7 days, individual transactions with notes)

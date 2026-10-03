@@ -1,5 +1,5 @@
 import {
-  clock, durationLabel, focusMinutes, logFocus, nextBlock, pause, progress, resume, settle, startBlock, timeLeft,
+  clock, durationLabel, focusMinutes, focusOverview, logFocus, nextBlock, pause, progress, resume, settle, startBlock, timeLeft,
   type FocusSession,
 } from '../src/focus';
 import type { Commission } from '../src/types';
@@ -93,5 +93,35 @@ describe('focus time', () => {
     expect(durationLabel(45)).toBe('45 min');
     expect(durationLabel(80)).toBe('1h 20m');
     expect(durationLabel(120)).toBe('2h');
+  });
+});
+
+describe('focusOverview', () => {
+  const log = [
+    { date: '2026-09-20', habitId: 'study', minutes: 50 },
+    { date: '2026-09-27', habitId: 'study', minutes: 50 },
+    { date: '2026-09-30', habitId: 'study', minutes: 75 },
+    { date: '2026-09-30', habitId: 'gone', minutes: 25 },
+    { date: '2026-10-03', habitId: 'read', minutes: 20 },
+  ];
+  const habits = [study(), { ...study({ id: 'read', label: 'Read' }), focus: undefined }];
+
+  it('sums up today, the last 7 days and the 7 before', () => {
+    expect(focusOverview(log, null, habits, '2026-10-03', at('2026-10-03', 9))).toEqual({
+      at: at('2026-10-03', 9), running: null,
+      todayMinutes: 20, weekMinutes: 170, prevWeekMinutes: 50, weekDays: 3,
+      byHabit: [{ label: 'Study', minutes: 125 }, { label: 'Read', minutes: 20 }], // "gone" was deleted
+      timed: [{ label: 'Study', minutes: 25, breakMinutes: 5 }],
+    });
+  });
+
+  it('describes the running timer', () => {
+    const s = pause(startBlock(study(), at('2026-10-03', 9), 'a'), at('2026-10-03', 9, 10));
+    expect(focusOverview([], s, habits, '2026-10-03', at('2026-10-03', 9, 30))?.running)
+      .toEqual({ label: 'Study', phase: 'focus', block: 2, blocks: 4, minutesLeft: 15, paused: true });
+  });
+
+  it('is null when the timer has never been set up or used', () => {
+    expect(focusOverview([], null, [{ ...study(), focus: undefined }], '2026-10-03', 0)).toBeNull();
   });
 });

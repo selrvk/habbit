@@ -154,3 +154,45 @@ export const parseFocusSession = (raw: unknown): FocusSession | null => {
   return s && typeof s.id === 'string' && typeof s.habitId === 'string' && (s.phase === 'focus' || s.phase === 'break')
     && typeof s.endsAt === 'number' && typeof s.startedAt === 'number' ? s : null;
 };
+
+// ── For Bonbon ────────────────────────────────────────────────────────────────
+
+export type FocusOverview = {
+  /** When this was worked out (ms), for the running timer. */
+  at: number;
+  /** The block or break running. */
+  running: { label: string; phase: 'focus' | 'break'; block: number; blocks: number; minutesLeft: number; paused: boolean } | null;
+  todayMinutes: number;
+  /** The last 7 days (today included), and the 7 before them. */
+  weekMinutes: number;
+  prevWeekMinutes: number;
+  weekDays: number;
+  /** The last 7 days by habit, most first (habits deleted since are left out). */
+  byHabit: { label: string; minutes: number }[];
+  /** Habits set up with the focus timer. */
+  timed: { label: string; minutes: number; breakMinutes: number }[];
+};
+
+/** The focus timer at a glance, for Bonbon's chat; null if it's never been set up or used. */
+export const focusOverview = (log: FocusLogEntry[], session: FocusSession | null, habits: Commission[], todayKey: string, now: number): FocusOverview | null => {
+  const timed = habits.flatMap(h => (h.focus ? [{ label: h.label, minutes: h.focus.minutes, breakMinutes: h.focus.breakMinutes }] : []));
+  if (timed.length === 0 && log.length === 0 && !session) return null;
+  const from   = addDaysToKey(todayKey, -6);
+  const week   = log.filter(e => e.date >= from && e.date <= todayKey && e.minutes > 0);
+  const labels = new Map(habits.map(h => [h.id, h.label]));
+  const byHabit = new Map<string, number>();
+  for (const e of week) if (labels.has(e.habitId)) byHabit.set(e.habitId, (byHabit.get(e.habitId) ?? 0) + e.minutes);
+  return {
+    at: now,
+    running: session && {
+      label: session.label, phase: session.phase, block: session.block, blocks: session.blocks,
+      minutesLeft: Math.ceil(timeLeft(session, now) / MINUTE), paused: session.pausedLeft !== undefined,
+    },
+    todayMinutes:    focusMinutes(log, todayKey, todayKey),
+    weekMinutes:     focusMinutes(week, from, todayKey),
+    prevWeekMinutes: focusMinutes(log, addDaysToKey(from, -7), addDaysToKey(from, -1)),
+    weekDays:        new Set(week.map(e => e.date)).size,
+    byHabit: [...byHabit].map(([id, minutes]) => ({ label: labels.get(id)!, minutes })).sort((a, b) => b.minutes - a.minutes),
+    timed,
+  };
+};
