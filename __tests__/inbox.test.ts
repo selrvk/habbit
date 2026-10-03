@@ -16,6 +16,14 @@ const spend = (id: string, date: string, amount: number, over: Partial<InboxEven
 const checkOff = (id: string, date: string, habitId = 'h1'): InboxEvent => ({ id, kind: 'habit', date, habitId });
 
 describe('parseInbox', () => {
+  it('keeps the focus timer’s pause and resume', () => {
+    expect(parseInbox(JSON.stringify([
+      { id: 'p', kind: 'focus', date: MON, action: 'pause', at: 1790990000000 },
+      { id: 'q', kind: 'focus', date: MON, action: 'stop', at: 1790990000000 },
+      { id: 'r', kind: 'focus', date: MON, action: 'resume' },
+    ]))).toEqual([{ id: 'p', kind: 'focus', date: MON, action: 'pause', at: 1790990000000 }]);
+  });
+
   it('keeps well-formed events and drops the rest', () => {
     const raw = JSON.stringify([
       { id: 'a', kind: 'spend', date: MON, time: '1:00 PM', amount: 150.456, category: 'food', note: '  Lunch ' },

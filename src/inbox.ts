@@ -14,7 +14,9 @@ import { categoryOf } from './categories';
 
 export type InboxEvent =
   | { id: string; kind: 'spend'; date: string; time: string; amount: number; category?: string; note?: string }
-  | { id: string; kind: 'habit'; date: string; habitId: string };
+  | { id: string; kind: 'habit'; date: string; habitId: string }
+  /** The focus timer's Live Activity button, pressed at `at` (ms). Applied in App.tsx. */
+  | { id: string; kind: 'focus'; date: string; action: 'pause' | 'resume'; at: number };
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_AMOUNT = 100_000_000;
@@ -37,6 +39,9 @@ export const parseInbox = (raw: string | null | undefined): InboxEvent[] => {
       }];
     }
     if (e.kind === 'habit' && typeof e.habitId === 'string') return [{ id: e.id, kind: 'habit', date: e.date, habitId: e.habitId }];
+    if (e.kind === 'focus' && (e.action === 'pause' || e.action === 'resume') && Number.isFinite(e.at)) {
+      return [{ id: e.id, kind: 'focus', date: e.date, action: e.action, at: Number(e.at) }];
+    }
     return [];
   });
 };

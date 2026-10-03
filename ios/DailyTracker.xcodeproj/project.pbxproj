@@ -16,6 +16,7 @@
 		737DEA57A8577E982736EDF3 /* HabbitWidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		9B6F3EC09A1DA1A3C89A768A /* FocusActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0F2098CFFDCCE34BC7229F /* FocusActivity.swift */; };
 		A28BFC6F391CA55CD56D0337 /* HabbitIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D00ED533D9E8045315D521 /* HabbitIntents.swift */; };
 		ACE14813FAE057C7BD079CE2 /* HabbitWidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */; };
 		B281A9A4A28FBE1F2EF1E560 /* HabbitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E590E16D45C1EFC66A44F960 /* HabbitStore.swift */; };
@@ -27,6 +28,8 @@
 		CAA1A648E1CD9958760B0F42 /* CloudBackup.m in Sources */ = {isa = PBXBuildFile; fileRef = 217152F79F97680852A14ACD /* CloudBackup.m */; };
 		CD4A98A6A97ADC61375D1EA1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		DBB4CF2054119AAF8B387047 /* libPods-DailyTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9379D2206BDE003D99A90B58 /* libPods-DailyTracker.a */; };
+		E6B11425D0CA79EEE48A9D4F /* FocusActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0F2098CFFDCCE34BC7229F /* FocusActivity.swift */; };
+		E967629FB64B000D79F5D429 /* FocusActivityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 08BAFBB77D99BED6E068AA0E /* FocusActivityModule.m */; };
 		F9657AFAEC6B8420499FA5A3 /* HabbitStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E590E16D45C1EFC66A44F960 /* HabbitStore.swift */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +59,7 @@
 
 /* Begin PBXFileReference section */
 		039E1AFEDC7248EF83A282B7 /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = DailyTracker/Colors.xcassets; sourceTree = "<group>"; };
+		08BAFBB77D99BED6E068AA0E /* FocusActivityModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = FocusActivityModule.m; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* DailyTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DailyTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = DailyTracker/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = DailyTracker/Info.plist; sourceTree = "<group>"; };
@@ -80,12 +84,13 @@
 		B7EBDC442F95C846008FDBCF /* HabbitWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HabbitWidgetExtension.entitlements; sourceTree = "<group>"; };
 		D3D00ED533D9E8045315D521 /* HabbitIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HabbitIntents.swift; sourceTree = "<group>"; };
 		D75FF905D1344F6186C7FE5D /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = DailyTracker/BootSplash.storyboard; sourceTree = "<group>"; };
+		DF0F2098CFFDCCE34BC7229F /* FocusActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FocusActivity.swift; sourceTree = "<group>"; };
 		E590E16D45C1EFC66A44F960 /* HabbitStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HabbitStore.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B7EBDC412F95C727008FDBCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -95,7 +100,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B7EBDC2D2F95C725008FDBCF /* HabbitWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B7EBDC412F95C727008FDBCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HabbitWidget; sourceTree = "<group>"; };
+		B7EBDC2D2F95C725008FDBCF /* HabbitWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B7EBDC412F95C727008FDBCF /* Exceptions for "HabbitWidget" folder in "HabbitWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = HabbitWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,6 +156,8 @@
 				D3D00ED533D9E8045315D521 /* HabbitIntents.swift */,
 				345790A777CFB54C6597A623 /* HabbitInbox.m */,
 				A54D10D2FAA3D02DD8E22F2A /* HabbitWidgetIntents.swift */,
+				DF0F2098CFFDCCE34BC7229F /* FocusActivity.swift */,
+				08BAFBB77D99BED6E068AA0E /* FocusActivityModule.m */,
 			);
 			name = DailyTracker;
 			sourceTree = "<group>";
@@ -398,6 +416,8 @@
 				A28BFC6F391CA55CD56D0337 /* HabbitIntents.swift in Sources */,
 				3499143B02F401AC73E364DA /* HabbitInbox.m in Sources */,
 				737DEA57A8577E982736EDF3 /* HabbitWidgetIntents.swift in Sources */,
+				E6B11425D0CA79EEE48A9D4F /* FocusActivity.swift in Sources */,
+				E967629FB64B000D79F5D429 /* FocusActivityModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,6 +427,7 @@
 			files = (
 				F9657AFAEC6B8420499FA5A3 /* HabbitStore.swift in Sources */,
 				ACE14813FAE057C7BD079CE2 /* HabbitWidgetIntents.swift in Sources */,
+				9B6F3EC09A1DA1A3C89A768A /* FocusActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

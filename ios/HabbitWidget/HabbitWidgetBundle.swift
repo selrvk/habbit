@@ -16,5 +16,6 @@ struct HabbitWidgetBundle: WidgetBundle {
         BudgetWidget()
         LogExpenseControl()
         NextHabitControl()
+        FocusLiveActivity()
     }
 }

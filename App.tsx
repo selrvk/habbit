@@ -26,6 +26,7 @@ import { parseCustomCategories, setCustomCategories, type Category, type CustomC
 import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
 import { focusMinutes, logFocus, nextBlock, parseFocusLog, parseFocusSession, pause as pauseFocus, resume as resumeFocus, settle, startBlock, type FocusLogEntry, type FocusSession } from './src/focus';
 import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
+import { syncFocusActivity } from './src/utils/focusActivity';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, type Quiet } from './src/notifications';
@@ -212,13 +213,33 @@ export default function App() {
   }, [saveStats, saveCompletionHistory]);
 
   // ── Focus timer (focus.ts) ─────────────────────────────────────────────────
-  /** Saves the running session (or clears it) and plans its notifications. */
-  const saveFocusSession = useCallback((next: FocusSession | null) => {
+  /**
+   * Saves the running session (or clears it), and plans its notifications and Live Activity.
+   * `finished`: the session just finished the day's last block, for the activity to show.
+   * `fromActivity`: paused or resumed on the Live Activity, which has already planned (or
+   * removed) the notifications; replanning them here could leave none if the app is
+   * suspended halfway.
+   */
+  const saveFocusSession = useCallback((next: FocusSession | null, finished?: FocusSession, fromActivity = false) => {
     focusRef.current = next;
     setFocusSession(next);
     (next ? AsyncStorage.setItem(STORAGE_FOCUS, JSON.stringify(next)) : AsyncStorage.removeItem(STORAGE_FOCUS)).catch(() => {});
-    scheduleFocusNotifs(next);
+    if (!fromActivity) scheduleFocusNotifs(next);
+    if (!next && finished) syncFocusActivity(finished, true);
+    else syncFocusActivity(next);
   }, []);
+
+  /** Pause or resume pressed on the Live Activity (queued by the native side, as of `at`). */
+  const applyFocusActions = useCallback((events: InboxEvent[]) => {
+    for (const e of events) {
+      const s = focusRef.current;
+      if (e.kind !== 'focus' || !s || s.phase !== 'focus') continue;
+      // Pressed after the block ran out: it's done, so it counts rather than pausing at 0:00.
+      if (e.action === 'pause' && s.pausedLeft === undefined && e.at >= s.endsAt) continue;
+      const next = e.action === 'pause' ? pauseFocus(s, e.at) : resumeFocus(s, e.at);
+      if (next !== s) saveFocusSession(next, undefined, true);
+    }
+  }, [saveFocusSession]);
 
   const addFocusTime = useCallback((entry: FocusLogEntry) => {
     focusLogRef.current = logFocus(focusLogRef.current, entry);
@@ -241,8 +262,9 @@ export default function App() {
     const r = settle(before, Date.now(), getTodayKey());
     if (r.session === before) return [];
     if (r.logged) addFocusTime(r.logged);
-    if (before && r.logged && !r.session) finishFocus(before);
-    saveFocusSession(r.session);
+    const finished = before && r.logged && !r.session ? before : undefined;
+    if (finished) finishFocus(finished);
+    saveFocusSession(r.session, finished);
     return r.events;
   }, [addFocusTime, finishFocus, saveFocusSession]);
 
@@ -273,7 +295,7 @@ export default function App() {
       if (!s) return;
       const next = nextBlock(s, liveState.current.commissions.find(c => c.id === s.habitId), Date.now(), generateId());
       if (!next) finishFocus(s);
-      saveFocusSession(next);
+      saveFocusSession(next, next ? undefined : s);
     },
     onClose:  () => { setFocusOpen(false); setFocusDone(null); },
   }), [saveFocusSession, finishFocus]);
@@ -281,8 +303,9 @@ export default function App() {
   const drainInbox = useCallback(async () => {
     if (!hasLoaded.current) return;
     const events = await takeInbox();
+    applyFocusActions(events);
     catchUp([...events, ...settleFocus()]);
-  }, [catchUp, settleFocus]);
+  }, [catchUp, settleFocus, applyFocusActions]);
 
   /** The block ran out with the app open. */
   const onFocusElapsed = useCallback(() => {
@@ -386,10 +409,15 @@ export default function App() {
       const storedFS = await AsyncStorage.getItem(STORAGE_FOCUS);
       focusRef.current = parseFocusSession(storedFS ? JSON.parse(storedFS) : null);
       setFocusSession(focusRef.current);
+      const inbox = await takeInbox();
+      applyFocusActions(inbox);
+      const unsettled = focusRef.current;
       const focusEvents = settleFocus();
+      // Settling updates the Live Activity itself; otherwise bring it in step (or end a stray one).
+      if (focusRef.current === unsettled) syncFocusActivity(focusRef.current);
 
       // Up to today: the new day, bills that came due, and what Siri and quick actions did.
-      const day = catchUpDay(stored, todayKey, [...await takeInbox(), ...focusEvents]);
+      const day = catchUpDay(stored, todayKey, [...inbox, ...focusEvents]);
 
       loadedTotals = day.dailyTotals; loadedSpent = day.finance.spentToday; loadedTodayHistory = day.finance.history; loadedBills = day.bills;
       setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills); setDailyTotals(loadedTotals);
@@ -445,7 +473,7 @@ export default function App() {
       }));
       setReady(true);
     }
-  }, [saveStats, saveCompletionHistory, settleFocus]);
+  }, [saveStats, saveCompletionHistory, settleFocus, applyFocusActions]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
