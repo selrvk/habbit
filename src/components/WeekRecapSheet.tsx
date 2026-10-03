@@ -16,6 +16,7 @@ import { addDaysToKey, currencyStr, parseDateKey } from '../helpers';
 import { periodStart } from '../budget';
 import { weekLabel, weekSummary, weekTip, weekTrend, type WeekData } from '../weekSummary';
 import { savedWeekNote, writeWeekNote } from '../utils/weekNote';
+import { durationLabel } from '../focus';
 import { CoachError } from '../utils/bonbonApi';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', red: '#f09090', muted: 'rgba(232,213,192,0.55)', border: 'rgba(212,149,106,0.18)' };
@@ -50,7 +51,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
   const current = periodStart('weekly', data.todayKey);
   const first   = periodStart('weekly', [data.dailyTotals[0]?.date, data.history[0]?.date, data.todayKey].filter(Boolean).sort()[0]!);
   const cur     = data.currency;
-  const empty   = s.habits.trackedDays === 0 && s.money.spent === 0;
+  const empty   = s.habits.trackedDays === 0 && s.money.spent === 0 && !s.focus;
 
   const write = async () => {
     setNote({ status: 'loading' });
@@ -112,8 +113,9 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
     </View>
   );
 
-  const { habits: h, money: m } = s;
+  const { habits: h, money: m, focus: f } = s;
   const change = m.prevSpent ? (m.spent - m.prevSpent) / m.prevSpent : null;
+  const focusChange = f && f.prevMinutes > 0 ? (f.minutes - f.prevMinutes) / f.prevMinutes : null;
   const budgetLine = (() => {
     const b = m.budget;
     if (!b) return null;
@@ -233,6 +235,32 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
                 </Section>
               )}
 
+              {/* ── Focus ── */}
+              {f && (
+                <Section title="Focus">
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(24), color: C.cream }}>{durationLabel(f.minutes)}</Text>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }} numberOfLines={1}>
+                        {f.habits.length === 1 ? `${f.habits[0].label} · ` : ''}over {f.days} day{f.days === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), marginBottom: 2, color: focusChange !== null && focusChange > 0 ? C.green : C.muted }}>
+                      {focusChange === null ? 'None the week before'
+                        : focusChange === 0 ? 'Same as last week'
+                        : `${focusChange > 0 ? '▲' : '▼'} ${Math.abs(Math.round(focusChange * 100))}% vs last week`}
+                    </Text>
+                  </View>
+                  {f.habits.length > 1 && (
+                    <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
+                      {f.habits.slice(0, 3).map((x, i, list) => (
+                        <Row key={x.id} icon="⏱️" title={x.label} detail={durationLabel(x.minutes)} last={i === list.length - 1} />
+                      ))}
+                    </View>
+                  )}
+                </Section>
+              )}
+
               {/* ── Money ── */}
               {(m.topCategory || m.biggest || m.saved !== 0) && (
                 <Section title="Money">
@@ -293,9 +321,10 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
   );
 };
 
-/** Two rows of bars, one per week: the share of perfect days, and spending. */
+/** Rows of bars, one per week: the share of perfect days, spending, and focus time (if any). */
 const Trend = ({ weeks, fs, cur }: { weeks: ReturnType<typeof weekTrend>; fs: (n: number) => number; cur: string }) => {
   const maxSpent = Math.max(...weeks.map(w => w.spent), 1);
+  const maxFocus = Math.max(...weeks.map(w => w.focusMinutes));
   const Bars = ({ title, values, color, caption }: { title: string; values: (number | null)[]; color: string; caption: string }) => (
     <View style={{ marginBottom: 14 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -320,6 +349,11 @@ const Trend = ({ weeks, fs, cur }: { weeks: ReturnType<typeof weekTrend>; fs: (n
       <Bars title="Spent" color={C.accent}
         values={weeks.map(w => (w.spent > 0 ? w.spent / maxSpent : null))}
         caption={`${currencyStr(cur, money(last.spent))} that week`} />
+      {maxFocus > 0 && (
+        <Bars title="Focus" color={C.cream}
+          values={weeks.map(w => (w.focusMinutes > 0 ? w.focusMinutes / maxFocus : null))}
+          caption={last.focusMinutes > 0 ? `${durationLabel(last.focusMinutes)} that week` : ''} />
+      )}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{weekLabel(weeks[0].start).split(' – ')[0]}</Text>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{weekLabel(last.start).split(' – ')[0]}</Text>

@@ -875,9 +875,9 @@ export default function App() {
 
   // ── Sunday recap ─────────────────────────────────────────────────────────
   const weekData: WeekRecapData = useMemo(() => ({
-    todayKey: dayKey, commissions, history: completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings,
+    todayKey: dayKey, commissions, history: completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings, focusLog,
     budgetPeriod, budgetAmount, currency, name, streak: stats.currentStreak,
-  }), [dayKey, commissions, completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings, budgetPeriod, budgetAmount, currency, name, stats.currentStreak]);
+  }), [dayKey, commissions, completionHistory, dailyTotals, todayHistory, spentToday, topUps, bills, savings, focusLog, budgetPeriod, budgetAmount, currency, name, stats.currentStreak]);
 
   // ── Achievements ─────────────────────────────────────────────────────────
   const achievementData: AchievementData = useMemo(() => ({

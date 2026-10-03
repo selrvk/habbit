@@ -17,7 +17,7 @@ const rec = (date: string, scheduled: string[], done: string[], skipped: string[
 
 const data = (over: Partial<WeekData> = {}): WeekData => ({
   todayKey: day(29), commissions: [habit('Read'), habit('Gym')], history: [],
-  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS,
+  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS, focusLog: [],
   budgetPeriod: 'weekly', budgetAmount: 3500, ...over,
 });
 
@@ -98,6 +98,38 @@ describe('weekSummary money', () => {
   });
 });
 
+describe('weekSummary focus', () => {
+  const focusLog = [
+    { date: day(15), habitId: 'Read', minutes: 50 },
+    { date: day(22), habitId: 'Read', minutes: 50 },
+    { date: day(22), habitId: 'Gym', minutes: 25 },
+    { date: day(24), habitId: 'Read', minutes: 25 },
+    { date: day(25), habitId: 'Gone', minutes: 20 },
+    { date: day(28), habitId: 'Read', minutes: 25 },
+  ];
+
+  it('adds up the week, by habit, against the week before', () => {
+    const s = weekSummary(MON, data({ focusLog }));
+    expect(s.focus).toEqual({
+      minutes: 120, prevMinutes: 50, days: 3,
+      habits: [{ id: 'Read', label: 'Read', minutes: 75 }, { id: 'Gym', label: 'Gym', minutes: 25 }], // "Gone" was deleted
+    });
+  });
+
+  it('compares the same days of last week while the week is going', () => {
+    const s = weekSummary(MON, data({ todayKey: day(22), focusLog: [...focusLog, { date: day(16), habitId: 'Read', minutes: 30 }] }));
+    expect(s.focus).toMatchObject({ minutes: 75, prevMinutes: 50 }); // Sep 16 is after the same point of last week
+  });
+
+  it('is null for a week with no focus time', () => {
+    expect(weekSummary(day(7), data({ focusLog })).focus).toBeNull();
+  });
+
+  it('counts toward the trend', () => {
+    expect(weekTrend(MON, data({ focusLog }), 2).map(w => w.focusMinutes)).toEqual([50, 120]);
+  });
+});
+
 describe('weekTip', () => {
   const commissions = [habit('Read'), habit('Gym', { reminderTime: { hour: 7, minute: 0 } as any })];
   it('says something for a quiet week', () => {
@@ -106,6 +138,11 @@ describe('weekTip', () => {
   it('points at the habit that slipped', () => {
     const history = [21, 22, 23, 24, 25].map(n => rec(day(n), ['Read', 'Gym'], n % 2 ? ['Read'] : ['Read', 'Gym']));
     expect(weekTip(weekSummary(MON, data({ commissions, history })), commissions)).toBe('Gym slipped 3 times. Try moving its reminder to a time that suits you better.');
+  });
+  it('notices more focus time', () => {
+    const history = [rec(day(21), ['Read', 'Gym'], ['Read', 'Gym']), rec(day(22), ['Read', 'Gym'], ['Read'])];
+    const focusLog = [{ date: day(15), habitId: 'Read', minutes: 50 }, { date: day(22), habitId: 'Read', minutes: 100 }];
+    expect(weekTip(weekSummary(MON, data({ history, focusLog })), commissions)).toBe('You focused 100% longer than last week. Keep those blocks coming 🥕');
   });
   it('celebrates a perfect week', () => {
     const history = [21, 22, 23].map(n => rec(day(n), ['Read'], ['Read']));

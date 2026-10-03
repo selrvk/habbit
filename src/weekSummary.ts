@@ -1,7 +1,7 @@
 // src/weekSummary.ts
 //
-// The Sunday recap: a week's habits (Monday to Sunday), money against the budget, the
-// best day, and one tip worked out from the numbers. While the week is still going (the
+// The Sunday recap: a week's habits (Monday to Sunday), focus time, money against the
+// budget, the best day, and one tip worked out from the numbers. While the week is still going (the
 // recap opens on Sunday evening), today counts once it's done and is never held against it.
 
 import type { Commission, CompletionRecord, DailyTotal, SpendingEntry } from './types';
@@ -11,6 +11,7 @@ import { categoryOf, spendingByCategory, type CategoryTotal } from './categories
 import { billSpending, type Bill } from './bills';
 import { monthLabel, withToday } from './monthSummary';
 import { allJarEntries, type Savings } from './savings';
+import { focusMinutes, type FocusLogEntry } from './focus';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -36,6 +37,16 @@ export type WeekSummary = {
     /** Set when weekends went clearly worse than weekdays (shares of habits done, 0–1). */
     weekendDip: { weekday: number; weekend: number } | null;
   };
+  /** Time on the focus timer, or null if there was none this week. */
+  focus: {
+    minutes: number;
+    /** The week before (the same days of it, while this one is going). */
+    prevMinutes: number;
+    /** Days with some focus time. */
+    days: number;
+    /** Each habit's minutes, most first (habits deleted since are left out). */
+    habits: { id: string; label: string; minutes: number }[];
+  } | null;
   money: {
     spent: number;
     /** The week before (the same days of it, while this one is going); null if nothing was logged. */
@@ -62,6 +73,7 @@ export type WeekData = {
   topUps: TopUp[];
   bills: Bill[];
   savings: Savings;
+  focusLog: FocusLogEntry[];
   budgetPeriod: BudgetPeriod;
   budgetAmount: number;
 };
@@ -149,6 +161,19 @@ export const weekSummary = (week: string, d: WeekData): WeekSummary => {
     ? { weekday: share(wk.done, wk.of), weekend: share(we.done, we.of) }
     : null;
 
+  // ── Focus ──
+  const focusDays = d.focusLog.filter(e => e.date >= start && e.date <= end && e.minutes > 0);
+  const byHabit   = new Map<string, number>();
+  for (const e of focusDays) byHabit.set(e.habitId, (byHabit.get(e.habitId) ?? 0) + e.minutes);
+  const focus: WeekSummary['focus'] = focusDays.length === 0 ? null : {
+    minutes:     focusMinutes(focusDays, start, end),
+    prevMinutes: focusMinutes(d.focusLog, addDaysToKey(start, -7), addDaysToKey(end, -7)),
+    days:        new Set(focusDays.map(e => e.date)).size,
+    habits: [...byHabit]
+      .flatMap(([id, minutes]) => (labels.has(id) ? [{ id, label: labels.get(id)!, minutes }] : []))
+      .sort((a, b) => b.minutes - a.minutes),
+  };
+
   // ── Money ──
   const allDays = withToday(d.dailyTotals, d.todayKey, d.spentToday, d.todayHistory);
   const daysIn  = (from: string, to: string) => allDays.filter(x => x.date >= from && x.date <= to);
@@ -203,6 +228,7 @@ export const weekSummary = (week: string, d: WeekData): WeekSummary => {
       })),
       weekendDip,
     },
+    focus,
     money: {
       spent,
       prevSpent: prevDays.length > 0 ? total(prevDays) : null,
@@ -238,10 +264,14 @@ export const weekTip = (s: WeekSummary, commissions: Commission[]): string => {
     return `Spending was up ${pct((m.spent - m.prevSpent) / m.prevSpent)} on last week${category ? `, mostly on ${category}` : ''}.`;
   }
   if (m.prevSpent && m.spent < m.prevSpent * 0.85) return `You spent ${pct((m.prevSpent - m.spent) / m.prevSpent)} less than last week. Nice!`;
+  const f = s.focus;
+  if (f && f.prevMinutes > 0 && f.minutes >= f.prevMinutes * 1.25) {
+    return `You focused ${pct((f.minutes - f.prevMinutes) / f.prevMinutes)} longer than last week. Keep those blocks coming 🥕`;
+  }
   return 'A steady week. Pick one Habbit to nail next week.';
 };
 
-export type WeekTrend = { start: string; spent: number; perfectDays: number; trackedDays: number };
+export type WeekTrend = { start: string; spent: number; perfectDays: number; trackedDays: number; focusMinutes: number };
 
 /** The last `count` weeks up to `week`, oldest first, for the Pro trends. */
 export const weekTrend = (week: string, d: WeekData, count = 8): WeekTrend[] => {
@@ -256,6 +286,7 @@ export const weekTrend = (week: string, d: WeekData, count = 8): WeekTrend[] => 
       spent: round2(allDays.filter(x => x.date >= start && x.date <= end).reduce((s, x) => s + x.total, 0)),
       perfectDays: tracked.filter(r => r.completed).length,
       trackedDays: tracked.length,
+      focusMinutes: focusMinutes(d.focusLog, start, end),
     };
   });
 };

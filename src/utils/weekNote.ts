@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_WEEK_NOTES } from '../storage';
 import { currencyStr, parseDateKey } from '../helpers';
 import { categoryOf } from '../categories';
+import { durationLabel } from '../focus';
 import type { WeekSummary } from '../weekSummary';
 import { askBonbon } from './bonbonApi';
 import { consumeMessage } from './messageQuota';
@@ -30,7 +31,7 @@ export const savedWeekNote = async (s: WeekSummary): Promise<string | null> => {
 export const weekNotePrompt = (s: WeekSummary, name: string, currency: string, streak: number): string => {
   const money = (n: number) => currencyStr(currency, n.toLocaleString('en-US', { maximumFractionDigits: 2 }));
   const pct   = (n: number) => `${Math.round(n * 100)}%`;
-  const { habits: h, money: m } = s;
+  const { habits: h, money: m, focus: f } = s;
   const lines = [
     `Week: ${s.label}${s.inProgress ? ' (Sunday is still going; today counts once it is done)' : ''}.`,
     `Current streak: ${streak} day${streak === 1 ? '' : 's'}.`,
@@ -39,6 +40,7 @@ export const weekNotePrompt = (s: WeekSummary, name: string, currency: string, s
     h.slipped ? `Slipped most: ${h.slipped.label}, missed ${h.slipped.missed} of ${h.slipped.of} days.` : '',
     h.weekly.length > 0 ? `Weekly goals: ${h.weekly.map(w => `${w.label} ${w.done}/${w.target}`).join(', ')}.` : '',
     h.weekendDip ? `Weekends were harder: ${pct(h.weekendDip.weekend)} of habits done on weekends, ${pct(h.weekendDip.weekday)} on weekdays.` : '',
+    f ? `Focus timer: ${durationLabel(f.minutes)} over ${f.days} day${f.days === 1 ? '' : 's'}${f.habits[0] ? `, most on ${f.habits[0].label}` : ''}${f.prevMinutes > 0 ? ` (week before: ${durationLabel(f.prevMinutes)}, ${f.minutes >= f.prevMinutes ? 'up' : 'down'} ${pct(Math.abs(f.minutes - f.prevMinutes) / f.prevMinutes)})` : ''}.` : '',
     `Spent: ${money(m.spent)}${m.prevSpent !== null ? ` (week before: ${money(m.prevSpent)})` : ''}.`,
     m.budget?.kind === 'weekly' ? `Weekly budget ${money(m.budget.budget)}: ${m.budget.left >= 0 ? `${money(m.budget.left)} left` : `${money(-m.budget.left)} over`}.` : '',
     m.budget?.kind === 'monthly' ? `${money(m.budget.left)} left in the monthly budget for ${m.budget.monthName}.` : '',
