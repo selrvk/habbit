@@ -1,11 +1,11 @@
-# Habbit 3 (build 14): App Store submission
+# Habbit 3 (build 15): App Store submission
 
 ## Your steps, in order
 
-1. **Privacy policy:** it's at <https://github.com/selrvk/habbit/blob/main/docs/privacy-policy.md>, where the paywall, Settings and Bonbon's consent card link to. Put the same URL in App Store Connect › App Privacy › Privacy Policy URL.
+1. **Privacy policy:** it's at <https://docs.google.com/document/d/e/2PACX-1vRaehJ-88IhMU8NCGtolO_JnG-gJBGN_eze6f3AMwz_5wUFT52NT8pZYG-fmp7t6c3IIcCTfC7WibFn/pub>, where the paywall, Settings and Bonbon's consent card link to. Put the same URL in App Store Connect › App Privacy › Privacy Policy URL.
 2. **RevenueCat:** remove the promotional Pro you gave yourself for testing.
 3. **Google AI Studio:** check that the API key behind Bonbon is on a project with billing (the paid tier). The consent card and policy say Google doesn't train on Bonbon's chats, which is only true on the paid tier.
-4. **Archive and upload:** in Xcode, choose Any iOS Device, then Product › Archive, then Distribute App › App Store Connect. It's already set to version 3, build 14.
+4. **Archive and upload:** in Xcode, choose Any iOS Device, then Product › Archive, then Distribute App › App Store Connect. It’s already set to version 3, build 15.
 5. **In App Store Connect,** fill in everything below, then on the version page add the subscriptions under "In-App Purchases and Subscriptions" if they show "Ready to Submit".
 6. **Submit for review.**
 
@@ -75,7 +75,7 @@ HABBIT PRO
 Habbit Pro is a monthly or yearly subscription. Payment is charged to your Apple ID, and it renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel it anytime in your App Store account settings.
 
 Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
-Privacy Policy: https://github.com/selrvk/habbit/blob/main/docs/privacy-policy.md
+Privacy Policy: https://docs.google.com/document/d/e/2PACX-1vRaehJ-88IhMU8NCGtolO_JnG-gJBGN_eze6f3AMwz_5wUFT52NT8pZYG-fmp7t6c3IIcCTfC7WibFn/pub
 ```
 
 ## Keywords (100 characters)

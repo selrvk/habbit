@@ -30,6 +30,8 @@ export const STORAGE_WORKOUT_LOG        = '@habbit_rabbit_workout_log';
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
 /** Whether Bonbon may send things to Google's AI ('allowed' / 'under18' / 'no'; aiConsent.ts). Not backed up. */
 export const STORAGE_AI_CONSENT         = '@habbit_rabbit_ai_consent';
+/** The "What's new" pages last seen (WHATS_NEW_VERSION, WhatsNewSheet.tsx). Not backed up. */
+export const STORAGE_WHATS_NEW          = '@habbit_rabbit_whats_new';
 
 // ── Used by "Delete All Data" — never include ONBOARDED or SETTINGS ──────────
 export const CONTENT_STORAGE_KEYS = [
@@ -57,4 +59,5 @@ export const ALL_STORAGE_KEYS = [
   STORAGE_SETTINGS,
   STORAGE_ONBOARDED,
   STORAGE_AI_CONSENT,
+  STORAGE_WHATS_NEW,
 ];

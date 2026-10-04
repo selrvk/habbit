@@ -36,8 +36,9 @@ import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
+import { WhatsNewSheet, WHATS_NEW_VERSION } from './src/components/WhatsNewSheet';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -135,6 +136,7 @@ export default function App() {
   const [weeklyRecap, setWeeklyRecap]             = useState(true);
   // The week the recap sheet is open on (its Monday), or null when closed.
   const [recapOpen, setRecapOpen]                 = useState<string | null>(null);
+  const [whatsNewOpen, setWhatsNewOpen]           = useState(false);
 
   // The day the in-memory state belongs to. Only advanced by catchUp, so data is
   // never written under a new date before the previous day has been rolled over.
@@ -458,6 +460,8 @@ export default function App() {
       const onboarded = await AsyncStorage.getItem(STORAGE_ONBOARDED);
       if (!onboarded) { setIsOnboarded(false); return; }
       setIsOnboarded(true);
+      // Someone updating from an earlier version sees what's new, once.
+      AsyncStorage.getItem(STORAGE_WHATS_NEW).then(seen => { if (seen !== WHATS_NEW_VERSION) setWhatsNewOpen(true); }).catch(() => {});
       const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
       if (storedS) {
         const s: Settings = JSON.parse(storedS);
@@ -777,6 +781,7 @@ export default function App() {
       await AsyncStorage.setItem(STORAGE_COMMISSIONS, JSON.stringify({ items: initial, date: todayKey }));
     }
     await AsyncStorage.setItem(STORAGE_ONBOARDED, 'true');
+    AsyncStorage.setItem(STORAGE_WHATS_NEW, WHATS_NEW_VERSION).catch(() => {});
     scheduleWeeklyRecap(true);
     achievementsFirstRun.current = false; earnedRef.current = {}; setEarned({});
     AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: {} })).catch(() => {});
@@ -1371,6 +1376,11 @@ export default function App() {
               workout={workout} done={workoutDone} log={workoutLog}
               routines={commissions.find(c => c.id === workout?.habitId)?.workout?.routines ?? []}
               {...workoutHandlers}
+            />
+            {/* Waits for any other sheet (a focus timer or workout opened from a link) to close. */}
+            <WhatsNewSheet
+              visible={whatsNewOpen && !focusOpen && !workoutOpen && recapOpen === null && !achievementsOpen}
+              onClose={() => { setWhatsNewOpen(false); AsyncStorage.setItem(STORAGE_WHATS_NEW, WHATS_NEW_VERSION).catch(() => {}); }}
             />
             {toasts.length > 0 && (
               <AchievementToast item={toasts[0]} avatar={avatar} onPress={() => setAchievementsOpen(true)} onDone={() => setToasts(q => q.slice(1))} />
