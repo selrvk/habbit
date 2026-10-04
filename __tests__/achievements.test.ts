@@ -17,7 +17,7 @@ const stats = (over: Partial<Stats> = {}): Stats => ({ currentStreak: 0, bestStr
 
 const data = (over: Partial<AchievementData> = {}): AchievementData => ({
   todayKey: TODAY, stats: stats(), history: [], commissions: [habit('Read')],
-  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS, focusLog: [],
+  dailyTotals: [], todayHistory: [], spentToday: 0, topUps: [], bills: [], savings: EMPTY_SAVINGS, focusLog: [], workoutLog: [],
   budgetPeriod: 'weekly', budgetAmount: 1000, ...over,
 });
 const progress = (id: string, d: AchievementData) => achievementById(id)!.progress!(d);
@@ -70,6 +70,24 @@ describe('achievements', () => {
     const d = data({ focusLog }); // a deleted habit's time still counts
     expect(progressText(achievementById('focus-10h')!, progress('focus-10h', d))).toBe('9/10 hours');
     expect(newlyEarned(data({ focusLog: [...focusLog, { date: day(24), habitId: 'Study', minutes: 30 }] }), {})).toEqual(['focus-first', 'focus-10h']);
+  });
+
+  it('counts workouts and spots a personal best', () => {
+    const workout = (id: string, n: number, unit: 'kg' | 'lb', sets: [number | null, number][], habitId = 'Gym') => ({
+      id, habitId, routineId: 'r', routineName: 'Push', date: day(n), startedAt: n * 1e8, endedAt: n * 1e8 + 1, unit,
+      exercises: [{ name: 'Bench press', sets: sets.map(([weight, reps]) => ({ weight, reps })) }],
+    });
+    const first = workout('a', 22, 'kg', [[60, 8]]);
+    expect(newlyEarned(data({ workoutLog: [first] }), {})).toEqual(['workout-first']);
+    expect(progressText(achievementById('workout-25')!, progress('workout-25', data({ workoutLog: [first] })))).toBe('1/25');
+    // 132 lb is 60 kg: no better. Another habit's heavier bench doesn't count against this one.
+    const same = [first, workout('b', 24, 'lb', [[132, 10]]), workout('c', 25, 'kg', [[100, 1]], 'Other')];
+    expect(progress('workout-pb', data({ workoutLog: same })).value).toBe(0);
+    expect(progress('workout-pb', data({ workoutLog: [...same, workout('d', 26, 'kg', [[62.5, 5]])] })).value).toBe(1);
+    // Bodyweight: more reps than ever.
+    const dips = (id: string, n: number, reps: number) => workout(id, n, 'kg', [[null, reps]]);
+    expect(progress('workout-pb', data({ workoutLog: [dips('e', 22, 10), dips('f', 24, 9)] })).value).toBe(0);
+    expect(progress('workout-pb', data({ workoutLog: [dips('e', 22, 10), dips('f', 24, 12)] })).value).toBe(1);
   });
 
   it('tracks logging: first expense, days in a row and categories (bills aside)', () => {

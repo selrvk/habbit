@@ -261,6 +261,29 @@ export const newBests = (log: WorkoutLog[], w: WorkoutLog): { name: string; labe
   });
 };
 
+/**
+ * Whether any workout beat a personal best (as newBests counts them), in one pass: a heavier
+ * top set, or more reps for an exercise only ever done with bodyweight.
+ */
+export const hadPersonalBest = (log: WorkoutLog[]): boolean => {
+  const best = new Map<string, { kg: number; weighted: boolean; reps: number }>();
+  for (const w of [...log].sort((a, b) => a.startedAt - b.startedAt)) {
+    for (const e of w.exercises) {
+      if (e.sets.length === 0) continue;
+      const key  = `${w.habitId}\n${e.name.trim().toLowerCase()}`;
+      const kgs  = e.sets.filter(s => s.weight !== null).map(s => convertWeight(s.weight!, w.unit, 'kg'));
+      const top  = kgs.length > 0 ? Math.max(...kgs) : null;
+      const reps = Math.max(...e.sets.map(s => s.reps));
+      const prev = best.get(key);
+      if (prev && (top !== null ? top > prev.kg : !prev.weighted && reps > prev.reps)) return true;
+      best.set(key, {
+        kg: Math.max(prev?.kg ?? 0, top ?? 0), weighted: !!prev?.weighted || top !== null, reps: Math.max(prev?.reps ?? 0, reps),
+      });
+    }
+  }
+  return false;
+};
+
 // ── A workout in progress ────────────────────────────────────────────────────
 
 /** A workout of `routine`, each set filled in from the last time (weights) and the plan (reps). */

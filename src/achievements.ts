@@ -13,6 +13,7 @@ import type { Bill } from './bills';
 import { withToday } from './monthSummary';
 import { liveRecord } from './weekSummary';
 import type { FocusLogEntry } from './focus';
+import { hadPersonalBest, type WorkoutLog } from './workout';
 
 export type AchievementGroup = 'habits' | 'money' | 'bonbon';
 
@@ -28,6 +29,7 @@ export type AchievementData = {
   bills: Bill[];
   savings: Savings;
   focusLog: FocusLogEntry[];
+  workoutLog: WorkoutLog[];
   budgetPeriod: BudgetPeriod;
   budgetAmount: number;
 };
@@ -166,6 +168,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'focus-10h',    group: 'habits', emoji: '🧠', title: 'Deep Focus',       description: 'Focus for 10 hours in all',
     progressLabel: p => `${p.value}/${p.target} hours`,
     progress: d => count(Math.floor(focusTotal(d) / 60), 10) },
+  { id: 'workout-first', group: 'habits', emoji: '💪', title: 'First Rep',       description: 'Finish a workout',                           progress: d => count(d.workoutLog.length, 1) },
+  { id: 'workout-pb',   group: 'habits', emoji: '🥇', title: 'Personal Best',    description: 'Beat a personal best in a workout',          progress: d => yes(hadPersonalBest(d.workoutLog)) },
+  { id: 'workout-25',   group: 'habits', emoji: '🏋️', title: 'Iron Bunny',       description: 'Finish 25 workouts',                         progress: d => count(d.workoutLog.length, 25) },
   { id: 'done-100',     group: 'habits', emoji: '🥕', title: 'Carrot Collector', description: 'Check off 100 Habbits',                      progress: d => count(d.stats.totalCompleted, 100) },
   { id: 'done-500',     group: 'habits', emoji: '🧺', title: 'Big Harvest',      description: 'Check off 500 Habbits',                      progress: d => count(d.stats.totalCompleted, 500) },
   // Money
