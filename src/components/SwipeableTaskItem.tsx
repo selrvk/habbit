@@ -27,6 +27,23 @@ const FocusCountdown = ({ session }: { session: FocusSession }) => {
   return <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: session.phase === 'break' ? '#9de087' : '#D4956A', fontVariant: ['tabular-nums'] }}>{text}</Text>;
 };
 
+/** "⏱ Rest 1:12" while a workout's rest runs (outside the workout screen), else that it's going. */
+const WorkoutStatus = ({ restEndsAt }: { restEndsAt?: number }) => {
+  const fs = useFontSize();
+  const [now, setNow] = useState(Date.now());
+  const resting = !!restEndsAt && restEndsAt > now;
+  useEffect(() => {
+    if (!restEndsAt || restEndsAt <= Date.now()) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [restEndsAt]);
+  return (
+    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A', fontVariant: ['tabular-nums'] }}>
+      {resting ? `⏱ Rest ${clock(restEndsAt! - now)}` : '💪 Workout in progress'}
+    </Text>
+  );
+};
+
 const haptic = {
   success: () => require('react-native-haptic-feedback').default.trigger('notificationSuccess', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
   warning: () => require('react-native-haptic-feedback').default.trigger('notificationWarning', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -63,7 +80,7 @@ export const SwipeableTaskItem = ({
   /** Focus-timer habits: the running session for this habit (if any), and the ▶︎ button. */
   focus?: { running: FocusSession | null; onPress: (id: string) => void };
   /** Workout habits: whether this habit's workout is in progress, and the ▶︎ button. */
-  workout?: { running: boolean; onPress: (id: string) => void };
+  workout?: { running: boolean; restEndsAt?: number; onPress: (id: string) => void };
 }) => {
   const fs          = useFontSize();
   const timesPerDay = item.timesPerDay ?? 1;
@@ -292,7 +309,7 @@ export const SwipeableTaskItem = ({
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                 {focus?.running && <FocusCountdown session={focus.running} />}
-                {workout?.running && <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>💪 Workout in progress</Text>}
+                {workout?.running && <WorkoutStatus restEndsAt={workout.restEndsAt} />}
                 {streak > 0 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}{week ? ' wk' : ''}</Text>
                 )}

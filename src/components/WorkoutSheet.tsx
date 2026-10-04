@@ -1,8 +1,8 @@
 // src/components/WorkoutSheet.tsx
 //
 // A workout in progress, full screen: each exercise's sets (weight × reps, filled in from
-// last time) to tick off as they're done. Closing it keeps the workout going; finishing it
-// logs it and checks the habit off (App.tsx, workout.ts).
+// last time) to tick off as they're done, with a rest timer after each. Closing it keeps the
+// workout going; finishing it logs it and checks the habit off (App.tsx, workout.ts).
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Modal, Alert, Keyboard } from 'react-native';
@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { clock } from '../focus';
 import {
-  addSet, editSet, lastTime, MAX_SETS, removeSet, setsDone, setsLabel, toggleSet,
+  addSet, adjustRest, editSet, endRest, lastTime, MAX_SETS, nextUp, removeSet, restLeft, setsDone, setsLabel, toggleSet,
   type ActiveWorkout, type LiveExercise, type Routine, type WeightUnit, type WorkoutLog,
 } from '../workout';
 
@@ -39,6 +39,65 @@ const Elapsed = ({ since }: { since: number }) => {
     return () => clearInterval(t);
   }, []);
   return <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream, fontVariant: ['tabular-nums'] }}>{clock(Math.max(0, now - since))}</Text>;
+};
+
+/**
+ * The rest after a set: a countdown with −15 / +15 and skip, then "Rest's over" with what's
+ * next until the next set is ticked off (or it's dismissed). Buzzes when it ends.
+ */
+const RestBar = ({ workout, visible, onChange }: { workout: ActiveWorkout; visible: boolean; onChange: (w: ActiveWorkout) => void }) => {
+  const fs   = useFontSize();
+  const rest = workout.rest!;
+  const [now, setNow] = useState(Date.now());
+  const left = restLeft(workout, now) ?? 0;
+  const over = left === 0;
+  useEffect(() => {
+    if (!visible || over) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [visible, over, rest.endsAt]);
+  // Buzz once when it runs out on screen.
+  const buzzed = React.useRef<number | null>(null);
+  useEffect(() => {
+    if (!visible || !over || buzzed.current === rest.endsAt) return;
+    buzzed.current = rest.endsAt;
+    if (Date.now() - rest.endsAt < 5000) haptic.success();
+  }, [visible, over, rest.endsAt]);
+
+  const up    = nextUp(workout);
+  const next  = up ? `${up.name} · set ${up.set + 1} of ${up.of}` : '';
+  const share = rest.seconds > 0 ? 1 - left / (rest.seconds * 1000) : 1;
+  const Small = ({ label, onPress, a11y }: { label: string; onPress: () => void; a11y: string }) => (
+    <TouchableOpacity onPress={() => { haptic.light(); onPress(); }} hitSlop={6} accessibilityLabel={a11y}
+      style={{ minWidth: 44, height: 34, paddingHorizontal: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,149,106,0.14)' }}>
+      <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.accent }}>{label}</Text>
+    </TouchableOpacity>
+  );
+  return (
+    <View style={{ backgroundColor: over ? 'rgba(157,224,135,0.12)' : C.card, borderRadius: 16, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: over ? 'rgba(157,224,135,0.35)' : C.border }}
+      accessibilityLiveRegion="polite">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), letterSpacing: 1.5, color: over ? C.green : C.accent }}>{over ? 'REST’S OVER' : 'REST'}</Text>
+        <Text style={{ flex: 1, fontFamily: 'Jua', fontSize: fs(12), color: over ? C.cream : C.muted }} numberOfLines={1}>{next ? `Next: ${next}` : ''}</Text>
+        {over && <Small label="✕" a11y="Dismiss" onPress={() => onChange(endRest(workout))} />}
+      </View>
+      {!over && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <Text style={{ flex: 1, fontFamily: 'DynaPuff', fontSize: fs(26), color: C.cream, fontVariant: ['tabular-nums'] }}
+            accessibilityLabel={`${Math.ceil(left / 1000)} seconds of rest left`}>{clock(left)}</Text>
+          <Small label="−15" a11y="15 seconds less" onPress={() => onChange(adjustRest(workout, -15, Date.now()))} />
+          <Small label="+15" a11y="15 seconds more" onPress={() => onChange(adjustRest(workout, 15, Date.now()))} />
+          <Small label="Skip" a11y="Skip the rest" onPress={() => onChange(endRest(workout))} />
+        </View>
+      )}
+      {!over && (
+        <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(212,149,106,0.15)', marginTop: 10, overflow: 'hidden' }}>
+          <View style={{ height: '100%', width: `${Math.min(100, share * 100)}%`, backgroundColor: C.accent, borderRadius: 2 }} />
+        </View>
+      )}
+    </View>
+  );
 };
 
 const Field = ({ value, onChange, placeholder, decimal, label, done }: {
@@ -194,7 +253,7 @@ export const WorkoutSheet = ({ visible, workout, done, routines, log, onChange, 
             )}
           </View>
         ) : workout ? (
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 110 }}
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + (workout.rest ? 210 : 110) }}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
             <Text style={{ fontFamily: 'Jua', fontSize: fs(12), letterSpacing: 2, color: C.accent, marginTop: 14 }}>{workout.label.toUpperCase()}</Text>
             <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(28), color: C.cream }}>{workout.routineName}</Text>
@@ -224,12 +283,15 @@ export const WorkoutSheet = ({ visible, workout, done, routines, log, onChange, 
               <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: '#fff' }}>Close</Text>
             </TouchableOpacity>
           ) : workout && (
+            <>
+            {workout.rest && <RestBar workout={workout} visible={visible} onChange={onChange} />}
             <TouchableOpacity onPress={() => { if (ticked > 0) { haptic.success(); onFinish(); } }} disabled={ticked === 0} activeOpacity={0.8}
               style={{ backgroundColor: ticked > 0 ? C.accent : 'rgba(212,149,106,0.18)', borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}>
               <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: ticked > 0 ? '#fff' : 'rgba(255,255,255,0.35)' }}>
                 {ticked > 0 ? `Finish workout · ${ticked} set${ticked === 1 ? '' : 's'}` : 'Tick off a set to finish'}
               </Text>
             </TouchableOpacity>
+            </>
           )}
         </View>
       </View>

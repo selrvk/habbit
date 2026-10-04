@@ -27,11 +27,11 @@ import { CategoriesContext, type CategoriesValue } from './src/context/Categorie
 import { focusMinutes, logFocus, nextBlock, parseFocusLog, parseFocusSession, pause as pauseFocus, resume as resumeFocus, settle, startBlock, type FocusLogEntry, type FocusSession } from './src/focus';
 import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
 import { syncFocusActivity } from './src/utils/focusActivity';
-import { finishWorkout, logWorkout, newBests, nextRoutine, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
+import { finishWorkout, logWorkout, newBests, nextRoutine, nextUp, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
 import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, type Quiet } from './src/notifications';
+import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
@@ -74,7 +74,7 @@ const formFields = (data: HabbitFormData) => ({
 const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
   home: 'home', habits: 'tasks', 'new-habit': 'tasks', habit: 'tasks',
   finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance', week: 'home',
-  coach: 'chat', profile: 'profile', focus: 'home',
+  coach: 'chat', profile: 'profile', focus: 'home', workout: 'home',
 };
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
@@ -310,10 +310,17 @@ export default function App() {
   }), [saveFocusSession, finishFocus]);
 
   // ── Workouts (workout.ts) ──────────────────────────────────────────────────
+  /** Saves the workout in progress (or clears it), with a notification for when its rest ends. */
   const saveWorkout = useCallback((next: ActiveWorkout | null) => {
+    const before = workoutRef.current?.rest?.endsAt;
     workoutRef.current = next;
     setWorkout(next);
     (next ? AsyncStorage.setItem(STORAGE_WORKOUT, JSON.stringify(next)) : AsyncStorage.removeItem(STORAGE_WORKOUT)).catch(() => {});
+    const rest = next?.rest;
+    if (rest?.endsAt === before) return;
+    const up = next && nextUp(next);
+    if (rest && up) scheduleRestNotif(rest.endsAt, `${up.name}, set ${up.set + 1} of ${up.of}`);
+    else cancelRestNotif();
   }, []);
 
   /** Keeps a finished workout; returns its check-off, for catchUp. */
@@ -605,6 +612,7 @@ export default function App() {
     );
     if (t.screen === 'week') setRecapOpen(recapWeek(liveState.current.dayKey));
     if (t.screen === 'focus') setFocusOpen(true);
+    if (t.screen === 'workout') setWorkoutOpen(true);
     setFinanceRequest(
       t.screen === 'spend' ? { kind: 'spend', amount: t.amount, category: t.category, note: t.note }
       : t.screen === 'add-money' ? { kind: 'money' }
@@ -1205,7 +1213,7 @@ export default function App() {
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
             focusSession={focusSession}
             onStartFocus={startFocus}
-            workoutHabitId={workout?.habitId ?? null}
+            workout={workout}
             onStartWorkout={startWorkout}
           />
         );

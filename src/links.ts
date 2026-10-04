@@ -11,10 +11,11 @@
 //   habbit://add-money                habbit://recap
 //   habbit://coach                    habbit://profile
 //   habbit://week (the weekly recap)  habbit://focus (the running focus timer)
+//   habbit://workout (the workout in progress)
 
 import { categoryOf } from './categories';
 
-type PlainScreen = 'home' | 'habits' | 'new-habit' | 'finance' | 'add-money' | 'recap' | 'week' | 'coach' | 'profile' | 'focus';
+type PlainScreen = 'home' | 'habits' | 'new-habit' | 'finance' | 'add-money' | 'recap' | 'week' | 'coach' | 'profile' | 'focus' | 'workout';
 
 export type LinkTarget =
   | { screen: PlainScreen }
@@ -44,7 +45,7 @@ const PLAIN = new Map<string, PlainScreen>([
   ['finance', 'finance'], ['money', 'finance'], ['budget', 'finance'],
   ['add-money', 'add-money'], ['recap', 'recap'], ['week', 'week'],
   ['coach', 'coach'], ['bonbon', 'coach'], ['chat', 'coach'],
-  ['profile', 'profile'], ['focus', 'focus'], ['timer', 'focus'],
+  ['profile', 'profile'], ['focus', 'focus'], ['timer', 'focus'], ['workout', 'workout'],
 ]);
 
 export const parseLink = (url: string): LinkTarget | null => {

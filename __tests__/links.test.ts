@@ -12,6 +12,7 @@ describe('parseLink', () => {
     expect(parseLink('habbit://week')).toEqual({ screen: 'week' });
     expect(parseLink('HABBIT://Coach')).toEqual({ screen: 'coach' });
     expect(parseLink('habbit://profile/')).toEqual({ screen: 'profile' });
+    expect(parseLink('habbit://workout')).toEqual({ screen: 'workout' });
   });
 
   it('fills in an expense', () => {

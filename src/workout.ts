@@ -5,7 +5,8 @@
 // routine after the last one done, whatever the day. A workout fills in each exercise's
 // weights from the last time it was done (in any routine, matched by name), and finishing
 // it checks the habit off once, on the day it finished (as an inbox event, like the focus
-// timer). Finished workouts are kept for history.
+// timer). Ticking a set off starts a rest before the next one. Finished workouts are kept
+// for history.
 
 import type { Commission } from './types';
 import { dayKeyAt } from './focus';
@@ -13,7 +14,12 @@ import { dayKeyAt } from './focus';
 export type WeightUnit = 'kg' | 'lb';
 export type ExercisePlan = { id: string; name: string; sets: number; reps: number };
 export type Routine = { id: string; name: string; exercises: ExercisePlan[] };
-export type WorkoutPlan = { unit: WeightUnit; routines: Routine[] };
+export type WorkoutPlan = {
+  unit: WeightUnit;
+  routines: Routine[];
+  /** Rest after each set, in seconds (0: none). Missing means the default. */
+  restSeconds?: number;
+};
 
 /** A set as done: weight (null for bodyweight) × reps. */
 export type SetLog = { weight: number | null; reps: number };
@@ -49,7 +55,16 @@ export type ActiveWorkout = {
   /** The last change (ms): a workout left alone for long is closed (settleWorkout). */
   updatedAt: number;
   exercises: LiveExercise[];
+  /** Rest after each set, in seconds (0: none). */
+  restSeconds: number;
+  /** The rest running: when it ends (ms), how long it is, and the set that started it. */
+  rest?: { endsAt: number; seconds: number; ex: number; set: number };
 };
+
+export const DEFAULT_REST = 90;
+export const REST_LENGTHS = [0, 30, 60, 90, 120, 180];
+/** Longest a rest can be stretched to with +15. */
+const MAX_REST = 600;
 
 export const SET_COUNTS = [1, 2, 3, 4, 5, 6, 8];
 export const MAX_SETS = 12;
@@ -84,7 +99,7 @@ export const ROUTINE_TEMPLATES: Template[] = [
 ];
 
 export const fromTemplate = (t: Template, unit: WeightUnit, newId: () => string): WorkoutPlan => ({
-  unit,
+  unit, restSeconds: DEFAULT_REST,
   routines: t.routines.map(r => ({
     id: newId(), name: r.name,
     exercises: r.exercises.map(([name, sets, reps]) => ({ id: newId(), name, sets, reps })),
@@ -94,6 +109,7 @@ export const fromTemplate = (t: Template, unit: WeightUnit, newId: () => string)
 /** Routines worth keeping: named, with at least one named exercise. */
 export const cleanPlan = (plan: WorkoutPlan): WorkoutPlan => ({
   unit: plan.unit,
+  restSeconds: plan.restSeconds ?? DEFAULT_REST,
   routines: plan.routines
     .map(r => ({ ...r, name: r.name.trim(), exercises: r.exercises.map(e => ({ ...e, name: e.name.trim() })).filter(e => e.name) }))
     .filter(r => r.exercises.length > 0)
@@ -252,7 +268,7 @@ export const startWorkout = (
   habit: Commission & { workout: WorkoutPlan }, routine: Routine, log: WorkoutLog[], now: number, id: string,
 ): ActiveWorkout => ({
   id, habitId: habit.id, label: habit.label, routineId: routine.id, routineName: routine.name, unit: habit.workout.unit,
-  startedAt: now, updatedAt: now,
+  startedAt: now, updatedAt: now, restSeconds: habit.workout.restSeconds ?? DEFAULT_REST,
   exercises: routine.exercises.map(e => {
     const last = lastTime(log, e.name);
     const weightAt = (i: number) => {
@@ -272,12 +288,50 @@ export const editSet = (w: ActiveWorkout, ex: number, set: number, field: 'weigh
   mapExercise(w, ex, e => ({ ...e, sets: e.sets.map((s, i) => (i === set ? { ...s, [field]: value } : s)) }), now);
 
 /** Ticks a set off (or back on). Ticking one off fills in the next sets' empty weights. */
-export const toggleSet = (w: ActiveWorkout, ex: number, set: number, now: number) =>
-  mapExercise(w, ex, e => {
-    const done = !e.sets[set].done;
+/**
+ * Ticks a set off (or back on). Ticking one off fills in the next sets' empty weights and
+ * starts a rest, unless it was the last set; ticking that set back on cancels its rest.
+ */
+export const toggleSet = (w: ActiveWorkout, ex: number, set: number, now: number): ActiveWorkout => {
+  const done = !w.exercises[ex].sets[set].done;
+  const next = mapExercise(w, ex, e => {
     const weight = e.sets[set].weight;
     return { ...e, sets: e.sets.map((s, i) => (i === set ? { ...s, done } : done && i > set && !s.done && s.weight === '' ? { ...s, weight } : s)) };
   }, now);
+  const { rest, ...rested } = next;
+  if (done) {
+    return next.restSeconds > 0 && nextUp(next)
+      ? { ...rested, rest: { endsAt: now + next.restSeconds * 1000, seconds: next.restSeconds, ex, set } }
+      : rested;
+  }
+  return rest && rest.ex === ex && rest.set === set ? rested : next;
+};
+
+// ── Resting ──────────────────────────────────────────────────────────────────
+
+/** The next set to do: the first one not ticked off, after the last one ticked off if any. */
+export const nextUp = (w: ActiveWorkout): { ex: number; set: number; name: string; of: number } | null => {
+  const flat = w.exercises.flatMap((e, ex) => e.sets.map((s, set) => ({ ex, set, done: s.done, name: e.name, of: e.sets.length })));
+  const lastDone = flat.map(x => x.done).lastIndexOf(true);
+  const pick = flat.slice(lastDone + 1).find(x => !x.done) ?? flat.find(x => !x.done);
+  return pick ? { ex: pick.ex, set: pick.set, name: pick.name, of: pick.of } : null;
+};
+
+/** ms left of the rest (0 once it's over), or null when there's none. */
+export const restLeft = (w: ActiveWorkout, now: number): number | null =>
+  w.rest ? Math.max(0, w.rest.endsAt - now) : null;
+
+/** Longer or shorter by `seconds` (it ends when it would go below zero). */
+export const adjustRest = (w: ActiveWorkout, seconds: number, now: number): ActiveWorkout => {
+  if (!w.rest) return w;
+  const endsAt = Math.min(w.rest.endsAt + seconds * 1000, now + MAX_REST * 1000);
+  return { ...w, updatedAt: now, rest: { ...w.rest, endsAt: Math.max(endsAt, now), seconds: Math.max(0, w.rest.seconds + seconds) } };
+};
+
+export const endRest = (w: ActiveWorkout): ActiveWorkout => {
+  const { rest, ...rested } = w;
+  return rest ? rested : w;
+};
 
 /** One more set, like the last one. */
 export const addSet = (w: ActiveWorkout, ex: number, now: number) =>
@@ -331,5 +385,7 @@ export const parseWorkoutLog = (raw: unknown): WorkoutLog[] =>
 export const parseActiveWorkout = (raw: unknown): ActiveWorkout | null => {
   const w = raw as ActiveWorkout | null;
   return w && typeof w.id === 'string' && typeof w.habitId === 'string' && typeof w.startedAt === 'number'
-    && typeof w.updatedAt === 'number' && isUnit(w.unit) && Array.isArray(w.exercises) ? w : null;
+    && typeof w.updatedAt === 'number' && isUnit(w.unit) && Array.isArray(w.exercises)
+    ? { ...w, restSeconds: typeof w.restSeconds === 'number' ? w.restSeconds : DEFAULT_REST }
+    : null;
 };

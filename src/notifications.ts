@@ -291,6 +291,33 @@ export const scheduleFocusNotifs = async (s: FocusSession | null) => {
   } catch {}
 };
 
+// ── Workout rest ─────────────────────────────────────────────────────────────
+// When a rest between sets ends, for when the phone's locked or in a pocket. While the app
+// is open the workout screen says so itself, so it isn't shown then.
+
+export const WORKOUT_LINK = 'habbit://workout';
+const REST_ID = 'workout-rest';
+
+export const cancelRestNotif = async () => {
+  try { await notifee.cancelTriggerNotifications([REST_ID]); } catch {}
+};
+
+/** `next`: "Bench press, set 2 of 3". */
+export const scheduleRestNotif = async (at: number, next: string) => {
+  await cancelRestNotif();
+  if (at <= Date.now() + 1000) return;
+  try {
+    await notifee.createTriggerNotification(
+      {
+        id: REST_ID, title: 'Rest’s over 💪', body: `Next: ${next}`, data: { link: WORKOUT_LINK },
+        android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } },
+        ios: { sound: 'default', foregroundPresentationOptions: { alert: false, banner: false, list: false, sound: false, badge: false } },
+      },
+      { type: TriggerType.TIMESTAMP, timestamp: at },
+    );
+  } catch {}
+};
+
 export const cancelAllNotifications = async () => {
   try { 
     await notifee.cancelAllNotifications();

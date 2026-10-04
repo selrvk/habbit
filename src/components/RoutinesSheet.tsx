@@ -1,14 +1,18 @@
 // src/components/RoutinesSheet.tsx
 //
 // A workout habit's routines (workout.ts), from the habit editor: each routine's name and
-// exercises with their sets × reps, and kg or lb. Routines take turns in this order.
+// exercises with their sets × reps, kg or lb, and the rest between sets. Routines take
+// turns in this order.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useFontSize } from '../hooks/useFontSize';
 import { generateId } from '../helpers';
-import { cleanPlan, EXERCISE_SUGGESTIONS, MAX_SETS, type ExercisePlan, type Routine, type WorkoutPlan } from '../workout';
+import { cleanPlan, DEFAULT_REST, EXERCISE_SUGGESTIONS, MAX_SETS, REST_LENGTHS, type ExercisePlan, type Routine, type WorkoutPlan } from '../workout';
+
+/** "Off", "30s", "1 min", "1:30". */
+const restLabel = (s: number) => (s === 0 ? 'Off' : s < 60 ? `${s}s` : s % 60 === 0 ? `${s / 60} min` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', red: '#f09090', muted: 'rgba(232,213,192,0.5)', faint: 'rgba(212,149,106,0.12)', border: 'rgba(212,149,106,0.2)' };
 
@@ -167,6 +171,24 @@ export const RoutinesSheet = ({ visible, plan, onSave, onClose }: {
               ))}
             </View>
           </View>
+
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, marginTop: 16 }}>Rest between sets</Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+            {REST_LENGTHS.map(sec => {
+              const active = sec === (draft.restSeconds ?? DEFAULT_REST);
+              return (
+                <TouchableOpacity key={sec} onPress={() => { haptic(); setDraft(d => ({ ...d, restSeconds: sec })); }} activeOpacity={0.8}
+                  accessibilityRole="button" accessibilityState={{ selected: active }}
+                  accessibilityLabel={sec === 0 ? 'No rest timer' : `${restLabel(sec)} rest`}
+                  style={{ flex: 1, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? C.accent : C.faint }}>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{restLabel(sec)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginTop: 6 }}>
+            {(draft.restSeconds ?? DEFAULT_REST) > 0 ? 'Starts when you tick a set off. You’ll get a nudge when it’s over.' : 'No timer between sets.'}
+          </Text>
 
           {draft.routines.map((r, i) => (
             <RoutineCard key={r.id} routine={r} index={i} onChange={next => setRoutine(r.id, next)} onRemove={() => removeRoutine(r)} />

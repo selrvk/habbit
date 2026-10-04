@@ -7,6 +7,7 @@ import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
 import type { FocusSession } from '../focus';
+import type { ActiveWorkout } from '../workout';
 import type { Commission } from '../types';
 import type { HabitSummary } from '../habitStats';
 import { LeftoverBanner, type Jar } from '../components/SavingsJar';
@@ -54,7 +55,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, workoutHabitId, onStartWorkout,
+  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, workout, onStartWorkout,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -72,8 +73,8 @@ export const HomeScreen = ({
   /** The running focus timer, if any, and starting (or showing) one for a habit. */
   focusSession: FocusSession | null;
   onStartFocus: (id: string) => void;
-  /** The habit whose workout is in progress, if any, and starting (or showing) one. */
-  workoutHabitId: string | null;
+  /** The workout in progress, if any, and starting (or showing) one. */
+  workout: ActiveWorkout | null;
   onStartWorkout: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
@@ -141,7 +142,7 @@ export const HomeScreen = ({
       onSkip={item.perWeek ? undefined : onSkip} onUnskip={onUnskip}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd}
       focus={item.focus ? { running: focusSession?.habitId === item.id ? focusSession : null, onPress: onStartFocus } : undefined}
-      workout={item.workout ? { running: workoutHabitId === item.id, onPress: onStartWorkout } : undefined} />
+      workout={item.workout ? { running: workout?.habitId === item.id, restEndsAt: workout?.rest?.endsAt, onPress: onStartWorkout } : undefined} />
   );
 
   const tile = { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: C.border } as const;

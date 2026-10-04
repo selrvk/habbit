@@ -13,7 +13,10 @@ import { daysLabel, formatTime12, computeSplitTimes, generateId } from '../helpe
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, HabbitFormData, ReminderTime } from '../types';
 import { BREAK_LENGTHS, DEFAULT_FOCUS, FOCUS_LENGTHS, type FocusSettings } from '../focus';
-import { fromTemplate, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
+import { DEFAULT_REST, fromTemplate, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
+
+/** "90-second", "2-minute". */
+const restText = (s: number) => (s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`);
 import { RoutinesSheet } from '../components/RoutinesSheet';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
@@ -422,6 +425,7 @@ export const AddHabbitScreen = ({
                   <LinkButton label="Edit routines" onPress={() => setRoutinesOpen(true)} />
                   <Text style={[subText, { marginTop: 12 }]}>
                     Tap ▶︎ on Home to start {plan.routines.length > 1 ? 'the next routine' : 'a workout'}. It fills in your weights from last time, and finishing it checks the habbit off.
+                    {(plan.restSeconds ?? DEFAULT_REST) > 0 ? ` A ${restText(plan.restSeconds ?? DEFAULT_REST)} rest timer starts after each set.` : ''}
                   </Text>
                 </>
               )}

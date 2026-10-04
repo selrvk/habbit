@@ -1,5 +1,5 @@
 import {
-  addSet, cleanPlan, convertWeight, editSet, exerciseSummaries, finishWorkout, fromTemplate, lastTime, logWorkout, newBests, nextRoutine, parseWeight,
+  addSet, adjustRest, cleanPlan, endRest, nextUp, parseActiveWorkout, restLeft, convertWeight, editSet, exerciseSummaries, finishWorkout, fromTemplate, lastTime, logWorkout, newBests, nextRoutine, parseWeight,
   removeSet, ROUTINE_TEMPLATES, setsLabel, settleWorkout, startWorkout, toggleSet, workoutEvent, workoutTotals,
   type WorkoutLog, type WorkoutPlan,
 } from '../src/workout';
@@ -96,6 +96,42 @@ describe('a workout', () => {
     expect(r.active).toBeNull();
     expect(r.finished).toMatchObject({ endedAt: at('2026-10-01', 18, 10), exercises: [{ name: 'Bench press', sets: [{ weight: null, reps: 8 }] }] });
     expect(settleWorkout(startWorkout(gym(), plan.routines[0], [], 0, 'w4'), 13 * HOUR)).toEqual({ active: null, finished: null });
+  });
+});
+
+describe('resting', () => {
+  const start = at('2026-10-01', 18);
+  const fresh = () => startWorkout(gym(), plan.routines[0], [], start, 'w2');
+
+  it('starts a rest when a set is ticked off, with the next set lined up', () => {
+    const w = toggleSet(fresh(), 0, 0, start);
+    expect(w.rest).toEqual({ endsAt: start + 90_000, seconds: 90, ex: 0, set: 0 });
+    expect(nextUp(w)).toEqual({ ex: 0, set: 1, name: 'Bench press', of: 3 });
+    expect(restLeft(w, start + 30_000)).toBe(60_000);
+    expect(restLeft(w, start + 200_000)).toBe(0);
+    expect(restLeft(endRest(w), start)).toBeNull();
+  });
+
+  it('cancels the rest when that set is ticked back on, and skips it after the last set', () => {
+    const w = toggleSet(fresh(), 0, 0, start);
+    expect(toggleSet(w, 0, 0, start).rest).toBeUndefined();
+    let all = fresh();
+    all.exercises.forEach((e, ex) => e.sets.forEach((_, set) => { all = toggleSet(all, ex, set, start); }));
+    expect(all.rest).toBeUndefined(); // nothing left to rest for
+    expect(nextUp(all)).toBeNull();
+  });
+
+  it('can be made longer or shorter, and turned off', () => {
+    const w = toggleSet(fresh(), 0, 0, start);
+    expect(adjustRest(w, 15, start).rest).toMatchObject({ endsAt: start + 105_000, seconds: 105 });
+    expect(adjustRest(w, -120, start).rest?.endsAt).toBe(start);
+    const none = toggleSet(startWorkout(gym({ workout: { ...plan, restSeconds: 0 } }), plan.routines[0], [], start, 'w3'), 0, 0, start);
+    expect(none.rest).toBeUndefined();
+  });
+
+  it('reads older stored workouts with the default rest', () => {
+    const { restSeconds, ...old } = fresh();
+    expect(parseActiveWorkout(old)?.restSeconds).toBe(90);
   });
 });
 
