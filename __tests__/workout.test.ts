@@ -1,5 +1,5 @@
 import {
-  addSet, adjustRest, cleanPlan, endRest, nextUp, parseActiveWorkout, restLeft, convertWeight, editSet, exerciseSummaries, finishWorkout, fromTemplate, lastTime, logWorkout, newBests, nextRoutine, parseWeight,
+  addSet, adjustRest, cleanPlan, endRest, nextUp, parseActiveWorkout, restLeft, convertWeight, editSet, exerciseSummaries, finishWorkout, fromTemplate, lastTime, logWorkout, newBests, nextRoutine, parseWeight, workoutOverview,
   removeSet, ROUTINE_TEMPLATES, setsLabel, settleWorkout, startWorkout, toggleSet, workoutEvent, workoutTotals,
   type WorkoutLog, type WorkoutPlan,
 } from '../src/workout';
@@ -160,6 +160,38 @@ describe('progress', () => {
     const next = bench('w5', '2026-10-01', 'kg', [[67.5, 4]]);
     expect(newBests(logWorkout(log, next), next)).toEqual([{ name: 'Bench press', label: '67.5 kg × 4' }, { name: 'Pull-up', label: '10 reps' }]);
     expect(newBests(log, log[0])).toEqual([]); // nothing to beat the first time
+  });
+});
+
+describe('workoutOverview', () => {
+  const log = [
+    logged({ id: 'w0', date: '2026-09-22', startedAt: at('2026-09-22', 18), endedAt: at('2026-09-22', 19), exercises: [{ name: 'Bench press', sets: [{ weight: 55, reps: 8 }] }] }),
+    logged({ id: 'w1', date: '2026-09-28', startedAt: at('2026-09-28', 18), endedAt: at('2026-09-28', 18, 50), exercises: [{ name: 'Bench press', sets: [{ weight: 60, reps: 8 }, { weight: 60, reps: 7 }] }] }),
+    logged({ id: 'w2', routineId: 'pull', routineName: 'Pull', date: '2026-09-30', startedAt: at('2026-09-30', 18), endedAt: at('2026-09-30', 18, 40),
+      exercises: [{ name: 'Pull-up', sets: [{ weight: null, reps: 8 }, { weight: null, reps: 6 }] }] }),
+  ];
+
+  it('sums up routines, recent workouts and lifts', () => {
+    const o = workoutOverview(log, null, [gym()], '2026-10-01', at('2026-10-01', 9))!;
+    expect(o.running).toBeNull();
+    expect(o.habits).toEqual([{ label: 'Gym', routines: ['Push', 'Pull', 'Legs'], next: 'Legs', unit: 'kg', restSeconds: 90 }]);
+    expect(o.recent.map(r => [r.routineName, r.minutes, r.sets, r.volume])).toEqual([['Pull', 40, 2, 0], ['Push', 50, 2, 900]]);
+    expect(o.prevWeekCount).toBe(1);
+    expect(o.exercises).toEqual([
+      { habit: 'Gym', name: 'Pull-up', unit: 'kg', times: 1, last: '8, 6 reps', best: null },
+      { habit: 'Gym', name: 'Bench press', unit: 'kg', times: 2, last: '60 kg × 8, 7', best: '60 kg × 8' },
+    ]);
+  });
+
+  it('describes the workout in progress', () => {
+    const start = at('2026-10-01', 18);
+    const w = toggleSet(startWorkout(gym(), plan.routines[2], log, start, 'w3'), 0, 0, start + 600_000);
+    expect(workoutOverview(log, w, [gym()], '2026-10-01', start + 630_000)?.running)
+      .toEqual({ label: 'Gym', routineName: 'Legs', minutes: 11, setsDone: 1, next: 'Squat, set 2 of 3', restLeft: 60 });
+  });
+
+  it('is null when workouts were never set up or done', () => {
+    expect(workoutOverview([], null, [{ ...gym(), workout: undefined }], '2026-10-01', 0)).toBeNull();
   });
 });
 

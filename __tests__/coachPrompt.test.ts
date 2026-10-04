@@ -1,5 +1,6 @@
-import { focusStatus } from '../src/utils/coachPrompt';
+import { focusStatus, workoutStatus } from '../src/utils/coachPrompt';
 import type { FocusOverview } from '../src/focus';
+import type { WorkoutOverview } from '../src/workout';
 
 const overview = (over: Partial<FocusOverview> = {}): FocusOverview => ({
   at: new Date('2026-10-03T16:50:00').getTime(), running: null,
@@ -37,5 +38,32 @@ describe('focusStatus', () => {
   it('says when nothing was focused lately', () => {
     expect(focusStatus(overview({ todayMinutes: 0, weekMinutes: 0, weekDays: 0, byHabit: [], timed: [] })))
       .toBe('Focused today: nothing yet.\nNothing focused in the last 7 days.');
+  });
+});
+
+describe('workoutStatus', () => {
+  const overview: WorkoutOverview = {
+    at: new Date('2026-10-01T18:12:00').getTime(),
+    running: { label: 'Gym', routineName: 'Legs', minutes: 12, setsDone: 3, next: 'Squat, set 4 of 5', restLeft: 45 },
+    habits: [{ label: 'Gym', routines: ['Push', 'Pull', 'Legs'], next: 'Legs', unit: 'kg', restSeconds: 90 }],
+    recent: [{ date: '2026-09-30', label: 'Gym', routineName: 'Pull', minutes: 40, sets: 9, volume: 0, unit: 'kg' },
+      { date: '2026-09-28', label: 'Gym', routineName: 'Push', minutes: 50, sets: 12, volume: 4200, unit: 'kg' }],
+    prevWeekCount: 1,
+    exercises: [{ habit: 'Gym', name: 'Bench press', unit: 'kg', times: 2, last: '60 kg × 8, 7', best: '62.5 kg × 5' }],
+  };
+
+  it('gives the workouts to Bonbon', () => {
+    expect(workoutStatus(overview).split('\n')).toEqual([
+      'In progress as of 6:12 PM: Gym, Legs, 12 min in, 3 sets done, resting (45s left); next up: Squat, set 4 of 5.',
+      'Gym: routines Push → Pull → Legs (they take turns); next up: Legs; weights in kg; 90s rest between sets.',
+      'Last 7 days: 2 workouts (the 7 days before: 1): Wed, Sep 30 Pull (40 min, 9 sets); Mon, Sep 28 Push (50 min, 12 sets, 4,200 kg lifted).',
+      'Exercises (last time; best ever):',
+      '  Bench press: 60 kg × 8, 7; best 62.5 kg × 5 (2 times)',
+    ]);
+  });
+
+  it('says when there were no workouts lately', () => {
+    expect(workoutStatus({ ...overview, running: null, recent: [], exercises: [] }).split('\n')[1])
+      .toBe('No workouts in the last 7 days (the 7 days before: 1).');
   });
 });

@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   STORAGE_COMMISSIONS, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY,
   STORAGE_COMPLETION_HISTORY, STORAGE_STATS, STORAGE_SETTINGS, STORAGE_BILLS, STORAGE_SAVINGS,
-  STORAGE_FOCUS, STORAGE_FOCUS_LOG,
+  STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG,
 } from '../storage';
 import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
@@ -17,6 +17,7 @@ import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 import { jarTotal, parseSavings } from '../savings';
 import { monthStart, monthSummary } from '../monthSummary';
 import { focusMinutes, focusOverview, parseFocusLog, parseFocusSession, type FocusOverview } from '../focus';
+import { parseActiveWorkout, parseWorkoutLog, workoutOverview, type WorkoutOverview } from '../workout';
 
 export interface WeeklySnapshotDay {
   date: string;
@@ -27,6 +28,8 @@ export interface WeeklySnapshotDay {
   spent: number;
   /** Minutes on the focus timer. */
   focusMinutes: number;
+  /** Workouts finished that day (routine names). */
+  workouts: string[];
 }
 
 // A single spending entry surfaced to the coach
@@ -68,6 +71,8 @@ export interface CoachContext {
   savingsGoals: { name: string; target: number; saved: number }[];
   /** The focus timer: what's running, and time focused lately; null if it's never been set up or used. */
   focus: FocusOverview | null;
+  /** Workouts: the one in progress, routines, recent workouts and exercises; null if never set up or done. */
+  workouts: WorkoutOverview | null;
   /** Last month's spending against the month before it, and its biggest category. */
   lastMonth: { name: string; spent: number; prevSpent: number | null; prevName: string; topCategory: string | null } | null;
   weeklySnapshot: WeeklySnapshotDay[];
@@ -87,7 +92,7 @@ export async function buildCoachContext(
 
   const [
     commissionsRaw, financeRaw, financeHistoryRaw,
-    completionHistoryRaw, statsRaw, settingsRaw, billsRaw, savingsRaw, focusRaw, focusLogRaw,
+    completionHistoryRaw, statsRaw, settingsRaw, billsRaw, savingsRaw, focusRaw, focusLogRaw, workoutRaw, workoutLogRaw,
   ] = await Promise.all([
     AsyncStorage.getItem(STORAGE_COMMISSIONS),
     AsyncStorage.getItem(STORAGE_FINANCE),
@@ -99,11 +104,15 @@ export async function buildCoachContext(
     AsyncStorage.getItem(STORAGE_SAVINGS),
     AsyncStorage.getItem(STORAGE_FOCUS),
     AsyncStorage.getItem(STORAGE_FOCUS_LOG),
+    AsyncStorage.getItem(STORAGE_WORKOUT),
+    AsyncStorage.getItem(STORAGE_WORKOUT_LOG),
   ]);
   const savings = parseSavings(savingsRaw ? JSON.parse(savingsRaw) : null);
   const bills: Bill[] = billsRaw ? JSON.parse(billsRaw) : [];
   const focusLog = parseFocusLog(focusLogRaw ? JSON.parse(focusLogRaw) : []);
   const focusSession = parseFocusSession(focusRaw ? JSON.parse(focusRaw) : null);
+  const workoutLog = parseWorkoutLog(workoutLogRaw ? JSON.parse(workoutLogRaw) : []);
+  const activeWorkout = parseActiveWorkout(workoutRaw ? JSON.parse(workoutRaw) : null);
 
   const commissionsData: CommissionsData | null = commissionsRaw ? JSON.parse(commissionsRaw) : null;
   const financeData: FinanceData | null         = financeRaw ? JSON.parse(financeRaw) : null;
@@ -210,6 +219,7 @@ export async function buildCoachContext(
       habitLabelsCompleted,
       spent: finance?.total ?? (date === todayStr ? spentToday : 0),
       focusMinutes: focusMinutes(focusLog, date, date),
+      workouts: workoutLog.filter(w => w.date === date).map(w => w.routineName),
     };
   });
 
@@ -244,6 +254,7 @@ export async function buildCoachContext(
         }
       : null,
     focus: focusOverview(focusLog, focusSession, habits, todayStr, Date.now()),
+    workouts: workoutOverview(workoutLog, activeWorkout, habits, todayStr, Date.now()),
     lastMonth: (() => {
       const today = last7[last7.length - 1];
       const m = monthSummary({

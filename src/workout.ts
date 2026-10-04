@@ -10,6 +10,7 @@
 
 import type { Commission } from './types';
 import { dayKeyAt } from './focus';
+import { addDaysToKey } from './helpers';
 
 export type WeightUnit = 'kg' | 'lb';
 export type ExercisePlan = { id: string; name: string; sets: number; reps: number };
@@ -411,4 +412,67 @@ export const parseActiveWorkout = (raw: unknown): ActiveWorkout | null => {
     && typeof w.updatedAt === 'number' && isUnit(w.unit) && Array.isArray(w.exercises)
     ? { ...w, restSeconds: typeof w.restSeconds === 'number' ? w.restSeconds : DEFAULT_REST }
     : null;
+};
+
+// ── For Bonbon ───────────────────────────────────────────────────────────────
+
+export type WorkoutOverview = {
+  /** When this was worked out (ms), for the workout in progress. */
+  at: number;
+  /** The workout in progress. */
+  running: {
+    label: string; routineName: string; minutes: number; setsDone: number;
+    /** "Bench press, set 2 of 3", or null when every set's ticked off. */
+    next: string | null;
+    /** Seconds of rest left, if a rest is running. */
+    restLeft: number | null;
+  } | null;
+  /** Habits with workouts: their routines in turn, the next one up, unit and rest. */
+  habits: { label: string; routines: string[]; next: string | null; unit: WeightUnit; restSeconds: number }[];
+  /** Workouts in the last 7 days (today included), newest first, and how many the 7 before had. */
+  recent: { date: string; label: string; routineName: string; minutes: number; sets: number; volume: number; unit: WeightUnit }[];
+  prevWeekCount: number;
+  /** The exercises done most recently (up to 8 a habit): last time and best, in the habit's unit. */
+  exercises: { habit: string; name: string; unit: WeightUnit; times: number; last: string; best: string | null }[];
+};
+
+/** The workouts at a glance, for Bonbon's chat; null if workouts were never set up or done. */
+export const workoutOverview = (
+  log: WorkoutLog[], active: ActiveWorkout | null, habits: Commission[], todayKey: string, now: number,
+): WorkoutOverview | null => {
+  const planned = habits.filter((h): h is Commission & { workout: WorkoutPlan } => !!h.workout);
+  if (planned.length === 0 && log.length === 0 && !active) return null;
+  const labels = new Map(habits.map(h => [h.id, h.label]));
+  const from   = addDaysToKey(todayKey, -6);
+  const up     = active && nextUp(active);
+  return {
+    at: now,
+    running: active && {
+      label: active.label, routineName: active.routineName,
+      minutes: Math.max(0, Math.round((now - active.startedAt) / 60_000)),
+      setsDone: setsDone(active),
+      next: up ? `${up.name}, set ${up.set + 1} of ${up.of}` : null,
+      restLeft: (() => { const l = restLeft(active, now); return l ? Math.ceil(l / 1000) : null; })(),
+    },
+    habits: planned.map(h => ({
+      label: h.label, routines: h.workout.routines.map(r => r.name), next: nextRoutine(h.workout, log, h.id)?.name ?? null,
+      unit: h.workout.unit, restSeconds: h.workout.restSeconds ?? DEFAULT_REST,
+    })),
+    recent: log.filter(w => w.date >= from && w.date <= todayKey).reverse().map(w => ({
+      date: w.date, label: labels.get(w.habitId) ?? 'A deleted habit', routineName: w.routineName, unit: w.unit, ...workoutTotals(w),
+    })),
+    prevWeekCount: log.filter(w => w.date >= addDaysToKey(from, -7) && w.date < from).length,
+    exercises: planned.flatMap(h => {
+      const mine = log.filter(w => w.habitId === h.id);
+      const unit = h.workout.unit;
+      return exerciseSummaries(mine, h.id, unit).slice(0, 8).map(s => {
+        const last = lastTime(mine, s.name)!;
+        return {
+          habit: h.label, name: s.name, unit, times: s.times,
+          last: setsLabel(last.sets.map(x => ({ ...x, weight: x.weight === null ? null : convertWeight(x.weight, last.unit, unit) })), unit),
+          best: s.heaviest ? `${weightText(s.heaviest.top.weight)} ${unit} × ${s.heaviest.top.reps}` : s.times > 1 ? `${s.mostReps.reps} reps` : null,
+        };
+      });
+    }),
+  };
 };
