@@ -400,6 +400,18 @@ export default function App() {
     return () => clearTimeout(t);
   }, [focusSession, onFocusElapsed]);
 
+  // A rest running out with the app open but the workout closed: buzz, as the workout
+  // screen does (its notification only shows when the app's in the background).
+  const restEndsAt = workout?.rest?.endsAt;
+  useEffect(() => {
+    if (!restEndsAt || workoutOpen || restEndsAt <= Date.now()) return;
+    // Not when it fires late, after the app was in the background (the notification did it).
+    const t = setTimeout(() => {
+      if (AppState.currentState === 'active' && Date.now() - restEndsAt < 3000) haptic.success();
+    }, restEndsAt - Date.now());
+    return () => clearTimeout(t);
+  }, [restEndsAt, workoutOpen]);
+
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
