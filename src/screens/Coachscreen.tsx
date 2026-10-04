@@ -392,13 +392,6 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
     }
   };
 
-  // ── Index of last bunny message (drives avatar state) ─────────────────────
-  const lastBunnyIndex = (() => {
-    let last = -1;
-    messages.forEach((m, i) => { if (m.from === 'bunny') last = i; });
-    return last;
-  })();
-
   if (!hasLoaded) return <View style={{ flex: 1, backgroundColor: '#2A1A18' }} />;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -455,15 +448,16 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => { if (typing) scrollRef.current?.scrollToEnd({ animated: false }); }}
       >
-        {messages.map((msg, index) => {
-          const isLastBunny = index === lastBunnyIndex;
+        {/* Only the reply being typed out talks; thinking shows in its own bubble below. */}
+        {messages.map(msg => {
+          const isTyping = typing?.id === msg.id;
           return (
             <MessageBubble
               key={msg.id}
               msg={msg}
-              text={typing?.id === msg.id ? typing.text : msg.text}
-              avatarState={isLastBunny ? bunnyState : 'idle'}
-              frame={isLastBunny ? talkFrame : 0}
+              text={isTyping ? typing.text : msg.text}
+              avatarState={isTyping ? bunnyState : 'idle'}
+              frame={isTyping ? talkFrame : 0}
               fontSize={fs(13)}
             />
           );
