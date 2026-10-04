@@ -6,10 +6,11 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 import { getAccessToken, invalidateAccessToken } from './supabaseAuth';
 import { syncRevenueCatUser } from './revenueCatIdentity';
+import { getAiConsent } from './aiConsent';
 
 export type BonbonTurn = { role: 'user' | 'model'; text: string };
 
-/** Error codes from the gemini-proxy function: daily_limit, rate_limited, busy, … */
+/** Error codes from the gemini-proxy function (daily_limit, rate_limited, busy, …), or no_consent. */
 export class CoachError extends Error {
   constructor(public code: string) { super(code); }
 }
@@ -17,6 +18,9 @@ export class CoachError extends Error {
 export async function askBonbon({ system, history = [], message }: {
   system: string; history?: BonbonTurn[]; message: string;
 }): Promise<string> {
+  // Nothing goes to Google's AI until it's allowed (aiConsent.ts); the screens ask first.
+  if (!(await getAiConsent())) throw new CoachError('no_consent');
+
   // Must stay within the server's limits (see supabase/functions/gemini-proxy).
   const body = JSON.stringify({
     system:  system.slice(0, 8000),

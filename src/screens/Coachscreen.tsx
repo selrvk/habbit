@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image,
-  TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert,
+  TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert, Linking,
 } from 'react-native';
 import { useNavHeight } from '../hooks/useNavHeight';
 import { STORAGE_COACH_MESSAGES } from '../storage';
@@ -20,6 +20,8 @@ import {
   HISTORY_LIMITS,
 } from '../utils/messageQuota';
 import { useProStatus } from '../context/ProContext';
+import { AI_AGE_TEXT, AI_SHARING_TEXT, setAiConsent, useAiConsent } from '../utils/aiConsent';
+import { PRIVACY_URL } from '../legal';
 import type { CoachContext } from '../utils/buildCoachContext';
 import type { BudgetState } from '../budget';
 
@@ -99,6 +101,52 @@ const SuggestedPrompts = ({ onSelect }: { onSelect: (t: string) => void }) => (
         </Text>
       </TouchableOpacity>
     ))}
+  </View>
+);
+
+// ─── Consent ──────────────────────────────────────────────────────────────────
+
+/**
+ * In place of the message box until Bonbon may use Google's AI (aiConsent.ts): asks first,
+ * with the age check, or says Bonbon is off for someone under 18.
+ */
+const ConsentCard = ({ under18, onAllow, onUnder18, bottom, fs }: {
+  under18: boolean; onAllow: () => void; onUnder18: () => void; bottom: number; fs: (n: number) => number;
+}) => (
+  <View style={{
+    marginHorizontal: 12, marginBottom: bottom + 10, padding: 16, gap: 10,
+    backgroundColor: '#5C3D2E', borderRadius: 18,
+    borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)',
+  }}>
+    {under18 ? (
+      <>
+        <Text style={{ fontFamily: DYNAPUFF, color: '#e8d5c0', fontSize: fs(16) }}>Bonbon is resting</Text>
+        <Text style={{ fontFamily: JUA, color: 'rgba(232,213,192,0.75)', fontSize: fs(13), lineHeight: fs(19) }}>
+          {AI_AGE_TEXT} Everything else in Habbit works as usual. You can change your answer in Settings › Data & Privacy.
+        </Text>
+      </>
+    ) : (
+      <>
+        <Text style={{ fontFamily: DYNAPUFF, color: '#e8d5c0', fontSize: fs(16) }}>Before you chat</Text>
+        <Text style={{ fontFamily: JUA, color: 'rgba(232,213,192,0.75)', fontSize: fs(13), lineHeight: fs(19) }}>
+          {AI_SHARING_TEXT} Nothing is sent until you allow it, and you can turn it off in Settings.
+        </Text>
+        <Text style={{ fontFamily: JUA, color: '#e8d5c0', fontSize: fs(13) }}>{AI_AGE_TEXT}</Text>
+        <TouchableOpacity onPress={onAllow} activeOpacity={0.8}
+          style={{ backgroundColor: '#D4956A', borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontFamily: DYNAPUFF, color: '#fff', fontSize: fs(15) }}>Allow · I’m 18 or older</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onUnder18} activeOpacity={0.8}
+          style={{ borderRadius: 14, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+          <Text style={{ fontFamily: JUA, color: '#e8d5c0', fontSize: fs(14) }}>I’m under 18</Text>
+        </TouchableOpacity>
+      </>
+    )}
+    <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={8} style={{ alignSelf: 'center' }}>
+      <Text style={{ fontFamily: JUA, color: 'rgba(232,213,192,0.55)', fontSize: fs(12), textDecorationLine: 'underline' }}>
+        Privacy Policy
+      </Text>
+    </TouchableOpacity>
   </View>
 );
 
@@ -190,6 +238,8 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
   const navHeight                     = useNavHeight();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fs                            = useFontSize();
+  const aiConsent                     = useAiConsent();
+  const aiAllowed                     = aiConsent === 'allowed';
 
   const contextRef = useRef<CoachContext | null>(null);
 
@@ -392,7 +442,8 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
     }
   };
 
-  if (!hasLoaded) return <View style={{ flex: 1, backgroundColor: '#2A1A18' }} />;
+  if (!hasLoaded || aiConsent === null) return <View style={{ flex: 1, backgroundColor: '#2A1A18' }} />;
+  const showPrompts = aiAllowed && messages.length === 1 && messages[0]?.from === 'bunny' && !isReplying && !input.trim();
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -441,9 +492,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: messages.length === 1 
-          && messages[0]?.from === 'bunny' 
-          && !isReplying && !input.trim() ? 140 : 8, }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: showPrompts ? 140 : 8 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => { if (typing) scrollRef.current?.scrollToEnd({ animated: false }); }}
@@ -466,10 +515,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
         {isReplying && bunnyState === 'thinking' && <ThinkingBubble />}
       </ScrollView>
 
-      {messages.length === 1 &&
-        messages[0]?.from === 'bunny' &&
-        !isReplying &&
-        !input.trim() && (
+      {showPrompts && (
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
           <SuggestedPrompts
             onSelect={(text) => {
@@ -481,7 +527,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
       )}
       </View>
 
-      {!isPro && remaining !== null && (
+      {aiAllowed && !isPro && remaining !== null && (
         <Text style={{
           fontFamily: JUA, fontSize: 11, textAlign: 'center', paddingBottom: 4,
           color: remaining <= 3
@@ -495,6 +541,13 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
       )}
 
       {/* ── Input bar ──────────────────────────────────────────────────────── */}
+      {!aiAllowed ? (
+        <ConsentCard
+          under18={aiConsent === 'under18'} bottom={navHeight} fs={fs}
+          onAllow={() => { haptic.success(); setAiConsent('allowed'); }}
+          onUnder18={() => { haptic.light(); setAiConsent('under18'); }}
+        />
+      ) : (
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -564,6 +617,7 @@ export const CoachScreen: React.FC<CoachScreenProps> = ({ name, streak, budget, 
           </Text>
         </TouchableOpacity>
       </View>
+      )}
     </KeyboardAvoidingView>
   );
 };

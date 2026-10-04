@@ -18,6 +18,7 @@ import { addDaysToKey, currencyStr, parseDateKey } from '../helpers';
 import { periodStart } from '../budget';
 import { weekLabel, weekSummary, weekTip, weekTrend, type WeekData } from '../weekSummary';
 import { savedWeekNote, writeWeekNote } from '../utils/weekNote';
+import { askAiConsent, getAiConsent, useAiConsent } from '../utils/aiConsent';
 import { durationLabel } from '../focus';
 import { CoachError } from '../utils/bonbonApi';
 
@@ -42,6 +43,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
   const fs     = useFontSize();
   const insets = useSafeAreaInsets();
   const { isPro } = useProStatus();
+  const aiConsent = useAiConsent();
   const [week, setWeek]       = useState(periodStart('weekly', initialWeek));
   const [note, setNote]       = useState<Note>({ status: 'idle' });
   const [paywall, setPaywall] = useState(false);
@@ -68,14 +70,15 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
   };
 
   // Pro: a saved note, or a new one for the week the recap opened on (others on request).
+  // Written on its own only once Bonbon may use Google's AI; until then the button asks.
   useEffect(() => {
     if (!visible || !isPro || empty) return;
     let cancelled = false;
     setNote({ status: 'idle' });
-    savedWeekNote(s).then(text => {
+    Promise.all([savedWeekNote(s), getAiConsent()]).then(([text, allowed]) => {
       if (cancelled) return;
       if (text) setNote({ status: 'done', text });
-      else if (week === periodStart('weekly', initialWeek)) write();
+      else if (allowed && week === periodStart('weekly', initialWeek)) write();
     });
     return () => { cancelled = true; };
   }, [visible, isPro, s.start, s.end, empty]);
@@ -204,10 +207,19 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
                   ) : (
                     <>
                       {note.status === 'error' && <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, marginBottom: 8 }}>{note.text}</Text>}
-                      <TouchableOpacity onPress={() => { haptic(); write(); }} activeOpacity={0.8}
-                        style={{ alignSelf: 'flex-start', backgroundColor: C.accent, borderRadius: 99, paddingVertical: 7, paddingHorizontal: 14 }}>
-                        <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: '#fff' }}>{note.status === 'error' ? 'Try again' : 'Ask Bonbon about this week'}</Text>
-                      </TouchableOpacity>
+                      {aiConsent !== 'allowed' && (
+                        <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, lineHeight: fs(19), marginBottom: 8 }}>
+                          {aiConsent === 'under18'
+                            ? 'Bonbon’s notes are for people 18 and older. You can change your answer in Settings › Data & Privacy.'
+                            : 'Bonbon writes this with Google’s Gemini AI, from this week’s recap.'}
+                        </Text>
+                      )}
+                      {aiConsent !== 'under18' && (
+                        <TouchableOpacity onPress={async () => { haptic(); if (aiConsent === 'allowed' || await askAiConsent()) write(); }} activeOpacity={0.8}
+                          style={{ alignSelf: 'flex-start', backgroundColor: C.accent, borderRadius: 99, paddingVertical: 7, paddingHorizontal: 14 }}>
+                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: '#fff' }}>{note.status === 'error' ? 'Try again' : 'Ask Bonbon about this week'}</Text>
+                        </TouchableOpacity>
+                      )}
                     </>
                   )}
                 </View>

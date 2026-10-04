@@ -57,6 +57,12 @@ RCT_EXPORT_METHOD(reloadAll) {
   reloadWidgetTimelines();
 }
 
+/** The app's version and build, for Settings › About. */
+- (NSDictionary *)constantsToExport {
+  NSDictionary *info = NSBundle.mainBundle.infoDictionary;
+  return @{ @"appVersion": info[@"CFBundleShortVersionString"] ?: @"", @"buildNumber": info[@"CFBundleVersion"] ?: @"" };
+}
+
 + (BOOL)requiresMainQueueSetup { return NO; }
 
 @end

@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image
+  View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image, NativeModules
 } from 'react-native';
 import { useAppSettings } from './../context/SettingsContext';
 import type { FontSize } from './../context/SettingsContext';
@@ -28,6 +28,8 @@ import {
 import { describeBackupContents, describeBackupTime } from '../backupFormat';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../icons';
+import { askAiConsent, setAiConsent, useAiConsent } from '../utils/aiConsent';
+import { PRIVACY_URL, TERMS_URL } from '../legal';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -105,6 +107,13 @@ const Row = ({ icon, label, sublabel, rightEl, onPress, last = false }: {
   if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.75}>{Inner}</TouchableOpacity>;
   return Inner;
 };
+
+/** "v3 (14)": the version and build from the app's Info.plist (WidgetReloader.m). */
+const appVersion = (() => {
+  const mod = NativeModules.WidgetReloader;
+  const c = mod?.getConstants?.() ?? mod ?? {};
+  return c.appVersion ? `v${c.appVersion}${c.buildNumber ? ` (${c.buildNumber})` : ''}` : '';
+})();
 
 /** Toggle pill — same style as ProfileScreen */
 const Toggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) => (
@@ -250,6 +259,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const fs = useFontSize();
 
   const { isPro, restorePurchases } = useProStatus();
+  const aiConsent = useAiConsent();
+
+  const toggleAi = () => {
+    if (aiConsent !== 'allowed') { askAiConsent(); return; }
+    Alert.alert('Turn off Bonbon’s AI?', 'Nothing more will be sent to Google. Bonbon can’t chat or write your Sunday note until you allow it again.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Turn off', style: 'destructive', onPress: () => { setAiConsent('no'); } },
+    ]);
+  };
   const [restoring, setRestoring] = useState(false);
   const ownCategories = useCategories().custom.filter(c => !c.archived);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -570,12 +588,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Data ───────────────────────────────────────────────────── */}
         <Section title="Data & Privacy">
           <Row
+            icon="bonbon"
+            label="Bonbon’s AI"
+            sublabel={aiConsent === 'allowed' ? 'On · your chats go to Google’s Gemini'
+              : aiConsent === 'under18' ? 'Off · Bonbon is for people 18 and older'
+              : 'Off · nothing is sent to Google'}
+            rightEl={<Toggle enabled={aiConsent === 'allowed'} onToggle={toggleAi} />}
+          />
+          <Row
             icon="document"
             label="Terms of Use"
             sublabel="EULA · opens in browser"
             onPress={() => {
               haptic.light();
-              Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');
+              Linking.openURL(TERMS_URL);
             }}
             rightEl={<Text style={{ fontSize: 13, color: C.muted }}>›</Text>}
           />
@@ -586,7 +612,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             last
             onPress={() => {
               haptic.light();
-              Linking.openURL('https://docs.google.com/document/d/e/2PACX-1vS6O5IJ28VMu6mbxgFHUhSFA-qbGt76PgLwlp4yLztI8l1AP3cKXaUZhlHAdPcQkvH7VHxDithqqFFa/pub');
+              Linking.openURL(PRIVACY_URL);
             }}
             rightEl={<Text style={{ fontSize: 13, color: C.muted }}>›</Text>}
           />
@@ -622,7 +648,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
-              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>v2.0</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: 12, color: C.muted }}>{appVersion}</Text>
             }
           />
           <Row

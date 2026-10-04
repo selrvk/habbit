@@ -28,6 +28,8 @@ export const STORAGE_WORKOUT            = '@habbit_rabbit_workout';
 export const STORAGE_WORKOUT_LOG        = '@habbit_rabbit_workout_log';
 /** Bonbon's weekly notes, by week. Not backed up: they can be written again. */
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
+/** Whether Bonbon may send things to Google's AI ('allowed' / 'under18' / 'no'; aiConsent.ts). Not backed up. */
+export const STORAGE_AI_CONSENT         = '@habbit_rabbit_ai_consent';
 
 // ── Used by "Delete All Data" — never include ONBOARDED or SETTINGS ──────────
 export const CONTENT_STORAGE_KEYS = [
@@ -54,4 +56,5 @@ export const ALL_STORAGE_KEYS = [
   ...CONTENT_STORAGE_KEYS,
   STORAGE_SETTINGS,
   STORAGE_ONBOARDED,
+  STORAGE_AI_CONSENT,
 ];

@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Linking } from 'react-native';
 import { useProStatus } from '../context/ProContext';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../icons';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-
-// Legal URLs — Terms uses Apple's standard EULA (also listed in App Store Connect).
-const TERMS_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-const PRIVACY_URL = 'https://docs.google.com/document/d/e/2PACX-1vS6O5IJ28VMu6mbxgFHUhSFA-qbGt76PgLwlp4yLztI8l1AP3cKXaUZhlHAdPcQkvH7VHxDithqqFFa/pub';
+import { PRIVACY_URL, TERMS_URL } from '../legal';
 
 const JUA = 'Jua';
 const DYNAPUFF = 'DynaPuff';
@@ -83,7 +80,8 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#2A1A18', padding: 24, justifyContent: 'center' }}>
+    // Scrolls on smaller phones, so the price terms and links at the bottom can always be reached.
+    <ScrollView style={{ flex: 1, backgroundColor: '#2A1A18' }} contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 28 }}>
           Habbit Pro
@@ -108,7 +106,6 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
         ['jar',        'More than one savings jar'],
         ['palette',    'Cream and Match iPhone widget looks'],
         ['flexed-arm', 'Workout progress and personal bests'],
-        ['bar-chart',  '& more soon!'],
       ] as [IconName, string][]).map(([icon, text]) => (
         <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <Icon name={icon} size={24} />
@@ -198,6 +195,6 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 };
