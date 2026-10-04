@@ -12,6 +12,7 @@ import { CurrencyAmount } from '../components/CurrencyAmount';
 import { PERIOD_LABELS, periodStart, type BudgetPeriod, type BudgetState, type TopUp } from '../budget';
 import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
 import { CategoryGrid } from '../components/CategoryGrid';
+import { CategoryIcon, Icon } from '../components/Icon';
 import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
 import { LeftoverBanner, SavingsJars, type Jar } from '../components/SavingsJar';
@@ -374,7 +375,7 @@ export const FinanceScreen = ({
               ) : (
                 [...selectedEntries].reverse().map(entry => (
                   <View key={entry.id} style={{ backgroundColor: C.card, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 }}>
-                    <Text style={{ fontSize: fs(18), marginRight: 10, opacity: entry.category ? 1 : 0.3 }}>{categoryOf(entry.category)?.emoji ?? '•'}</Text>
+                    <View style={{ marginRight: 10 }}><CategoryIcon category={categoryOf(entry.category)} size={fs(24)} dim={!entry.category} /></View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{entryTitle(entry)}</Text>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>{entry.time}</Text>
@@ -435,9 +436,10 @@ export const FinanceScreen = ({
                 </Text>
               )}
               {budget.billsSetAside > 0 && (
-                <Text style={[label, { marginTop: budget.topUpsThisPeriod > 0 ? 2 : 8 }]}>
-                  🧾 {currencyStr(currency, fmt(budget.billsSetAside))} set aside for bills this {noun}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: budget.topUpsThisPeriod > 0 ? 2 : 8 }}>
+                  <Icon name="receipt" size={fs(15)} />
+                  <Text style={label}>{currencyStr(currency, fmt(budget.billsSetAside))} set aside for bills this {noun}</Text>
+                </View>
               )}
             </View>
           )}
@@ -474,9 +476,11 @@ export const FinanceScreen = ({
                 activeOpacity={0.7}
                 accessibilityHint={row.kind === 'spend' ? 'Change its category or remove it' : 'Opens undo'}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
-                <Text style={{ fontSize: fs(18), marginRight: 10, opacity: row.kind === 'spend' && !row.category ? 0.3 : 1 }}>
-                  {row.kind === 'topup' ? '💰' : categoryOf(row.category)?.emoji ?? '•'}
-                </Text>
+                <View style={{ marginRight: 10 }}>
+                  {row.kind === 'topup'
+                    ? <Icon name="money-bag" size={fs(24)} />
+                    : <CategoryIcon category={categoryOf(row.category)} size={fs(24)} dim={!row.category} />}
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>
                     {row.kind === 'spend' ? entryTitle(row) : row.note || 'Money added'}
@@ -508,7 +512,7 @@ export const FinanceScreen = ({
         {bills.length === 0 ? (
           <TouchableOpacity onPress={() => { haptic.light(); setBillEditor('new'); }} activeOpacity={0.8}
             style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Text style={{ fontSize: fs(24) }}>🧾</Text>
+            <Icon name="receipt" size={fs(32)} />
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Add rent, subscriptions and other bills</Text>
               <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Add them once — they're logged for you on the day.</Text>
@@ -521,7 +525,7 @@ export const FinanceScreen = ({
               <TouchableOpacity key={bill.id} onPress={() => { haptic.light(); setBillEditor(bill); }} activeOpacity={0.7}
                 accessibilityHint="Edit this bill"
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
-                <Text style={{ fontSize: fs(18), marginRight: 10 }}>🧾</Text>
+                <Icon name="receipt" size={fs(24)} style={{ marginRight: 10 }} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>{bill.name}</Text>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }} numberOfLines={1}>
@@ -548,7 +552,7 @@ export const FinanceScreen = ({
                 return (
                   <View key={b.key} accessible accessibilityLabel={`${cat.label}: ${currencyStr(currency, fmt(b.total))}, ${Math.round(b.share * 100)} percent`}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                      <Text style={{ fontSize: fs(15), width: 26 }}>{cat.emoji}</Text>
+                      <View style={{ width: 28 }}><CategoryIcon category={cat} size={fs(20)} /></View>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, flex: 1 }}>{cat.label}</Text>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginRight: 8 }}>{Math.round(b.share * 100)}%</Text>
                       <CurrencyAmount currency={currency} amount={fmt(b.total)} imageSize={fs(13)}
@@ -567,7 +571,7 @@ export const FinanceScreen = ({
         {/* ── Monthly recap ── */}
         <TouchableOpacity onPress={() => { haptic.light(); setSummaryMonth(recapMonth); }} activeOpacity={0.8}
           style={{ backgroundColor: recapLastMonth ? 'rgba(212,149,106,0.16)' : C.card, borderRadius: 16, padding: 16, marginTop: 12, marginBottom: 12, borderWidth: 1, borderColor: recapLastMonth ? 'rgba(212,149,106,0.45)' : C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Text style={{ fontSize: fs(24) }}>📊</Text>
+          <Icon name="bar-chart" size={fs(32)} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>
               {recapLastMonth ? `Your ${monthLabel(recapMonth).name} recap is ready` : `${monthLabel(recapMonth).name} so far`}

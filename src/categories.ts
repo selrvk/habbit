@@ -4,21 +4,22 @@
 // category over a range of days.
 
 import type { DailyTotal, SpendingEntry } from './types';
+import type { IconName } from './icons';
 
 /** The built-in categories. Siri and Shortcuts offer these (ios/HabbitIntents.swift). */
 export type CategoryKey = 'food' | 'transport' | 'shopping' | 'fun' | 'bills' | 'health' | 'other';
 
-/** A built-in key, or a custom one ("c-…"). */
-export type Category = { key: string; label: string; emoji: string; color: string };
+/** A built-in key, or a custom one ("c-…"). Built-in ones also have a clay icon (src/icons.ts). */
+export type Category = { key: string; label: string; emoji: string; color: string; icon?: IconName };
 
 export const CATEGORIES: (Category & { key: CategoryKey })[] = [
-  { key: 'food',      label: 'Food',      emoji: '🍔', color: '#E8A87C' },
-  { key: 'transport', label: 'Transport', emoji: '🚌', color: '#8FB8DE' },
-  { key: 'shopping',  label: 'Shopping',  emoji: '🛍️', color: '#D4A5D4' },
-  { key: 'fun',       label: 'Fun',       emoji: '🎉', color: '#F5C26B' },
-  { key: 'bills',     label: 'Bills',     emoji: '🧾', color: '#C9A27E' },
-  { key: 'health',    label: 'Health',    emoji: '💊', color: '#9DE087' },
-  { key: 'other',     label: 'Other',     emoji: '📦', color: '#B8A99A' },
+  { key: 'food',      label: 'Food',      emoji: '🍔', icon: 'burger',        color: '#E8A87C' },
+  { key: 'transport', label: 'Transport', emoji: '🚌', icon: 'bus',           color: '#8FB8DE' },
+  { key: 'shopping',  label: 'Shopping',  emoji: '🛍️', icon: 'shopping-bags', color: '#D4A5D4' },
+  { key: 'fun',       label: 'Fun',       emoji: '🎉', icon: 'party-popper',  color: '#F5C26B' },
+  { key: 'bills',     label: 'Bills',     emoji: '🧾', icon: 'receipt',       color: '#C9A27E' },
+  { key: 'health',    label: 'Health',    emoji: '💊', icon: 'pill',          color: '#9DE087' },
+  { key: 'other',     label: 'Other',     emoji: '📦', icon: 'box',           color: '#B8A99A' },
 ];
 
 /** Entries logged before categories existed, or without picking one. */

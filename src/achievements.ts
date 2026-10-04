@@ -14,6 +14,7 @@ import { withToday } from './monthSummary';
 import { liveRecord } from './weekSummary';
 import type { FocusLogEntry } from './focus';
 import { hadPersonalBest, type WorkoutLog } from './workout';
+import type { IconName } from './icons';
 
 export type AchievementGroup = 'habits' | 'money' | 'bonbon';
 
@@ -38,7 +39,8 @@ export type Progress = { value: number; target: number };
 
 export type Achievement = {
   id: string;
-  emoji: string;
+  /** Its badge (src/icons.ts). */
+  icon: IconName;
   title: string;
   group: AchievementGroup;
   description: string | ((d: AchievementData) => string);
@@ -155,42 +157,42 @@ const endedUnderBudget = (d: AchievementData) => {
 
 export const ACHIEVEMENTS: Achievement[] = [
   // Habits
-  { id: 'first-hop',    group: 'habits', emoji: '🐣', title: 'First Hop',        description: 'Check off your first Habbit',                progress: d => count(d.stats.totalCompleted, 1) },
-  { id: 'perfect-day',  group: 'habits', emoji: '✨', title: 'Perfect Day',      description: 'Finish every Habbit in a day',               progress: d => yes(records(d).some(r => r.completed)) },
-  { id: 'streak-3',     group: 'habits', emoji: '🔥', title: 'On a Roll',        description: 'Reach a 3-day streak',                       progress: d => count(d.stats.bestStreak, 3) },
-  { id: 'streak-7',     group: 'habits', emoji: '⚡', title: 'Week Warrior',     description: 'Reach a 7-day streak',                       progress: d => count(d.stats.bestStreak, 7) },
-  { id: 'streak-30',    group: 'habits', emoji: '🏆', title: 'Unstoppable',      description: 'Reach a 30-day streak',                      progress: d => count(d.stats.bestStreak, 30) },
-  { id: 'streak-100',   group: 'habits', emoji: '👑', title: 'Legend',           description: 'Reach a 100-day streak',                     progress: d => count(d.stats.bestStreak, 100) },
-  { id: 'perfect-week', group: 'habits', emoji: '🌟', title: 'Perfect Week',     description: 'Every Habbit, every day, Monday to Sunday',  progress: d => yes(hadPerfectWeek(d)) },
-  { id: 'comeback',     group: 'habits', emoji: '🌱', title: 'Comeback',         description: 'Have a perfect day right after missing one', progress: d => yes(hadComeback(d)) },
-  { id: 'weekly-goal',  group: 'habits', emoji: '🎯', title: 'Goal Getter',      description: 'Hit an “N× a week” goal',                    progress: d => yes(metWeeklyGoal(d)) },
-  { id: 'focus-first',  group: 'habits', emoji: '⏱️', title: 'In the Zone',      description: 'Finish a focus block',                       progress: d => yes(focusTotal(d) > 0) },
-  { id: 'focus-10h',    group: 'habits', emoji: '🧠', title: 'Deep Focus',       description: 'Focus for 10 hours in all',
+  { id: 'first-hop',    group: 'habits', icon: 'chick',         title: 'First Hop',        description: 'Check off your first Habbit',                progress: d => count(d.stats.totalCompleted, 1) },
+  { id: 'perfect-day',  group: 'habits', icon: 'sparkles',      title: 'Perfect Day',      description: 'Finish every Habbit in a day',               progress: d => yes(records(d).some(r => r.completed)) },
+  { id: 'streak-3',     group: 'habits', icon: 'fire',          title: 'On a Roll',        description: 'Reach a 3-day streak',                       progress: d => count(d.stats.bestStreak, 3) },
+  { id: 'streak-7',     group: 'habits', icon: 'lightning',     title: 'Week Warrior',     description: 'Reach a 7-day streak',                       progress: d => count(d.stats.bestStreak, 7) },
+  { id: 'streak-30',    group: 'habits', icon: 'trophy',        title: 'Unstoppable',      description: 'Reach a 30-day streak',                      progress: d => count(d.stats.bestStreak, 30) },
+  { id: 'streak-100',   group: 'habits', icon: 'crown',         title: 'Legend',           description: 'Reach a 100-day streak',                     progress: d => count(d.stats.bestStreak, 100) },
+  { id: 'perfect-week', group: 'habits', icon: 'star-glow',     title: 'Perfect Week',     description: 'Every Habbit, every day, Monday to Sunday',  progress: d => yes(hadPerfectWeek(d)) },
+  { id: 'comeback',     group: 'habits', icon: 'seedling',      title: 'Comeback',         description: 'Have a perfect day right after missing one', progress: d => yes(hadComeback(d)) },
+  { id: 'weekly-goal',  group: 'habits', icon: 'target',        title: 'Goal Getter',      description: 'Hit an “N× a week” goal',                    progress: d => yes(metWeeklyGoal(d)) },
+  { id: 'focus-first',  group: 'habits', icon: 'stopwatch',     title: 'In the Zone',      description: 'Finish a focus block',                       progress: d => yes(focusTotal(d) > 0) },
+  { id: 'focus-10h',    group: 'habits', icon: 'brain',         title: 'Deep Focus',       description: 'Focus for 10 hours in all',
     progressLabel: p => `${p.value}/${p.target} hours`,
     progress: d => count(Math.floor(focusTotal(d) / 60), 10) },
-  { id: 'workout-first', group: 'habits', emoji: '💪', title: 'First Rep',       description: 'Finish a workout',                           progress: d => count(d.workoutLog.length, 1) },
-  { id: 'workout-pb',   group: 'habits', emoji: '🥇', title: 'Personal Best',    description: 'Beat a personal best in a workout',          progress: d => yes(hadPersonalBest(d.workoutLog)) },
-  { id: 'workout-25',   group: 'habits', emoji: '🏋️', title: 'Iron Bunny',       description: 'Finish 25 workouts',                         progress: d => count(d.workoutLog.length, 25) },
-  { id: 'done-100',     group: 'habits', emoji: '🥕', title: 'Carrot Collector', description: 'Check off 100 Habbits',                      progress: d => count(d.stats.totalCompleted, 100) },
-  { id: 'done-500',     group: 'habits', emoji: '🧺', title: 'Big Harvest',      description: 'Check off 500 Habbits',                      progress: d => count(d.stats.totalCompleted, 500) },
+  { id: 'workout-first', group: 'habits', icon: 'flexed-arm',    title: 'First Rep',       description: 'Finish a workout',                           progress: d => count(d.workoutLog.length, 1) },
+  { id: 'workout-pb',   group: 'habits', icon: 'medal',         title: 'Personal Best',    description: 'Beat a personal best in a workout',          progress: d => yes(hadPersonalBest(d.workoutLog)) },
+  { id: 'workout-25',   group: 'habits', icon: 'barbell',       title: 'Iron Bunny',       description: 'Finish 25 workouts',                         progress: d => count(d.workoutLog.length, 25) },
+  { id: 'done-100',     group: 'habits', icon: 'carrot',        title: 'Carrot Collector', description: 'Check off 100 Habbits',                      progress: d => count(d.stats.totalCompleted, 100) },
+  { id: 'done-500',     group: 'habits', icon: 'basket',        title: 'Big Harvest',      description: 'Check off 500 Habbits',                      progress: d => count(d.stats.totalCompleted, 500) },
   // Money
-  { id: 'first-spend',  group: 'money',  emoji: '🪙', title: 'Penny Tracker',    description: 'Log your first expense',                     progress: d => count(loggedEntries(d).length, 1) },
-  { id: 'logged-7',     group: 'money',  emoji: '📒', title: 'Bookkeeper',       description: 'Log spending 7 days in a row',               progress: d => count(longestRun([...new Set(loggedEntries(d).map(e => e.date))].sort()), 7) },
-  { id: 'sorted-25',    group: 'money',  emoji: '🗂️', title: 'Neat Nibbler',     description: 'Give 25 expenses a category',                progress: d => count(loggedEntries(d).filter(e => e.category).length, 25) },
-  { id: 'under-budget', group: 'money',  emoji: '💚', title: 'Budget Boss',
+  { id: 'first-spend',  group: 'money',  icon: 'coin',          title: 'Penny Tracker',    description: 'Log your first expense',                     progress: d => count(loggedEntries(d).length, 1) },
+  { id: 'logged-7',     group: 'money',  icon: 'notebook',      title: 'Bookkeeper',       description: 'Log spending 7 days in a row',               progress: d => count(longestRun([...new Set(loggedEntries(d).map(e => e.date))].sort()), 7) },
+  { id: 'sorted-25',    group: 'money',  icon: 'folders',       title: 'Neat Nibbler',     description: 'Give 25 expenses a category',                progress: d => count(loggedEntries(d).filter(e => e.category).length, 25) },
+  { id: 'under-budget', group: 'money',  icon: 'green-heart',   title: 'Budget Boss',
     description: d => (d.budgetPeriod === 'monthly' ? 'End a month under budget' : d.budgetPeriod === 'weekly' ? 'End a week under budget' : 'Stay under your daily budget for a whole week'),
     progress: d => yes(endedUnderBudget(d)) },
-  { id: 'bills',        group: 'money',  emoji: '🧾', title: 'Bill Wrangler',    description: 'Set up a recurring bill',                    progress: d => count(d.bills.length, 1) },
-  { id: 'saver',        group: 'money',  emoji: '🫙', title: 'Saver',            description: 'Put money in a savings jar',              progress: d => yes(allJarEntries(d.savings).some(e => e.amount > 0)) },
-  { id: 'jar-half',     group: 'money',  emoji: '🐷', title: 'Halfway There',    description: 'Fill a savings jar halfway',
+  { id: 'bills',        group: 'money',  icon: 'receipt',       title: 'Bill Wrangler',    description: 'Set up a recurring bill',                    progress: d => count(d.bills.length, 1) },
+  { id: 'saver',        group: 'money',  icon: 'jar',           title: 'Saver',            description: 'Put money in a savings jar',              progress: d => yes(allJarEntries(d.savings).some(e => e.amount > 0)) },
+  { id: 'jar-half',     group: 'money',  icon: 'piggy-bank',    title: 'Halfway There',    description: 'Fill a savings jar halfway',
     progressLabel: p => `${p.value}% full`,
     progress: d => count(Math.floor(fullestJar(d.savings) * 100), 50) },
-  { id: 'jar-full',     group: 'money',  emoji: '🎉', title: 'Goal!',            description: 'Reach a savings goal',
+  { id: 'jar-full',     group: 'money',  icon: 'party-popper',  title: 'Goal!',            description: 'Reach a savings goal',
     progressLabel: p => `${p.value}% full`,
     progress: d => count(Math.floor(fullestJar(d.savings) * 100), 100) },
   // Bonbon (events)
-  { id: 'hello-bonbon', group: 'bonbon', emoji: '🐰', title: 'Hi, Bonbon!',      description: 'Chat with Bonbon' },
-  { id: 'look-back',    group: 'bonbon', emoji: '🪞', title: 'Look Back',        description: 'Open a weekly recap' },
+  { id: 'hello-bonbon', group: 'bonbon', icon: 'bonbon',        title: 'Hi, Bonbon!',      description: 'Chat with Bonbon' },
+  { id: 'look-back',    group: 'bonbon', icon: 'mirror',        title: 'Look Back',        description: 'Open a weekly recap' },
 ];
 
 export const achievementById = (id: string) => ACHIEVEMENTS.find(a => a.id === id);

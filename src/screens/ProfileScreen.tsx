@@ -11,6 +11,7 @@ import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from './PaywallScreen';
 import type { Stats, CompletionRecord } from '../types';
 import { ACHIEVEMENTS, earnedSortKey, type Earned } from '../achievements';
+import { Icon } from '../components/Icon';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -72,7 +73,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
             activeOpacity={0.7}
             accessibilityLabel="Settings"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.3)' }}>
-            <Text style={{ fontSize: fs(14) }}>⚙️</Text>
+            <Icon name="gear" size={fs(18)} />
             <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(13) }}>Settings</Text>
           </TouchableOpacity>
         </View>
@@ -115,7 +116,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
 
           {isPro ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(212,149,106,0.12)', borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
-              <Text style={{ fontSize: fs(14) }}>🥕</Text>
+              <Icon name="carrot" size={fs(18)} />
               <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(13), color: C.accent }}>Habbit Pro</Text>
             </View>
           ) : (
@@ -155,7 +156,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                   {recent.map(a => (
                     <View key={a.id} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,149,106,0.22)', borderWidth: 1.5, borderColor: C.accent }}>
-                      <Text style={{ fontSize: fs(19) }}>{a.emoji}</Text>
+                      <Icon name={a.icon} size={fs(25)} />
                     </View>
                   ))}
                 </View>

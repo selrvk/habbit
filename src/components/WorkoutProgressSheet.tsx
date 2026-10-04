@@ -8,6 +8,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { parseDateKey } from '../helpers';
+import { Icon } from './Icon';
 import { exerciseHistory, exerciseSummaries, weightText, type ExerciseSummary, type WeightUnit, type WorkoutLog } from '../workout';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', muted: 'rgba(232,213,192,0.55)', border: 'rgba(212,149,106,0.18)' };
@@ -37,7 +38,10 @@ const ExerciseCard = ({ summary: s, log, unit }: { summary: ExerciseSummary; log
           ...(s.weighted && s.bestE1rm ? [{ title: 'Est. 1-rep max', value: kg(Math.round(s.bestE1rm.e1rm)), when: s.bestE1rm.date }] : []),
         ].map(b => (
           <View key={b.title} style={{ flex: 1, backgroundColor: 'rgba(42,26,24,0.45)', borderRadius: 12, padding: 10 }}>
-            <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>🏆 {b.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon name="trophy" size={fs(14)} />
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{b.title}</Text>
+            </View>
             <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.cream, marginTop: 2 }}>{b.value}</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{dayLabel(b.when)}</Text>
           </View>

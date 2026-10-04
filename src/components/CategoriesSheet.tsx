@@ -13,6 +13,7 @@ import { useCategories } from '../context/CategoriesContext';
 import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { CategoryEditor } from './CategoryEditor';
+import { CategoryIcon, ProPill } from './Icon';
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
@@ -70,9 +71,7 @@ export const CategoriesSheet = ({ visible, onClose }: { visible: boolean; onClos
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: yours.length > 0 ? 1 : 0, borderTopColor: C.border }}>
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(15), color: C.accent, flex: 1 }}>＋ New category</Text>
                 {!isPro && (
-                  <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
-                    <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
-                  </View>
+                  <ProPill />
                 )}
               </TouchableOpacity>
             ) : (
@@ -89,7 +88,7 @@ export const CategoriesSheet = ({ visible, onClose }: { visible: boolean; onClos
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {CATEGORIES.map(c => (
               <View key={c.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.08)', borderWidth: 1, borderColor: 'rgba(212,149,106,0.18)' }}>
-                <Text style={{ fontSize: fs(14) }}>{c.emoji}</Text>
+                <CategoryIcon category={c} size={fs(18)} />
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: 'rgba(232,213,192,0.7)' }}>{c.label}</Text>
               </View>
             ))}

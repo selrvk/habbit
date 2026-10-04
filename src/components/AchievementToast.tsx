@@ -8,8 +8,10 @@ import { Animated, Image, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { avatarImage } from '../helpers';
+import { Icon } from './Icon';
+import type { IconName } from '../icons';
 
-export type ToastItem = { key: string; emoji: string; title: string; subtitle: string; plural?: boolean };
+export type ToastItem = { key: string; icon: IconName; title: string; subtitle: string; plural?: boolean };
 
 const SHOW_MS = 3800;
 
@@ -44,7 +46,7 @@ export const AchievementToast = ({ item, avatar, onPress, onDone }: {
         }}>
         <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(212,149,106,0.2)', alignItems: 'center', justifyContent: 'center' }}>
           <Image source={avatarImage(avatar)} style={{ width: 34, height: 34 }} resizeMode="contain" />
-          <Text style={{ position: 'absolute', right: -6, bottom: -6, fontSize: fs(20) }}>{item.emoji}</Text>
+          <Icon name={item.icon} size={fs(24)} style={{ position: 'absolute', right: -8, bottom: -8 }} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: '#D4956A', letterSpacing: 1 }}>{item.plural ? 'ACHIEVEMENTS UNLOCKED' : 'ACHIEVEMENT UNLOCKED'}</Text>

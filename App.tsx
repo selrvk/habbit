@@ -1002,8 +1002,8 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: next })).catch(() => {});
     haptic.success();
     setToasts(q => [...q, ...(fromHistory && fresh.length > 1
-      ? [{ key: `history-${fresh.length}`, emoji: '🏅', title: `${fresh.length} achievements earned`, subtitle: 'From everything you’ve done so far. Tap to see them.', plural: true }]
-      : fresh.map(id => { const a = achievementById(id)!; return { key: id, emoji: a.emoji, title: a.title, subtitle: typeof a.description === 'string' ? a.description : a.description(achievementData) }; }))]);
+      ? [{ key: `history-${fresh.length}`, icon: 'medal' as const, title: `${fresh.length} achievements earned`, subtitle: 'From everything you’ve done so far. Tap to see them.', plural: true }]
+      : fresh.map(id => { const a = achievementById(id)!; return { key: id, icon: a.icon, title: a.title, subtitle: typeof a.description === 'string' ? a.description : a.description(achievementData) }; }))]);
   }, [achievementData]);
 
   // Checked a moment after anything changes, so a burst of taps is checked once.

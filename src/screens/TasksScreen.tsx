@@ -10,6 +10,7 @@ import { WeeklyHabitChart } from '../components/WeeklyHabitChart';
 import type { Commission, CompletionRecord, HabitChartDay } from '../types';
 import type { HabitSummary } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
+import { Icon } from '../components/Icon';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -317,9 +318,17 @@ export const TasksScreen = ({
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: fs(16) }} numberOfLines={1}>{item.label}</Text>
-                  <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(12), marginTop: 3 }} numberOfLines={1}>
-                    {meta}{reminder ? `  ·  🔔 ${reminder}` : ''}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                    <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(12), flexShrink: 1 }} numberOfLines={1}>
+                      {meta}{reminder ? '  ·  ' : ''}
+                    </Text>
+                    {reminder && (
+                      <>
+                        <Icon name="bell" size={fs(15)} style={{ marginRight: 3 }} />
+                        <Text style={{ fontFamily: 'Jua', color: 'rgba(212,149,106,0.8)', fontSize: fs(12) }} numberOfLines={1}>{reminder}</Text>
+                      </>
+                    )}
+                  </View>
                 </View>
                 {streak > 0 && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(212,149,106,0.14)', borderRadius: 99, paddingVertical: 4, paddingHorizontal: 9, marginRight: 8 }}>

@@ -5,6 +5,7 @@ import { DEFAULT_BUDGET, DEFAULT_CURRENCY, CURRENCIES, IMAGES } from '../constan
 import type { OnboardingResult } from '../types';
 import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
 import { describeBackupContents, describeBackupTime, type BackupSummary } from '../backupFormat';
+import { Icon } from '../components/Icon';
 
 // Starting amounts if the user skips the budget step.
 const DEFAULT_BY_PERIOD: Record<BudgetPeriod, number> = {
@@ -156,7 +157,7 @@ export const OnboardingScreen = ({ onComplete, cloudBackup, onRestoreCloud, onDe
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
             <Dots />
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>👋</Text>
+            <Icon name="wave" size={68} style={{ marginBottom: 16 }} />
             <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 8, textAlign: 'center' }}>What's your name?</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.5)', marginBottom: 32, textAlign: 'center' }}>This will appear on your home screen.</Text>
             <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: canProceedStep1 ? '#D4956A' : 'rgba(212,149,106,0.2)', paddingHorizontal: 20, paddingVertical: 4, marginBottom: 32, width: '100%' }}>
@@ -175,7 +176,7 @@ export const OnboardingScreen = ({ onComplete, cloudBackup, onRestoreCloud, onDe
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
             <Dots />
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>📋</Text>
+            <Icon name="clipboard" size={68} style={{ marginBottom: 16 }} />
             <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 8, textAlign: 'center' }}>Add your first Habbit</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.5)', marginBottom: 32, textAlign: 'center' }}>What's one thing you want to do every day?</Text>
             <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: habbit.trim().length > 0 ? '#D4956A' : 'rgba(212,149,106,0.2)', paddingHorizontal: 20, paddingVertical: 4, marginBottom: 12, width: '100%' }}>
@@ -245,7 +246,7 @@ export const OnboardingScreen = ({ onComplete, cloudBackup, onRestoreCloud, onDe
         return (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
             <Dots />
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>🎉</Text>
+            <Icon name="party-popper" size={68} style={{ marginBottom: 12 }} />
             <Text style={{ fontFamily: 'DynaPuff', fontSize: 26, color: '#e8d5c0', marginBottom: 6, textAlign: 'center' }}>You're all set{name.trim() ? `, ${name.trim()}` : ''}!</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(232,213,192,0.5)', marginBottom: 28, textAlign: 'center' }}>Here's a quick look around:</Text>
             <View style={{ width: '100%', gap: 10, marginBottom: 32 }}>

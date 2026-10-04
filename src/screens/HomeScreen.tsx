@@ -13,6 +13,7 @@ import type { HabitSummary } from '../habitStats';
 import { LeftoverBanner, type Jar } from '../components/SavingsJar';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
+import { Icon } from '../components/Icon';
 import { PERIOD_LABELS, type BudgetState } from '../budget';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
@@ -245,7 +246,7 @@ export const HomeScreen = ({
           </Text>
         ) : todays.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 28, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border }}>
-            <Text style={{ fontSize: fs(40), marginBottom: 8 }}>😴</Text>
+            <Icon name="moon" size={fs(56)} style={{ marginBottom: 8 }} />
             <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 4 }}>Rest day!</Text>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), textAlign: 'center' }}>Nothing scheduled for {today.dayName}. Your streak is safe 🐰</Text>
           </View>
@@ -253,7 +254,7 @@ export const HomeScreen = ({
           <>
             {totalCount === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 22, paddingHorizontal: 16, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, marginBottom: 12 }}>
-                <Text style={{ fontSize: fs(36), marginBottom: 6 }}>😴</Text>
+                <Icon name="moon" size={fs(50)} style={{ marginBottom: 6 }} />
                 <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(16), marginBottom: 4 }}>Taking it easy today</Text>
                 <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(13), textAlign: 'center' }}>Everything's skipped, so your streaks are safe. Feel better 🐰</Text>
               </View>

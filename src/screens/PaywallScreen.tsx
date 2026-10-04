@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, Linking } from 'react-native';
 import { useProStatus } from '../context/ProContext';
+import { Icon } from '../components/Icon';
+import type { IconName } from '../icons';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 // Legal URLs — Terms uses Apple's standard EULA (also listed in App Store Connect).
@@ -97,20 +99,21 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
       </Text>
 
       {/* Features */}
-      {[
-        '🥕  50 daily Bonbon messages',
-        '📜  Longer AI chat memory',
-        '🐰  Bonbon’s note on your week, every Sunday',
-        '📈  Your last 8 weeks, side by side',
-        '🏷️  Your own spending categories',
-        '🫙  More than one savings jar',
-        '🎨  Cream and Match iPhone widget looks',
-        '💪  Workout progress and personal bests',
-        '📊  & more soon!',
-      ].map(f => (
-        <Text key={f} style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14, marginBottom: 12 }}>
-          {f}
-        </Text>
+      {([
+        ['carrot',     '50 daily Bonbon messages'],
+        ['scroll',     'Longer AI chat memory'],
+        ['bonbon',     'Bonbon’s note on your week, every Sunday'],
+        ['chart-up',   'Your last 8 weeks, side by side'],
+        ['tag',        'Your own spending categories'],
+        ['jar',        'More than one savings jar'],
+        ['palette',    'Cream and Match iPhone widget looks'],
+        ['flexed-arm', 'Workout progress and personal bests'],
+        ['bar-chart',  '& more soon!'],
+      ] as [IconName, string][]).map(([icon, text]) => (
+        <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <Icon name={icon} size={24} />
+          <Text style={{ fontFamily: 'Jua', color: '#e8d5c0', fontSize: 14 }}>{text}</Text>
+        </View>
       ))}
 
       {/* Plan selector */}

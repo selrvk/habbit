@@ -11,7 +11,9 @@ import { useFontSize } from '../hooks/useFontSize';
 import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { CurrencyAmount } from './CurrencyAmount';
-import { categoryOf } from '../categories';
+import { categoryOf, type Category } from '../categories';
+import { CategoryIcon, Icon, ProPill } from './Icon';
+import type { IconName } from '../icons';
 import { addDaysToKey, currencyStr, parseDateKey } from '../helpers';
 import { periodStart } from '../budget';
 import { weekLabel, weekSummary, weekTip, weekTrend, type WeekData } from '../weekSummary';
@@ -85,9 +87,11 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
     </View>
   );
 
-  const Row = ({ icon, title, detail, last = false }: { icon: string; title: string; detail: string; last?: boolean }) => (
+  /** `icon`: a clay icon, or a category (its icon or emoji). */
+  type RecapRow = { key: string; icon: IconName | Category | undefined; title: string; detail: string };
+  const Row = ({ icon, title, detail, last = false }: { icon: IconName | Category | undefined; title: string; detail: string; last?: boolean }) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(212,149,106,0.1)' }}>
-      <Text style={{ fontSize: fs(16), width: 30 }}>{icon}</Text>
+      <View style={{ width: 34 }}>{typeof icon === 'string' ? <Icon name={icon} size={fs(24)} /> : <CategoryIcon category={icon} size={fs(24)} />}</View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>{title}</Text>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>{detail}</Text>
@@ -105,12 +109,6 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
       style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,149,106,0.12)', opacity: enabled ? 1 : 0.3 }}>
       <Text style={{ fontFamily: 'Jua', fontSize: fs(18), color: C.accent, lineHeight: fs(22) }}>{label}</Text>
     </TouchableOpacity>
-  );
-
-  const ProPill = () => (
-    <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
-      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
-    </View>
   );
 
   const { habits: h, money: m, focus: f } = s;
@@ -217,7 +215,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
 
               {showTip && (
                 <View style={{ flexDirection: 'row', gap: 10, backgroundColor: C.card, borderRadius: 16, padding: 14, marginTop: 10, borderWidth: 1, borderColor: C.border }}>
-                  <Text style={{ fontSize: fs(16) }}>💡</Text>
+                  <Icon name="lightbulb" size={fs(22)} />
                   <Text style={{ flex: 1, fontFamily: 'Jua', fontSize: fs(13), color: C.cream, lineHeight: fs(19) }}>{tip}</Text>
                 </View>
               )}
@@ -226,11 +224,11 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
               {(h.best || h.slipped || h.weekly.length > 0) && (
                 <Section title="Habbits">
                   {[
-                    h.best && { icon: '⭐', title: h.best.label, detail: `Done ${h.best.done} of ${h.best.of} days` },
-                    h.slipped && { icon: '🌧️', title: h.slipped.label, detail: `Missed ${h.slipped.missed} of ${h.slipped.of} days` },
-                    ...h.weekly.map(w => ({ icon: w.done >= w.target ? '✅' : '🗓️', title: w.label, detail: `${w.done} of ${w.target} this week` })),
-                  ].filter((r): r is { icon: string; title: string; detail: string } => !!r).map((r, i, list) => (
-                    <Row key={`${r.icon}${r.title}`} {...r} last={i === list.length - 1} />
+                    h.best && { key: 'best', icon: 'star' as IconName, title: h.best.label, detail: `Done ${h.best.done} of ${h.best.of} days` },
+                    h.slipped && { key: 'slipped', icon: 'rain-cloud' as IconName, title: h.slipped.label, detail: `Missed ${h.slipped.missed} of ${h.slipped.of} days` },
+                    ...h.weekly.map(w => ({ key: `weekly-${w.label}`, icon: (w.done >= w.target ? 'check' : 'calendar') as IconName, title: w.label, detail: `${w.done} of ${w.target} this week` })),
+                  ].filter((r): r is { key: string; icon: IconName; title: string; detail: string } => !!r).map(({ key, ...r }, i, list) => (
+                    <Row key={key} {...r} last={i === list.length - 1} />
                   ))}
                 </Section>
               )}
@@ -254,7 +252,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
                   {f.habits.length > 1 && (
                     <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
                       {f.habits.slice(0, 3).map((x, i, list) => (
-                        <Row key={x.id} icon="⏱️" title={x.label} detail={durationLabel(x.minutes)} last={i === list.length - 1} />
+                        <Row key={x.id} icon="stopwatch" title={x.label} detail={durationLabel(x.minutes)} last={i === list.length - 1} />
                       ))}
                     </View>
                   )}
@@ -264,22 +262,22 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
               {/* ── Money ── */}
               {(m.topCategory || m.biggest || m.saved !== 0) && (
                 <Section title="Money">
-                  {[
+                  {([
                     m.topCategory && {
-                      icon: categoryOf(m.topCategory.key)?.emoji ?? '•',
+                      key: 'top', icon: categoryOf(m.topCategory.key),
                       title: `Most went on ${categoryOf(m.topCategory.key)?.label.toLowerCase() ?? 'other things'}`,
                       detail: `${currencyStr(cur, money(m.topCategory.total))} · ${Math.round(m.topCategory.share * 100)}% of the week`,
                     },
                     m.biggest && {
-                      icon: categoryOf(m.biggest.category)?.emoji ?? '💸',
+                      key: 'biggest', icon: categoryOf(m.biggest.category) ?? ('money-wings' as IconName),
                       title: `Biggest: ${m.biggest.note || categoryOf(m.biggest.category)?.label || 'Spending'}`,
                       detail: `${currencyStr(cur, money(m.biggest.amount))} on ${DAYS[parseDateKey(m.biggest.date).getDay()]}`,
                     },
                     m.saved !== 0 && {
-                      icon: '🫙', title: m.saved > 0 ? 'Saved to your jar' : 'Taken from your jar', detail: currencyStr(cur, money(Math.abs(m.saved))),
+                      key: 'saved', icon: 'jar' as IconName, title: m.saved > 0 ? 'Saved to your jar' : 'Taken from your jar', detail: currencyStr(cur, money(Math.abs(m.saved))),
                     },
-                  ].filter((r): r is { icon: string; title: string; detail: string } => !!r).map((r, i, list) => (
-                    <Row key={r.icon + r.title} {...r} last={i === list.length - 1} />
+                  ] as (RecapRow | false | null)[]).filter((r): r is RecapRow => !!r).map(({ key, ...r }, i, list) => (
+                    <Row key={key} {...r} last={i === list.length - 1} />
                   ))}
                 </Section>
               )}
@@ -301,7 +299,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
                   <Trend weeks={trend} fs={fs} cur={cur} />
                 ) : (
                   <TouchableOpacity onPress={() => { haptic(); setPaywall(true); }} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Text style={{ fontSize: fs(22) }}>📈</Text>
+                    <Icon name="chart-up" size={fs(28)} />
                     <Text style={{ flex: 1, fontFamily: 'Jua', fontSize: fs(13), color: C.muted }}>See how your perfect days and spending move week to week.</Text>
                     <ProPill />
                   </TouchableOpacity>

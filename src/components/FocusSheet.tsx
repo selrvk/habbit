@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { avatarImage } from '../helpers';
 import { clock, durationLabel, progress, timeLeft, type FocusSession } from '../focus';
+import { Icon } from './Icon';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', muted: 'rgba(232,213,192,0.5)', track: 'rgba(212,149,106,0.16)' };
 
@@ -143,7 +144,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
             <View style={{ position: 'absolute', alignItems: 'center' }}>
               <Image source={avatarImage(avatar)} style={{ width: 64, height: 64, marginBottom: 6, opacity: paused ? 0.5 : 1 }} resizeMode="contain" />
               {done ? (
-                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(34), color: C.green }}>🎉</Text>
+                <Icon name="party-popper" size={fs(44)} />
               ) : (
                 <Text accessibilityLabel={`${Math.ceil(left / 60_000)} minutes left`}
                   style={{ fontFamily: 'DynaPuff', fontSize: fs(48), color: paused ? C.muted : C.cream, fontVariant: ['tabular-nums'] }}>

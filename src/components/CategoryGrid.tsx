@@ -11,6 +11,7 @@ import { useCategories } from '../context/CategoriesContext';
 import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { CategoryEditor } from './CategoryEditor';
+import { CategoryIcon } from './Icon';
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
@@ -41,7 +42,7 @@ export const CategoryGrid = ({ value, onChange }: { value?: string; onChange: (k
               backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.1)',
               borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
             }}>
-            <Text style={{ fontSize: 18 }}>{c.emoji}</Text>
+            <CategoryIcon category={c} size={24} />
             <Text numberOfLines={1} style={{ fontFamily: 'Jua', fontSize: 10, marginTop: 2, paddingHorizontal: 2, color: active ? '#fff' : 'rgba(232,213,192,0.7)' }}>{c.label}</Text>
           </TouchableOpacity>
         );

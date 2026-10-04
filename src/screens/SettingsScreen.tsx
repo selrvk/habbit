@@ -26,6 +26,8 @@ import {
   backUpToICloud, exportBackupFile, exportSpendingCsv, getCloudBackupStatus, markBackupHandled, type CloudBackupStatus,
 } from '../utils/cloudBackup';
 import { describeBackupContents, describeBackupTime } from '../backupFormat';
+import { Icon } from '../components/Icon';
+import type { IconName } from '../icons';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
 
@@ -74,7 +76,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 /** A single row inside a Section */
 const Row = ({ icon, label, sublabel, rightEl, onPress, last = false }: {
-  icon: string; label: string; sublabel?: string;
+  icon: IconName; label: string; sublabel?: string;
   rightEl?: React.ReactNode; onPress?: () => void; last?: boolean;
 }) => {
   const fs = useFontSize();
@@ -89,7 +91,7 @@ const Row = ({ icon, label, sublabel, rightEl, onPress, last = false }: {
         backgroundColor: 'rgba(212,149,106,0.14)',
         justifyContent: 'center', alignItems: 'center', marginRight: 12,
       }}>
-        <Text style={{ fontSize: fs(17) }}>{icon}</Text>
+        <Icon name={icon} size={fs(24)} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{label}</Text>
@@ -443,7 +445,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 justifyContent: 'center', alignItems: 'center',
                 marginRight: 12,
               }}>
-                <Text style={{ fontSize: fs(17) }}>🔡</Text>
+                <Icon name="letters" size={fs(24)} />
               </View>
               <View>
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Text Size</Text>
@@ -459,14 +461,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Finance ────────────────────────────────────────────────── */}
       <Section title="Finance">
         <Row
-          icon="🥕"
+          icon="carrot"
           label="Budget"
           sublabel={`${PERIOD_LABELS[budgetPeriod].adjective} · ${currencyStr(currency, budgetAmount.toLocaleString('en-US'))} — edit in Finance`}
           onPress={() => { haptic.light(); onOpenBudget(); }}
           rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
         />
         <Row
-          icon="🏷️"
+          icon="tag"
           label="Spending categories"
           sublabel={ownCategories.length > 0
             ? `${ownCategories.map(c => c.emoji).join(' ')} and the 7 built in`
@@ -484,7 +486,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               backgroundColor: 'rgba(212,149,106,0.14)',
               justifyContent: 'center', alignItems: 'center', marginRight: 12,
             }}>
-              <Text style={{ fontSize: fs(17) }}>💰</Text>
+              <Icon name="money-bag" size={fs(24)} />
             </View>
             <View>
               <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Currency</Text>
@@ -500,13 +502,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Notifications ──────────────────────────────────────────── */}
         <Section title="Notifications">
           <Row
-            icon="🐰"
+            icon="bonbon"
             label="Sunday recap"
             sublabel="Your week in review, Sundays at 7 PM"
             rightEl={<Toggle enabled={weeklyRecap} onToggle={() => onSetWeeklyRecap(!weeklyRecap)} />}
           />
           <Row
-            icon="🌙"
+            icon="moon"
             label="Evening check-in"
             sublabel={eveningReminder.enabled
               ? 'Only on days with Habbits still left'
@@ -535,28 +537,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Backup ─────────────────────────────────────────────────── */}
         <Section title="Backup">
           <Row
-            icon="☁️"
+            icon="cloud"
             label={backingUp ? 'Backing up…' : 'iCloud Backup'}
             sublabel={backupSublabel}
             onPress={backingUp ? undefined : handleICloud}
             rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
           />
           <Row
-            icon="📤"
+            icon="upload"
             label="Export backup file"
             sublabel="Save a copy to Files or send it to yourself"
             onPress={() => runExport(exportBackupFile)}
             rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
           />
           <Row
-            icon="📥"
+            icon="download"
             label="Import backup file"
             sublabel="Replaces everything on this phone"
             onPress={() => { haptic.light(); onImportBackupFile(); }}
             rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
           />
           <Row
-            icon="🧾"
+            icon="receipt"
             label="Export spending (CSV)"
             sublabel="Open it in Numbers, Excel or Google Sheets"
             onPress={() => runExport(exportSpendingCsv)}
@@ -568,7 +570,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Data ───────────────────────────────────────────────────── */}
         <Section title="Data & Privacy">
           <Row
-            icon="📄"
+            icon="document"
             label="Terms of Use"
             sublabel="EULA · opens in browser"
             onPress={() => {
@@ -578,7 +580,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             rightEl={<Text style={{ fontSize: 13, color: C.muted }}>›</Text>}
           />
           <Row
-            icon="🔒"
+            icon="padlock"
             label="Privacy Policy"
             sublabel="How your data is handled"
             last
@@ -594,19 +596,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Subscription ───────────────────────────────────────────── */}
         <Section title="Subscription">
           <Row
-            icon="🥕"
+            icon="carrot"
             label={isPro ? 'Habbit Pro' : 'Free plan'}
             sublabel={isPro ? 'Thanks for supporting Habbit!' : 'Upgrade from your Profile'}
           />
           <Row
-            icon="🔄"
+            icon="refresh"
             label={restoring ? 'Restoring…' : 'Restore purchases'}
             sublabel="Already subscribed on this Apple ID? Bring it back here."
             onPress={restoring ? undefined : handleRestore}
             rightEl={<Text style={{ fontSize: fs(15), color: C.muted }}>›</Text>}
           />
           <Row
-            icon="🪪"
+            icon="id-card"
             label="Account ID"
             sublabel={`${accountId ?? '—'}\n${purchasesLinked === null ? '' : purchasesLinked ? 'Purchases linked ✓' : 'Purchases not linked — tap to fix'}`}
             onPress={purchasesLinked === false ? handleLink : undefined}
@@ -616,7 +618,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         <Section title="About">
           <Row
-            icon="🐰"
+            icon="bonbon"
             label="Habbit"
             sublabel="Your daily companion"
             rightEl={
@@ -624,7 +626,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             }
           />
           <Row
-            icon="✉️"
+            icon="envelope"
             label="Send Feedback"
             sublabel="Help make Habbit better"
             last
@@ -643,7 +645,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* ── Danger Zone ───────────────────────────────────────────── */}
         <Section title="Danger Zone">
         <Row
-            icon="🔄"
+            icon="refresh"
             label="Reset Today's Data"
             sublabel="Unchecks Habbits · clears today's spending"
             last={false}
@@ -651,7 +653,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             rightEl={<Text style={{ fontFamily: 'Jua', fontSize: 13, color: 'rgba(240,144,144,0.6)' }}>›</Text>}
         />
         <Row
-            icon="🗑️"
+            icon="trash"
             label="Delete All Data"
             sublabel="Resets app completely · cannot be undone"
             last

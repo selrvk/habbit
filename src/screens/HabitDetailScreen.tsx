@@ -18,6 +18,7 @@ import { nextRoutine, workoutTotals, type WorkoutLog } from '../workout';
 import { useProStatus } from '../context/ProContext';
 import { PaywallScreen } from './PaywallScreen';
 import { WorkoutProgressSheet } from '../components/WorkoutProgressSheet';
+import { Icon, ProPill } from '../components/Icon';
 
 const C = {
   bg:     '#2A1A18',
@@ -60,7 +61,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
 
   const tpd      = habit.timesPerDay ?? 1;
   const reminder = reminderSummary(habit);
-  const meta     = [scheduleLabel(habit), tpd > 1 ? `${tpd}× a day` : null, reminder ? `🔔 ${reminder}` : null].filter(Boolean).join('  ·  ');
+  const meta     = [scheduleLabel(habit), tpd > 1 ? `${tpd}× a day` : null].filter(Boolean).join('  ·  ');
 
   const since    = parseDateKey(stats.since);
   const sinceStr = `${MONTHS[since.getMonth()]} ${since.getDate()}${since.getFullYear() !== parseDateKey(todayKey).getFullYear() ? `, ${since.getFullYear()}` : ''}`;
@@ -125,7 +126,16 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
-        <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: 'rgba(212,149,106,0.85)', marginBottom: 16 }}>{meta}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: 'rgba(212,149,106,0.85)' }}>{meta}</Text>
+          {reminder && (
+            <>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: 'rgba(212,149,106,0.85)' }}>{'  ·  '}</Text>
+              <Icon name="bell" size={fs(16)} style={{ marginRight: 3 }} />
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: 'rgba(212,149,106,0.85)' }}>{reminder}</Text>
+            </>
+          )}
+        </View>
 
         {/* ── Stats ── */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -151,7 +161,10 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
           return (
             <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>⏱ Focus</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="stopwatch" size={fs(22)} />
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>Focus</Text>
+                </View>
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>
                   {habit.focus.minutes}-min blocks{habit.focus.breakMinutes > 0 ? ` · ${habit.focus.breakMinutes}-min breaks` : ''}
                 </Text>
@@ -166,7 +179,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
                   accessibilityRole="button"
                   style={{ marginTop: 12, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: '#fff' }}>
-                    {focusRunning ? '⏱ Back to the timer' : `▶︎ Start a ${habit.focus.minutes}-minute block`}
+                    {focusRunning ? 'Back to the timer' : `▶︎ Start a ${habit.focus.minutes}-minute block`}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -184,7 +197,10 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
           return (
             <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>💪 Workouts</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="flexed-arm" size={fs(22)} />
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>Workouts</Text>
+                </View>
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>{mine.length > 0 ? `${mine.length} done` : habit.workout.routines.map(r => r.name).join(' → ')}</Text>
               </View>
               {recent.length === 0 ? (
@@ -202,12 +218,10 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
                 <TouchableOpacity onPress={() => { haptic(); (isPro ? setProgressOpen : setPaywall)(true); }} activeOpacity={0.75}
                   accessibilityRole="button" accessibilityHint={isPro ? undefined : 'Part of Habbit Pro'}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
-                  <Text style={{ fontSize: fs(15) }}>📈</Text>
+                  <Icon name="chart-up" size={fs(20)} />
                   <Text style={{ flex: 1, fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Progress and personal bests</Text>
                   {!isPro && (
-                    <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
-                    </View>
+                    <ProPill />
                   )}
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(16), color: C.accent }}>›</Text>
                 </TouchableOpacity>
@@ -217,7 +231,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
                   accessibilityRole="button"
                   style={{ marginTop: 12, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: '#fff' }}>
-                    {workoutRunning ? '💪 Back to your workout' : `▶︎ Start ${next!.name}`}
+                    {workoutRunning ? 'Back to your workout' : `▶︎ Start ${next!.name}`}
                   </Text>
                 </TouchableOpacity>
               )}

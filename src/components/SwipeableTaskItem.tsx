@@ -7,10 +7,23 @@ import type { Commission } from '../types';
 import type { SkipAllowance } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
 import { clock, timeLeft, type FocusSession } from '../focus';
+import { Icon } from './Icon';
+import type { IconName } from '../icons';
 
 const SWIPE_THRESHOLD = 60;
 
-/** "⏱ 18:42" (or "☕ 3:10" on a break) for the habit whose focus timer is running. */
+/** A small icon and its text, as in a habit's line of details. */
+const IconText = ({ icon, color, dim = false, children }: { icon: IconName; color: string; dim?: boolean; children: React.ReactNode }) => {
+  const fs = useFontSize();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <Icon name={icon} size={fs(15)} style={{ opacity: dim ? 0.5 : 1 }} />
+      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color, fontVariant: ['tabular-nums'] }}>{children}</Text>
+    </View>
+  );
+};
+
+/** "18:42" with a stopwatch (or a coffee cup on a break) for the habit whose focus timer is running. */
 const FocusCountdown = ({ session }: { session: FocusSession }) => {
   const fs = useFontSize();
   const [now, setNow] = useState(Date.now());
@@ -21,13 +34,13 @@ const FocusCountdown = ({ session }: { session: FocusSession }) => {
     return () => clearInterval(t);
   }, [paused, session.id, session.phase]);
   const left = timeLeft(session, now);
-  const text = session.phase === 'break'
-    ? (left > 0 ? `☕ break ${clock(left)}` : '☕ break’s over')
-    : paused ? `⏸ ${clock(left)}` : `⏱ ${clock(left)}`;
-  return <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: session.phase === 'break' ? '#9de087' : '#D4956A', fontVariant: ['tabular-nums'] }}>{text}</Text>;
+  if (session.phase === 'break') {
+    return <IconText icon="coffee" color="#9de087">{left > 0 ? `break ${clock(left)}` : 'break’s over'}</IconText>;
+  }
+  return <IconText icon="stopwatch" color="#D4956A" dim={paused}>{paused ? `${clock(left)} paused` : clock(left)}</IconText>;
 };
 
-/** "⏱ Rest 1:12" while a workout's rest runs (outside the workout screen), else that it's going. */
+/** "Rest 1:12" while a workout's rest runs (outside the workout screen), else that it's going. */
 const WorkoutStatus = ({ restEndsAt }: { restEndsAt?: number }) => {
   const fs = useFontSize();
   const [now, setNow] = useState(Date.now());
@@ -37,11 +50,9 @@ const WorkoutStatus = ({ restEndsAt }: { restEndsAt?: number }) => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [restEndsAt]);
-  return (
-    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A', fontVariant: ['tabular-nums'] }}>
-      {resting ? `⏱ Rest ${clock(restEndsAt! - now)}` : '💪 Workout in progress'}
-    </Text>
-  );
+  return resting
+    ? <IconText icon="stopwatch" color="#D4956A">Rest {clock(restEndsAt! - now)}</IconText>
+    : <IconText icon="flexed-arm" color="#D4956A">Workout in progress</IconText>;
 };
 
 const haptic = {
@@ -229,9 +240,9 @@ export const SwipeableTaskItem = ({
 
   // Reminder label for subtitle
   const reminderLabel = (() => {
-    if (item.reminderTime) return `🔔 ${formatTime12(item.reminderTime.hour, item.reminderTime.minute)}`;
-    if (item.reminderTimes && item.reminderTimes.length > 0) return `🔔 ×${item.reminderTimes.length}`;
-    if (item.reminderSplit) return `🔔 split`;
+    if (item.reminderTime) return formatTime12(item.reminderTime.hour, item.reminderTime.minute);
+    if (item.reminderTimes && item.reminderTimes.length > 0) return `×${item.reminderTimes.length}`;
+    if (item.reminderSplit) return 'split';
     return null;
   })();
 
@@ -239,7 +250,7 @@ export const SwipeableTaskItem = ({
   // ▶︎ starts a focus block or a workout; it stays while one runs for this habit, to get back to it.
   const play     = focus ? { running: !!focus.running, onPress: focus.onPress } : workout;
   const showPlay = !!play && (play.running || (canComplete && !weekMet));
-  const playIcon = !play?.running ? '▶' : focus ? '⏱' : '💪';
+  const playIcon: IconName | null = !play?.running ? null : focus ? 'stopwatch' : 'dumbbell';
   const playA11y = focus
     ? (play?.running ? `Show the ${item.label} focus timer` : `Start a focus block for ${item.label}`)
     : (play?.running ? `Back to your ${item.label} workout` : `Start a ${item.label} workout`);
@@ -311,7 +322,7 @@ export const SwipeableTaskItem = ({
                 {focus?.running && <FocusCountdown session={focus.running} />}
                 {workout?.running && <WorkoutStatus restEndsAt={workout.restEndsAt} />}
                 {streak > 0 && (
-                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}{week ? ' wk' : ''}</Text>
+                  <IconText icon="fire" color="#D4956A">{streak}{week ? ' wk' : ''}</IconText>
                 )}
                 {week && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
@@ -324,9 +335,7 @@ export const SwipeableTaskItem = ({
                   </Text>
                 )}
                 {reminderLabel && (
-                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: 'rgba(212,149,106,0.65)' }}>
-                    {reminderLabel}
-                  </Text>
+                  <IconText icon="bell" color="rgba(212,149,106,0.65)">{reminderLabel}</IconText>
                 )}
               </View>
             )}
@@ -339,7 +348,9 @@ export const SwipeableTaskItem = ({
                 width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10,
                 backgroundColor: play?.running ? '#D4956A' : 'rgba(212,149,106,0.14)', borderWidth: 1.5, borderColor: '#D4956A',
               }}>
-              <Text style={{ fontSize: 13, color: play?.running ? '#fff' : '#D4956A', marginLeft: play?.running ? 0 : 2 }}>{playIcon}</Text>
+              {playIcon
+                ? <Icon name={playIcon} size={22} />
+                : <Text style={{ fontSize: 13, color: '#D4956A', marginLeft: 2 }}>▶</Text>}
             </TouchableOpacity>
           )}
 

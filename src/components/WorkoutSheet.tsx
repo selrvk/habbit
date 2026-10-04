@@ -10,6 +10,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { clock } from '../focus';
+import { Icon } from './Icon';
 import {
   addSet, adjustRest, editSet, endRest, lastTime, MAX_SETS, nextUp, removeSet, restLeft, setsDone, setsLabel, toggleSet,
   type ActiveWorkout, type LiveExercise, type Routine, type WeightUnit, type WorkoutLog,
@@ -236,7 +237,7 @@ export const WorkoutSheet = ({ visible, workout, done, routines, log, onChange, 
 
         {done ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
-            <Text style={{ fontSize: fs(56) }}>💪</Text>
+            <Icon name="flexed-arm" size={fs(84)} />
             <Text style={{ fontFamily: 'Jua', fontSize: fs(12), letterSpacing: 2, color: C.green, marginTop: 12 }}>WORKOUT DONE</Text>
             <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(26), color: C.cream, marginTop: 6, textAlign: 'center' }}>{done.routineName}</Text>
             <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.muted, marginTop: 8, textAlign: 'center' }}>
@@ -245,7 +246,10 @@ export const WorkoutSheet = ({ visible, workout, done, routines, log, onChange, 
             <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, marginTop: 4 }}>{done.label} is checked off 🥕</Text>
             {done.bests.length > 0 && (
               <View style={{ alignSelf: 'stretch', backgroundColor: 'rgba(157,224,135,0.1)', borderRadius: 16, padding: 14, marginTop: 24, borderWidth: 1, borderColor: 'rgba(157,224,135,0.3)' }}>
-                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.green, marginBottom: 4 }}>🏆 New personal best{done.bests.length === 1 ? '' : 's'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Icon name="trophy" size={fs(20)} />
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.green }}>New personal best{done.bests.length === 1 ? '' : 's'}</Text>
+                </View>
                 {done.bests.map(b => (
                   <Text key={b.name} style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, marginTop: 4 }}>{b.name} · {b.label}</Text>
                 ))}

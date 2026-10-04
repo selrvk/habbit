@@ -8,6 +8,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from './CurrencyAmount';
+import { CategoryIcon, Icon } from './Icon';
 import { UNCATEGORIZED, categoryOf } from '../categories';
 import { currencyStr, parseDateKey } from '../helpers';
 import { firstMonth, monthStart, monthSummary } from '../monthSummary';
@@ -107,7 +108,7 @@ export const MonthSummarySheet = ({ visible, initialMonth, data, onClose }: {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 90 }}>
           {empty ? (
             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-              <Text style={{ fontSize: fs(40), marginBottom: 10 }}>🐰</Text>
+              <Icon name="bonbon" size={fs(56)} style={{ marginBottom: 10 }} />
               <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(14) }}>Nothing logged in {s.name}.</Text>
             </View>
           ) : (
@@ -133,12 +134,15 @@ export const MonthSummarySheet = ({ visible, initialMonth, data, onClose }: {
               {(s.billsPaid > 0 || s.added > 0 || s.saved !== 0) && (
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                   {[
-                    { label: '🧾 Bills paid', n: s.billsPaid, color: C.cream },
-                    { label: '💰 Added', n: s.added, color: C.green },
-                    { label: '🫙 Saved', n: s.saved, color: C.green },
+                    { label: 'Bills paid', icon: 'receipt' as const, n: s.billsPaid, color: C.cream },
+                    { label: 'Added', icon: 'money-bag' as const, n: s.added, color: C.green },
+                    { label: 'Saved', icon: 'jar' as const, n: s.saved, color: C.green },
                   ].filter(t => t.n !== 0).map(t => (
                     <View key={t.label} style={{ flex: 1, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.border }}>
-                      <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(11), marginBottom: 2 }}>{t.label}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                        <Icon name={t.icon} size={fs(15)} />
+                        <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(11) }}>{t.label}</Text>
+                      </View>
                       <Amount n={t.n} size={14} color={t.color} />
                     </View>
                   ))}
@@ -155,7 +159,7 @@ export const MonthSummarySheet = ({ visible, initialMonth, data, onClose }: {
                       return (
                         <View key={c.key}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                            <Text style={{ fontSize: fs(15), width: 26 }}>{cat.emoji}</Text>
+                            <View style={{ width: 28 }}><CategoryIcon category={cat} size={fs(20)} /></View>
                             <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream, flex: 1 }}>{cat.label}</Text>
                             <Text style={{ fontFamily: 'Jua', fontSize: fs(11), marginRight: 8, color: c.prev === 0 ? C.muted : diff > 0 ? C.red : C.green }}>
                               {c.prev === 0 ? 'new' : `${diff > 0 ? '+' : '−'}${currencyStr(cur, money(Math.abs(diff)))}`}
@@ -178,7 +182,7 @@ export const MonthSummarySheet = ({ visible, initialMonth, data, onClose }: {
                 <Section title="Biggest spends">
                   {s.topExpenses.map((e, i) => (
                     <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
-                      <Text style={{ fontSize: fs(16), width: 28, opacity: e.category ? 1 : 0.3 }}>{categoryOf(e.category)?.emoji ?? '•'}</Text>
+                      <View style={{ width: 30 }}><CategoryIcon category={categoryOf(e.category)} size={fs(22)} dim={!e.category} /></View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>{e.note || categoryOf(e.category)?.label || 'Spending'}</Text>
                         <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }}>{dayStr(e.date)}</Text>
@@ -197,9 +201,12 @@ export const MonthSummarySheet = ({ visible, initialMonth, data, onClose }: {
               {/* ── Habits ── */}
               {s.habits.trackedDays > 0 && (
                 <Section title="Habbits">
-                  <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>
-                    🐰 {s.habits.perfectDays} perfect day{s.habits.perfectDays === 1 ? '' : 's'} out of {s.habits.trackedDays}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon name="bonbon" size={fs(20)} />
+                    <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>
+                      {s.habits.perfectDays} perfect day{s.habits.perfectDays === 1 ? '' : 's'} out of {s.habits.trackedDays}
+                    </Text>
+                  </View>
                   <View style={{ height: 8, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.12)', overflow: 'hidden', marginTop: 10 }}>
                     <View style={{ height: '100%', width: `${(s.habits.perfectDays / s.habits.trackedDays) * 100}%`, borderRadius: 99, backgroundColor: C.green }} />
                   </View>

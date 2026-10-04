@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from './CurrencyAmount';
 import { NumpadModal } from './NumpadModal';
+import { Icon, ProPill } from './Icon';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { useProStatus } from '../context/ProContext';
 import { MAX_JARS, jarTotal, type JarEntry, type LeftoverOffer, type Savings, type SavingsGoal, type SavingsJar } from '../savings';
@@ -156,15 +157,6 @@ export const JarEditor = ({ visible, goal, entries, currency, onSave, onDelete, 
 
 // ─── Finance cards ────────────────────────────────────────────────────────────
 
-const ProPill = () => {
-  const fs = useFontSize();
-  return (
-    <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
-      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
-    </View>
-  );
-};
-
 /** One jar: its goal and progress (tap to edit and see its history), with Add and Take out. */
 const JarCard = ({ jar, api, currency }: { jar: SavingsJar; api: Jar; currency: string }) => {
   const fs = useFontSize();
@@ -271,7 +263,7 @@ export const SavingsJars = ({ jar, currency }: { jar: Jar; currency: string }) =
         {editorModal}
         <TouchableOpacity onPress={() => { haptic.light(); setEditor(true); }} activeOpacity={0.8}
           style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Text style={{ fontSize: fs(24) }}>🫙</Text>
+          <Icon name="jar" size={fs(32)} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Saving for something?</Text>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Start a jar and watch it fill up.</Text>
@@ -350,7 +342,7 @@ export const LeftoverBanner = ({ jar, currency }: { jar: Jar; currency: string }
         onClose={() => setEditor(false)} />
       <View style={{ backgroundColor: 'rgba(100,160,90,0.14)', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(157,224,135,0.3)' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ fontSize: fs(26) }}>{only?.goal.emoji ?? '🫙'}</Text>
+          {only ? <Text style={{ fontSize: fs(26) }}>{only.goal.emoji}</Text> : <Icon name="jar" size={fs(34)} />}
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
               <Text style={{ fontFamily: 'DynaPuff', color: C.green, fontSize: fs(14) }}>You had </Text>

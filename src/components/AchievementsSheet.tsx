@@ -7,6 +7,7 @@ import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { parseDateKey } from '../helpers';
+import { Icon } from './Icon';
 import { ACHIEVEMENTS, EARNED_BEFORE, describe, progressText, type AchievementData, type AchievementGroup, type Earned } from '../achievements';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', muted: 'rgba(232,213,192,0.55)', border: 'rgba(212,149,106,0.18)' };
@@ -60,7 +61,7 @@ export const AchievementsSheet = ({ visible, earned, data, onClose }: {
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: i === list.length - 1 ? 0 : 1, borderBottomColor: 'rgba(212,149,106,0.1)' }}>
                       <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
                         backgroundColor: when ? 'rgba(212,149,106,0.22)' : 'rgba(232,213,192,0.05)', borderWidth: when ? 1.5 : 0, borderColor: C.accent }}>
-                        <Text style={{ fontSize: fs(22), opacity: when ? 1 : 0.3 }}>{a.emoji}</Text>
+                        <Icon name={a.icon} size={fs(28)} style={{ opacity: when ? 1 : 0.3 }} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: when ? C.cream : C.muted }}>{a.title}</Text>
@@ -71,9 +72,13 @@ export const AchievementsSheet = ({ visible, earned, data, onClose }: {
                           </View>
                         )}
                       </View>
-                      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: when ? C.green : C.muted }}>
-                        {when ? shortDate(when) : text ?? '🔒'}
-                      </Text>
+                      {when || text ? (
+                        <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: when ? C.green : C.muted }}>
+                          {when ? shortDate(when) : text}
+                        </Text>
+                      ) : (
+                        <Icon name="padlock" size={fs(20)} style={{ opacity: 0.6 }} />
+                      )}
                     </View>
                   );
                 })}
