@@ -1,5 +1,7 @@
 // src/types.ts
 
+import type { WorkoutPlan } from './workout';
+
 export type ReminderTime    = { hour: number; minute: number };
 export type EveningReminder = { enabled: boolean; hour: number; minute: number };
 export type ReminderSplit   = { startHour: number; startMinute: number; endHour: number; endMinute: number };
@@ -27,6 +29,8 @@ export type Commission      = {
   reminderSplit: ReminderSplit | null; // "split evenly between X and Y" config
   /** Focus timer: each block of this many minutes counts as one check-off (focus.ts). */
   focus?: { minutes: number; breakMinutes: number };
+  /** Workout routines, taking turns: finishing a workout checks it off (workout.ts). */
+  workout?: WorkoutPlan;
 };
 
 /** Shape produced by AddHabbitScreen and consumed by App handlers */
@@ -39,6 +43,7 @@ export type HabbitFormData  = {
   reminderTimes: ReminderTime[];
   reminderSplit: ReminderSplit | null;
   focus: { minutes: number; breakMinutes: number } | null;
+  workout: WorkoutPlan | null;
 };
 
 

@@ -1,6 +1,6 @@
 // src/screens/AddHabbitScreen.tsx
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   Platform, KeyboardAvoidingView, Switch, Pressable, Alert,
@@ -9,10 +9,12 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DayPicker } from '../components/DayPicker';
 import { TimeField } from '../components/TimePicker';
-import { daysLabel, formatTime12, computeSplitTimes } from '../helpers';
+import { daysLabel, formatTime12, computeSplitTimes, generateId } from '../helpers';
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, HabbitFormData, ReminderTime } from '../types';
 import { BREAK_LENGTHS, DEFAULT_FOCUS, FOCUS_LENGTHS, type FocusSettings } from '../focus';
+import { fromTemplate, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
+import { RoutinesSheet } from '../components/RoutinesSheet';
 
 const HAPTIC_OPTIONS = { enableVibrateFallback: true, ignoreAndroidSystemSettings: false };
 const haptic = {
@@ -25,10 +27,11 @@ const TIMES_OPTIONS = Array.from({ length: MAX_TIMES }, (_, i) => i + 1);
 // 7× a week is just every day, which the "Set days" mode already covers.
 const PER_WEEK_OPTIONS = [1, 2, 3, 4, 5, 6];
 
-const SUGGESTIONS: { label: string; times: number; focus?: FocusSettings }[] = [
+const SUGGESTIONS: { label: string; times: number; focus?: FocusSettings; workout?: true }[] = [
   { label: 'Drink water',  times: 8 },
   { label: 'Read',         times: 1 },
   { label: 'Study',        times: 4, focus: { minutes: 25, breakMinutes: 5 } },
+  { label: 'Gym',          times: 1, workout: true },
   { label: 'Exercise',     times: 1 },
   { label: 'Meditate',     times: 1, focus: { minutes: 10, breakMinutes: 0 } },
   { label: 'Take vitamins', times: 1 },
@@ -106,6 +109,15 @@ export const AddHabbitScreen = ({
   const [focusChosen, setFocusChosen] = useState(isEdit);
   const chooseFocus = (change: () => void) => { haptic.light(); setFocusChosen(true); change(); };
 
+  // Workouts: routines that take turns; a habit is timed or has workouts, not both.
+  const [workoutOn, setWorkoutOn]       = useState(!!initialValue?.workout);
+  const [plan, setPlan]                 = useState<WorkoutPlan>(initialValue?.workout ?? { unit: 'kg', routines: [] });
+  const [routinesOpen, setRoutinesOpen] = useState(false);
+  // "Make my own" opens the editor on one empty routine.
+  const starter = useMemo<WorkoutPlan>(() => ({ unit: 'kg', routines: [{ id: generateId(), name: '', exercises: [] }] }), []);
+  const toggleFocus   = (on: boolean) => chooseFocus(() => { setFocusOn(on); if (on) setWorkoutOn(false); });
+  const toggleWorkout = (on: boolean) => chooseFocus(() => { setWorkoutOn(on); if (on) setFocusOn(false); });
+
   const [reminderEnabled, setReminderEnabled] = useState(!!(
     initialValue?.reminderTime || initialValue?.reminderTimes?.length || initialValue?.reminderSplit
   ));
@@ -146,7 +158,7 @@ export const AddHabbitScreen = ({
   const pickSuggestion = (s: typeof SUGGESTIONS[number]) => {
     haptic.light();
     setLabel(s.label);
-    if (!focusChosen) { setFocusOn(!!s.focus); if (s.focus) setFocus(s.focus); }
+    if (!focusChosen) { setFocusOn(!!s.focus); if (s.focus) setFocus(s.focus); setWorkoutOn(!!s.workout); }
     if (timesChosen) return;
     setTimesPerDay(s.times);
     setManualTimes(prev => resizeTimes(s.times, prev));
@@ -170,6 +182,7 @@ export const AddHabbitScreen = ({
       label: label.trim(), days, perWeek: weekly ? perWeek : null, timesPerDay: dailyTimes, reminderTime, reminderTimes, reminderSplit,
       // A break only comes between blocks, so once-a-day habits have none.
       focus: focusOn ? { minutes: focus.minutes, breakMinutes: dailyTimes > 1 ? focus.breakMinutes : 0 } : null,
+      workout: workoutOn && plan.routines.length > 0 ? plan : null,
     });
   };
 
@@ -288,7 +301,7 @@ export const AddHabbitScreen = ({
         <Label>Focus timer</Label>
         <Card>
           <Pressable
-            onPress={() => chooseFocus(() => setFocusOn(v => !v))}
+            onPress={() => toggleFocus(!focusOn)}
             accessibilityRole="switch" accessibilityState={{ checked: focusOn }}
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flex: 1, marginRight: 12 }}>
@@ -297,7 +310,7 @@ export const AddHabbitScreen = ({
             </View>
             <Switch
               value={focusOn}
-              onValueChange={v => chooseFocus(() => setFocusOn(v))}
+              onValueChange={toggleFocus}
               trackColor={{ false: 'rgba(212,149,106,0.2)', true: '#D4956A' }}
               thumbColor="#fff"
               ios_backgroundColor="rgba(212,149,106,0.2)"
@@ -353,6 +366,70 @@ export const AddHabbitScreen = ({
             </View>
           )}
         </Card>
+
+        {/* ── Workouts ── */}
+        <Label>Workouts</Label>
+        <Card>
+          <Pressable
+            onPress={() => toggleWorkout(!workoutOn)}
+            accessibilityRole="switch" accessibilityState={{ checked: workoutOn }}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={rowText}>Log my workouts</Text>
+              {!workoutOn && <Text style={[subText, { marginTop: 2 }]}>Routines with sets, reps and weights</Text>}
+            </View>
+            <Switch
+              value={workoutOn}
+              onValueChange={toggleWorkout}
+              trackColor={{ false: 'rgba(212,149,106,0.2)', true: '#D4956A' }}
+              thumbColor="#fff"
+              ios_backgroundColor="rgba(212,149,106,0.2)"
+            />
+          </Pressable>
+
+          {workoutOn && (
+            <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
+              {plan.routines.length === 0 ? (
+                <>
+                  <Text style={[subText, { marginBottom: 8 }]}>Start from a plan, then change anything you like</Text>
+                  <View style={{ gap: 8 }}>
+                    {ROUTINE_TEMPLATES.map(t => (
+                      <TouchableOpacity key={t.name} onPress={() => { haptic.light(); setPlan(p => fromTemplate(t, p.unit, generateId)); }} activeOpacity={0.7}
+                        style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(212,149,106,0.08)', borderWidth: 1.5, borderColor: 'rgba(212,149,106,0.2)' }}>
+                        <Text style={rowText}>{t.name}</Text>
+                        <Text style={[subText, { marginTop: 2 }]} numberOfLines={1}>
+                          {t.routines.length > 1 ? `${t.routines.length} routines, taking turns` : t.routines[0].exercises.map(e => e[0]).join(', ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity onPress={() => { haptic.light(); setRoutinesOpen(true); }} activeOpacity={0.7}
+                      style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1.5, borderColor: 'rgba(212,149,106,0.2)', borderStyle: 'dashed' }}>
+                      <Text style={[rowText, { color: '#D4956A' }]}>Make my own</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  {plan.routines.map((r, i) => (
+                    <View key={r.id} style={{ flexDirection: 'row', gap: 10, paddingVertical: 6 }}>
+                      <Text style={[subText, { width: 16 }]}>{i + 1}.</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={rowText}>{r.name}</Text>
+                        <Text style={subText} numberOfLines={2}>{r.exercises.map(e => `${e.name} ${e.sets}×${e.reps}`).join(' · ')}</Text>
+                      </View>
+                    </View>
+                  ))}
+                  <LinkButton label="Edit routines" onPress={() => setRoutinesOpen(true)} />
+                  <Text style={[subText, { marginTop: 12 }]}>
+                    Tap ▶︎ on Home to start {plan.routines.length > 1 ? 'the next routine' : 'a workout'}. It fills in your weights from last time, and finishing it checks the habbit off.
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
+        </Card>
+        <RoutinesSheet visible={routinesOpen} plan={plan.routines.length > 0 ? plan : { ...starter, unit: plan.unit }} onClose={() => setRoutinesOpen(false)}
+          onSave={next => { setPlan(next); setRoutinesOpen(false); if (next.routines.length === 0) setWorkoutOn(false); }} />
 
         {/* ── Reminder ── */}
         <Label>Reminder</Label>
@@ -424,6 +501,7 @@ export const AddHabbitScreen = ({
         <Text style={[subText, { textAlign: 'center', marginTop: 18 }]}>
           {weekly ? `${perWeek}× a week · any days` : `${daysLabel(days)} · ${timesPerDay === 1 ? 'once a day' : `${timesPerDay}× a day`}`}
           {focusOn ? ` · ${focus.minutes}-min focus` : ''}
+          {workoutOn && plan.routines.length > 0 ? ` · ${plan.routines.length === 1 ? '1 routine' : `${plan.routines.length} routines`}` : ''}
           {reminderEnabled ? ' · with reminders' : ''}
         </Text>
 

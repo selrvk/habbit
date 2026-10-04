@@ -27,6 +27,8 @@ import { CategoriesContext, type CategoriesValue } from './src/context/Categorie
 import { focusMinutes, logFocus, nextBlock, parseFocusLog, parseFocusSession, pause as pauseFocus, resume as resumeFocus, settle, startBlock, type FocusLogEntry, type FocusSession } from './src/focus';
 import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
 import { syncFocusActivity } from './src/utils/focusActivity';
+import { finishWorkout, logWorkout, newBests, nextRoutine, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
+import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
 import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, type Quiet } from './src/notifications';
@@ -35,7 +37,7 @@ import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSh
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -65,6 +67,7 @@ const formFields = (data: HabbitFormData) => ({
   reminderTimes: data.reminderTimes,
   reminderSplit: data.reminderSplit,
   focus:         data.focus ?? undefined,
+  workout:       data.workout ?? undefined,
 });
 
 /** The tab each link opens on. */
@@ -117,6 +120,12 @@ export default function App() {
   const focusLogRef                               = useRef<FocusLogEntry[]>([]);
   const [focusOpen, setFocusOpen]                 = useState(false);
   const [focusDone, setFocusDone]                 = useState<FocusDone | null>(null);
+  const [workout, setWorkout]                     = useState<ActiveWorkout | null>(null);
+  const workoutRef                                = useRef<ActiveWorkout | null>(null);
+  const [workoutLog, setWorkoutLog]               = useState<WorkoutLog[]>([]);
+  const workoutLogRef                             = useRef<WorkoutLog[]>([]);
+  const [workoutOpen, setWorkoutOpen]             = useState(false);
+  const [workoutDone, setWorkoutDone]             = useState<WorkoutDone | null>(null);
   const [currency, setCurrency]                 = useState(DEFAULT_CURRENCY);
   const [name, setName]                           = useState('Friend');
   const [avatar, setAvatar]                       = useState<string>(DEFAULT_AVATAR);
@@ -300,12 +309,77 @@ export default function App() {
     onClose:  () => { setFocusOpen(false); setFocusDone(null); },
   }), [saveFocusSession, finishFocus]);
 
+  // ── Workouts (workout.ts) ──────────────────────────────────────────────────
+  const saveWorkout = useCallback((next: ActiveWorkout | null) => {
+    workoutRef.current = next;
+    setWorkout(next);
+    (next ? AsyncStorage.setItem(STORAGE_WORKOUT, JSON.stringify(next)) : AsyncStorage.removeItem(STORAGE_WORKOUT)).catch(() => {});
+  }, []);
+
+  /** Keeps a finished workout; returns its check-off, for catchUp. */
+  const addWorkout = useCallback((w: WorkoutLog): InboxEvent => {
+    workoutLogRef.current = logWorkout(workoutLogRef.current, w);
+    setWorkoutLog(workoutLogRef.current);
+    AsyncStorage.setItem(STORAGE_WORKOUT_LOG, JSON.stringify(workoutLogRef.current)).catch(() => {});
+    return workoutEvent(w);
+  }, []);
+
+  /** A workout left alone for 12 hours is finished (or dropped). Safe to call any time. */
+  const settleActiveWorkout = useCallback((): InboxEvent[] => {
+    const r = settleWorkout(workoutRef.current, Date.now());
+    if (r.active === workoutRef.current) return [];
+    saveWorkout(r.active);
+    return r.finished ? [addWorkout(r.finished)] : [];
+  }, [saveWorkout, addWorkout]);
+
+  const startWorkout = useCallback((habitId: string) => {
+    const running = workoutRef.current;
+    if (running?.habitId === habitId) { setWorkoutOpen(true); return; }
+    const habit   = liveState.current.commissions.find(c => c.id === habitId);
+    const plan    = habit?.workout;
+    const routine = plan && nextRoutine(plan, workoutLogRef.current, habitId);
+    if (!habit || !plan || !routine) return;
+    const begin = () => {
+      setWorkoutDone(null);
+      saveWorkout(beginWorkout({ ...habit, workout: plan }, routine, workoutLogRef.current, Date.now(), generateId()));
+      setWorkoutOpen(true);
+    };
+    if (!running) { begin(); return; }
+    Alert.alert(`You’re in the middle of ${running.routineName}`, 'One workout runs at a time.', [
+      { text: 'Back to it', onPress: () => setWorkoutOpen(true) },
+      { text: `Discard it and start ${habit.label}`, style: 'destructive', onPress: begin },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [saveWorkout]);
+
+  const workoutHandlers = useMemo(() => ({
+    onChange: (w: ActiveWorkout) => saveWorkout(w),
+    /** Another routine, before the first set: same workout, started over. */
+    onSwitchRoutine: (routineId: string) => {
+      const w       = workoutRef.current;
+      const habit   = w && liveState.current.commissions.find(c => c.id === w.habitId);
+      const routine = habit?.workout?.routines.find(r => r.id === routineId);
+      if (!w || !habit?.workout || !routine) return;
+      saveWorkout(beginWorkout({ ...habit, workout: habit.workout }, routine, workoutLogRef.current, w.startedAt, w.id));
+    },
+    onFinish: () => {
+      const w    = workoutRef.current;
+      const done = w && finishWorkout(w, Date.now());
+      if (!w || !done) return;
+      setWorkoutDone({ label: w.label, routineName: w.routineName, unit: w.unit, ...workoutTotals(done), bests: newBests(logWorkout(workoutLogRef.current, done), done) });
+      saveWorkout(null);
+      catchUp([addWorkout(done)]);
+    },
+    onDiscard: () => { saveWorkout(null); setWorkoutOpen(false); },
+    onClose:   () => { setWorkoutOpen(false); setWorkoutDone(null); },
+  }), [saveWorkout, addWorkout, catchUp]);
+
   const drainInbox = useCallback(async () => {
     if (!hasLoaded.current) return;
     const events = await takeInbox();
     applyFocusActions(events);
-    catchUp([...events, ...settleFocus()]);
-  }, [catchUp, settleFocus, applyFocusActions]);
+    catchUp([...events, ...settleFocus(), ...settleActiveWorkout()]);
+  }, [catchUp, settleFocus, applyFocusActions, settleActiveWorkout]);
 
   /** The block ran out with the app open. */
   const onFocusElapsed = useCallback(() => {
@@ -416,8 +490,17 @@ export default function App() {
       // Settling updates the Live Activity itself; otherwise bring it in step (or end a stray one).
       if (focusRef.current === unsettled) syncFocusActivity(focusRef.current);
 
+      // Workouts: a forgotten one is finished (or dropped) below.
+      const storedWL = await AsyncStorage.getItem(STORAGE_WORKOUT_LOG);
+      workoutLogRef.current = parseWorkoutLog(storedWL ? JSON.parse(storedWL) : []);
+      setWorkoutLog(workoutLogRef.current);
+      const storedW = await AsyncStorage.getItem(STORAGE_WORKOUT);
+      workoutRef.current = parseActiveWorkout(storedW ? JSON.parse(storedW) : null);
+      setWorkout(workoutRef.current);
+      const workoutEvents = settleActiveWorkout();
+
       // Up to today: the new day, bills that came due, and what Siri and quick actions did.
-      const day = catchUpDay(stored, todayKey, [...inbox, ...focusEvents]);
+      const day = catchUpDay(stored, todayKey, [...inbox, ...focusEvents, ...workoutEvents]);
 
       loadedTotals = day.dailyTotals; loadedSpent = day.finance.spentToday; loadedTodayHistory = day.finance.history; loadedBills = day.bills;
       setSpentToday(loadedSpent); setTodayHistory(loadedTodayHistory); setBills(loadedBills); setDailyTotals(loadedTotals);
@@ -473,7 +556,7 @@ export default function App() {
       }));
       setReady(true);
     }
-  }, [saveStats, saveCompletionHistory, settleFocus, applyFocusActions]);
+  }, [saveStats, saveCompletionHistory, settleFocus, applyFocusActions, settleActiveWorkout]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -551,6 +634,9 @@ export default function App() {
     focusRef.current = null; setFocusSession(null); setFocusOpen(false); setFocusDone(null);
     focusLogRef.current = []; setFocusLog([]);
     AsyncStorage.removeItem(STORAGE_FOCUS).catch(() => {});
+    workoutRef.current = null; setWorkout(null); setWorkoutOpen(false); setWorkoutDone(null);
+    workoutLogRef.current = []; setWorkoutLog([]);
+    AsyncStorage.removeItem(STORAGE_WORKOUT).catch(() => {});
     setCurrency(DEFAULT_CURRENCY);
     setName('Friend');
     setAvatar(DEFAULT_AVATAR);
@@ -1008,8 +1094,9 @@ export default function App() {
     setCommissions(p => p.filter(c => c.id !== id));
     cancelHabitNotifs(id);
     if (focusRef.current?.habitId === id) saveFocusSession(null);
+    if (workoutRef.current?.habitId === id) saveWorkout(null);
     setTasksSubScreen(null);
-  }, [saveFocusSession]);
+  }, [saveFocusSession, saveWorkout]);
 
   const handleSetEntryCategory = useCallback((id: string, category: string | undefined) => {
     setTodayHistory(prev => {
@@ -1118,6 +1205,8 @@ export default function App() {
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
             focusSession={focusSession}
             onStartFocus={startFocus}
+            workoutHabitId={workout?.habitId ?? null}
+            onStartWorkout={startWorkout}
           />
         );
 
@@ -1136,6 +1225,9 @@ export default function App() {
               focusLog={focusLog}
               focusRunning={focusSession?.habitId === detailHabit.id}
               onStartFocus={() => startFocus(detailHabit.id)}
+              workoutLog={workoutLog}
+              workoutRunning={workout?.habitId === detailHabit.id}
+              onStartWorkout={() => startWorkout(detailHabit.id)}
             />
           );
         }
@@ -1253,6 +1345,12 @@ export default function App() {
               todayMinutes={focusMinutes(focusLog, todayKey, todayKey)}
               {...focusHandlers}
               onElapsed={onFocusElapsed}
+            />
+            <WorkoutSheet
+              visible={workoutOpen && (!!workout || !!workoutDone)}
+              workout={workout} done={workoutDone} log={workoutLog}
+              routines={commissions.find(c => c.id === workout?.habitId)?.workout?.routines ?? []}
+              {...workoutHandlers}
             />
             {toasts.length > 0 && (
               <AchievementToast item={toasts[0]} avatar={avatar} onPress={() => setAchievementsOpen(true)} onDone={() => setToasts(q => q.slice(1))} />

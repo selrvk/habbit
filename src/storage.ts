@@ -22,6 +22,10 @@ export const STORAGE_CATEGORIES         = '@habbit_rabbit_categories';
 export const STORAGE_FOCUS              = '@habbit_rabbit_focus';
 /** Minutes focused per day and habit (FocusLogEntry[]). */
 export const STORAGE_FOCUS_LOG          = '@habbit_rabbit_focus_log';
+/** The workout in progress (ActiveWorkout, workout.ts). Not backed up. */
+export const STORAGE_WORKOUT            = '@habbit_rabbit_workout';
+/** Finished workouts (WorkoutLog[]). */
+export const STORAGE_WORKOUT_LOG        = '@habbit_rabbit_workout_log';
 /** Bonbon's weekly notes, by week. Not backed up: they can be written again. */
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
 
@@ -41,6 +45,8 @@ export const CONTENT_STORAGE_KEYS = [
   STORAGE_CATEGORIES,
   STORAGE_FOCUS,
   STORAGE_FOCUS_LOG,
+  STORAGE_WORKOUT,
+  STORAGE_WORKOUT_LOG,
 ];
 
 // ── Full wipe — only used if you ever need a true factory reset ───────────────

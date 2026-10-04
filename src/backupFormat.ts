@@ -7,7 +7,7 @@
 import {
   STORAGE_COACH_MESSAGES, STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE,
   STORAGE_FINANCE_HISTORY, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS,
-  STORAGE_ACHIEVEMENTS, STORAGE_CATEGORIES, STORAGE_FOCUS_LOG,
+  STORAGE_ACHIEVEMENTS, STORAGE_CATEGORIES, STORAGE_FOCUS_LOG, STORAGE_WORKOUT_LOG,
 } from './storage';
 import type { DailyTotal, FinanceData } from './types';
 import type { TopUp } from './budget';
@@ -30,6 +30,7 @@ export const BACKUP_SECTIONS = {
   achievements:  STORAGE_ACHIEVEMENTS,
   categories:    STORAGE_CATEGORIES,
   focus:         STORAGE_FOCUS_LOG,
+  workouts:      STORAGE_WORKOUT_LOG,
 } as const;
 
 export type BackupSection = keyof typeof BACKUP_SECTIONS;
@@ -63,6 +64,7 @@ const VALIDATORS: Record<BackupSection, (v: any) => boolean> = {
   achievements:  v => isObject(v) && isObject(v.earned),
   categories:    v => Array.isArray(v),
   focus:         v => Array.isArray(v),
+  workouts:      v => Array.isArray(v),
 };
 
 const SECTION_NAMES = Object.keys(BACKUP_SECTIONS) as BackupSection[];

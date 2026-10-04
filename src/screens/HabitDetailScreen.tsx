@@ -3,8 +3,8 @@
 // One habit's page: its streak, best streak, completion rate and a month calendar.
 // Opened by tapping a habit in the Habbits list.
 
-import React, { useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Platform, Modal } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { parseDateKey, reminderSummary, scheduleLabel } from '../helpers';
@@ -14,6 +14,10 @@ import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, CompletionRecord } from '../types';
 import { addDaysToKey } from '../helpers';
 import { durationLabel, focusMinutes, type FocusLogEntry } from '../focus';
+import { nextRoutine, workoutTotals, type WorkoutLog } from '../workout';
+import { useProStatus } from '../context/ProContext';
+import { PaywallScreen } from './PaywallScreen';
+import { WorkoutProgressSheet } from '../components/WorkoutProgressSheet';
 
 const C = {
   bg:     '#2A1A18',
@@ -24,11 +28,12 @@ const C = {
   border: 'rgba(212,149,106,0.18)',
 };
 
+const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip, focusLog, focusRunning, onStartFocus }: {
+export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip, focusLog, focusRunning, onStartFocus, workoutLog, workoutRunning, onStartWorkout }: {
   habit: Commission;
   history: CompletionRecord[];
   todayKey: string;
@@ -40,8 +45,15 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
   focusLog: FocusLogEntry[];
   focusRunning: boolean;
   onStartFocus: () => void;
+  /** Workout habits: past workouts, whether one is in progress, and starting it. */
+  workoutLog: WorkoutLog[];
+  workoutRunning: boolean;
+  onStartWorkout: () => void;
 }) => {
   const fs = useFontSize();
+  const { isPro } = useProStatus();
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [paywall, setPaywall]           = useState(false);
   const days  = useMemo(() => habitDays(habit, history, todayKey), [habit, history, todayKey]);
   const stats = useMemo(() => statsFromDays(habit, days, todayKey), [habit, days, todayKey]);
   const skips = useMemo(() => skipAllowance(habit, history, todayKey), [habit, history, todayKey]);
@@ -161,6 +173,64 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
             </View>
           );
         })()}
+
+        {/* ── Workouts ── */}
+        {habit.workout && (() => {
+          const next     = nextRoutine(habit.workout, workoutLog, habit.id);
+          const mine     = workoutLog.filter(w => w.habitId === habit.id);
+          const recent   = mine.slice(-3).reverse();
+          const canStart = !!next && (workoutRunning || today === 'pending');
+          const dayLabel = (key: string) => { const d = parseDateKey(key); return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`; };
+          return (
+            <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>💪 Workouts</Text>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>{mine.length > 0 ? `${mine.length} done` : habit.workout.routines.map(r => r.name).join(' → ')}</Text>
+              </View>
+              {recent.length === 0 ? (
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, marginTop: 8 }}>No workouts yet. Finished ones show up here, and fill in your weights next time.</Text>
+              ) : recent.map(w => {
+                const t = workoutTotals(w);
+                return (
+                  <View key={w.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                    <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.cream }}>{w.routineName}</Text>
+                    <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>{dayLabel(w.date)} · {t.minutes} min · {t.sets} sets</Text>
+                  </View>
+                );
+              })}
+              {mine.length > 0 && (
+                <TouchableOpacity onPress={() => { haptic(); (isPro ? setProgressOpen : setPaywall)(true); }} activeOpacity={0.75}
+                  accessibilityRole="button" accessibilityHint={isPro ? undefined : 'Part of Habbit Pro'}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
+                  <Text style={{ fontSize: fs(15) }}>📈</Text>
+                  <Text style={{ flex: 1, fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Progress and personal bests</Text>
+                  {!isPro && (
+                    <View style={{ backgroundColor: 'rgba(212,149,106,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(10), color: C.accent }}>🥕 PRO</Text>
+                    </View>
+                  )}
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(16), color: C.accent }}>›</Text>
+                </TouchableOpacity>
+              )}
+              {canStart && (
+                <TouchableOpacity onPress={() => { haptic(); onStartWorkout(); }} activeOpacity={0.8}
+                  accessibilityRole="button"
+                  style={{ marginTop: 12, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: '#fff' }}>
+                    {workoutRunning ? '💪 Back to your workout' : `▶︎ Start ${next!.name}`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()}
+
+        {habit.workout && (
+          <WorkoutProgressSheet visible={progressOpen} habitId={habit.id} label={habit.label} unit={habit.workout.unit} log={workoutLog} onClose={() => setProgressOpen(false)} />
+        )}
+        <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
+          <PaywallScreen onClose={() => setPaywall(false)} />
+        </Modal>
 
         {/* ── Calendar ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>

@@ -54,7 +54,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus,
+  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, workoutHabitId, onStartWorkout,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -72,6 +72,9 @@ export const HomeScreen = ({
   /** The running focus timer, if any, and starting (or showing) one for a habit. */
   focusSession: FocusSession | null;
   onStartFocus: (id: string) => void;
+  /** The habit whose workout is in progress, if any, and starting (or showing) one. */
+  workoutHabitId: string | null;
+  onStartWorkout: (id: string) => void;
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
@@ -137,7 +140,8 @@ export const HomeScreen = ({
       onComplete={onCommissionComplete} onUncomplete={onCommissionUncomplete}
       onSkip={item.perWeek ? undefined : onSkip} onUnskip={onUnskip}
       onSwipeStart={handleSwipeStart} onSwipeEnd={handleSwipeEnd}
-      focus={item.focus ? { running: focusSession?.habitId === item.id ? focusSession : null, onPress: onStartFocus } : undefined} />
+      focus={item.focus ? { running: focusSession?.habitId === item.id ? focusSession : null, onPress: onStartFocus } : undefined}
+      workout={item.workout ? { running: workoutHabitId === item.id, onPress: onStartWorkout } : undefined} />
   );
 
   const tile = { flex: 1, backgroundColor: C.card, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: C.border } as const;

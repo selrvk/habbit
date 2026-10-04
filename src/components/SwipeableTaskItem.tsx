@@ -45,6 +45,7 @@ export const SwipeableTaskItem = ({
   onSwipeStart,
   onSwipeEnd,
   focus,
+  workout,
 }: {
   item: Commission;
   /** This habit's current streak; shown once it's running. */
@@ -61,6 +62,8 @@ export const SwipeableTaskItem = ({
   onSwipeEnd: () => void;
   /** Focus-timer habits: the running session for this habit (if any), and the ▶︎ button. */
   focus?: { running: FocusSession | null; onPress: (id: string) => void };
+  /** Workout habits: whether this habit's workout is in progress, and the ▶︎ button. */
+  workout?: { running: boolean; onPress: (id: string) => void };
 }) => {
   const fs          = useFontSize();
   const timesPerDay = item.timesPerDay ?? 1;
@@ -215,9 +218,14 @@ export const SwipeableTaskItem = ({
     return null;
   })();
 
-  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week || !!focus?.running;
-  // ▶︎ starts a block; it stays while a session runs for this habit, to get back to it.
-  const showPlay = !!focus && (!!focus.running || (canComplete && !weekMet));
+  const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week || !!focus?.running || !!workout?.running;
+  // ▶︎ starts a focus block or a workout; it stays while one runs for this habit, to get back to it.
+  const play     = focus ? { running: !!focus.running, onPress: focus.onPress } : workout;
+  const showPlay = !!play && (play.running || (canComplete && !weekMet));
+  const playIcon = !play?.running ? '▶' : focus ? '⏱' : '💪';
+  const playA11y = focus
+    ? (play?.running ? `Show the ${item.label} focus timer` : `Start a focus block for ${item.label}`)
+    : (play?.running ? `Back to your ${item.label} workout` : `Start a ${item.label} workout`);
 
   return (
     <View style={{ marginBottom: 10 }}>
@@ -284,6 +292,7 @@ export const SwipeableTaskItem = ({
             {showMeta && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                 {focus?.running && <FocusCountdown session={focus.running} />}
+                {workout?.running && <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>💪 Workout in progress</Text>}
                 {streak > 0 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: '#D4956A' }}>🔥 {streak}{week ? ' wk' : ''}</Text>
                 )}
@@ -307,13 +316,13 @@ export const SwipeableTaskItem = ({
           </View>
 
           {showPlay && (
-            <TouchableOpacity onPress={() => { haptic.light(); focus?.onPress(item.id); }} activeOpacity={0.7} hitSlop={8}
-              accessibilityRole="button" accessibilityLabel={focus?.running ? `Show the ${item.label} focus timer` : `Start a focus block for ${item.label}`}
+            <TouchableOpacity onPress={() => { haptic.light(); play?.onPress(item.id); }} activeOpacity={0.7} hitSlop={8}
+              accessibilityRole="button" accessibilityLabel={playA11y}
               style={{
                 width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10,
-                backgroundColor: focus?.running ? '#D4956A' : 'rgba(212,149,106,0.14)', borderWidth: 1.5, borderColor: '#D4956A',
+                backgroundColor: play?.running ? '#D4956A' : 'rgba(212,149,106,0.14)', borderWidth: 1.5, borderColor: '#D4956A',
               }}>
-              <Text style={{ fontSize: 13, color: focus?.running ? '#fff' : '#D4956A', marginLeft: focus?.running ? 0 : 2 }}>{focus?.running ? '⏱' : '▶'}</Text>
+              <Text style={{ fontSize: 13, color: play?.running ? '#fff' : '#D4956A', marginLeft: play?.running ? 0 : 2 }}>{playIcon}</Text>
             </TouchableOpacity>
           )}
 
