@@ -9,7 +9,7 @@
 // has N done days, and only a finished week that fell short breaks the streak.
 
 import type { Commission, CompletionRecord } from './types';
-import { addDaysToKey, isScheduledForDay, parseDateKey, toDateKey } from './helpers';
+import { addDaysToKey, allSkipped, isScheduledForDay, parseDateKey, toDateKey } from './helpers';
 import { periodStart } from './budget';
 
 /** `pending`: today, scheduled and not done yet. It doesn't break the streak. */
@@ -150,5 +150,46 @@ export const habitStats = (habit: Commission, history: CompletionRecord[], today
     ...stats,
     skips: skipAllowance(habit, history, todayKey),
     weekDone: !!habit.perWeek && stats.thisWeek >= habit.perWeek,
+  };
+};
+
+// ── For Bonbon ───────────────────────────────────────────────────────────────
+
+export type HabitsOverview = {
+  /** No habits at all. */
+  none: boolean;
+  /** Today as Home counts it: habits scheduled and not skipped, how many are done, what's left. */
+  today: { done: number; of: number; left: string[]; skipped: number };
+  /** The 6 days before today that had habits to do: how many were perfect, and what the rest missed. */
+  recent: { days: number; perfect: number; notPerfect: { date: string; missed: string[] }[] };
+  /** "N× a week" habits and how far along they are this week. */
+  weeklyGoals: { label: string; done: number; target: number }[];
+};
+
+/**
+ * Today comes from the habits themselves: the day has no record until it's perfect, so the
+ * history can't say how it's going. Rest days (nothing scheduled, or all skipped) aren't counted.
+ */
+export const habitsOverview = (habits: Commission[], history: CompletionRecord[], todayKey: string): HabitsOverview => {
+  const todays  = habits.filter(h => isScheduledForDay(h, parseDateKey(todayKey).getDay()));
+  const counted = todays.filter(h => !h.skipped);
+  const labels  = new Map(habits.map(h => [h.id, h.label]));
+  const from    = addDaysToKey(todayKey, -6);
+  const before  = history.filter(r => r.date >= from && r.date < todayKey && r.scheduledIds.length > 0 && !allSkipped(r));
+  return {
+    none: habits.length === 0,
+    today: {
+      done: counted.filter(h => h.completed).length, of: counted.length, skipped: todays.length - counted.length,
+      left: counted.filter(h => !h.completed).map(h => (h.timesPerDay > 1 ? `${h.label} (${h.completionCount} of ${h.timesPerDay})` : h.label)),
+    },
+    recent: {
+      days: before.length, perfect: before.filter(r => r.completed).length,
+      notPerfect: before.filter(r => !r.completed).map(r => ({
+        date: r.date,
+        // Habits deleted since then have no name to give.
+        missed: r.scheduledIds.filter(id => !r.completedIds.includes(id) && !r.skippedIds?.includes(id)).flatMap(id => labels.get(id) ?? []),
+      })),
+    },
+    weeklyGoals: habits.filter(h => h.perWeek).map(h => ({ label: h.label, done: habitStats(h, history, todayKey).thisWeek, target: h.perWeek! })),
   };
 };

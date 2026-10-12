@@ -31,7 +31,7 @@ import { finishWorkout, logWorkout, newBests, nextRoutine, nextUp, parseActiveWo
 import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
-import { cancelAllNotifications, initNotifications, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, type Quiet } from './src/notifications';
+import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
@@ -137,6 +137,8 @@ export default function App() {
   // The week the recap sheet is open on (its Monday), or null when closed.
   const [recapOpen, setRecapOpen]                 = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen]           = useState(false);
+  /** A link opened the app, or arrived while it was open: "What's new" waits for the next launch. */
+  const openedByLink = useRef(false);
 
   // The day the in-memory state belongs to. Only advanced by catchUp, so data is
   // never written under a new date before the previous day has been rolled over.
@@ -460,8 +462,12 @@ export default function App() {
       const onboarded = await AsyncStorage.getItem(STORAGE_ONBOARDED);
       if (!onboarded) { setIsOnboarded(false); return; }
       setIsOnboarded(true);
-      // Someone updating from an earlier version sees what's new, once.
-      AsyncStorage.getItem(STORAGE_WHATS_NEW).then(seen => { if (seen !== WHATS_NEW_VERSION) setWhatsNewOpen(true); }).catch(() => {});
+      await requestNotificationPermission();
+      // Someone updating from an earlier version sees what's new, once: on a plain launch,
+      // not one that a widget, quick action or Siri opened to do something.
+      AsyncStorage.getItem(STORAGE_WHATS_NEW).then(seen => {
+        if (seen !== WHATS_NEW_VERSION && !openedByLink.current) setWhatsNewOpen(true);
+      }).catch(() => {});
       const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
       if (storedS) {
         const s: Settings = JSON.parse(storedS);
@@ -620,6 +626,8 @@ export default function App() {
     const t = pendingLink;
     setPendingLink(null);
     if (!isOnboardedRef.current) return;
+    openedByLink.current = true;
+    setWhatsNewOpen(false);
     setActiveTab(LINK_TABS[t.screen]);
     setTasksSubScreen(
       t.screen === 'new-habit' ? { mode: 'add' }
@@ -782,6 +790,8 @@ export default function App() {
     }
     await AsyncStorage.setItem(STORAGE_ONBOARDED, 'true');
     AsyncStorage.setItem(STORAGE_WHATS_NEW, WHATS_NEW_VERSION).catch(() => {});
+    // Asked here, with onboarding's last page still showing, not on first launch.
+    await requestNotificationPermission();
     scheduleWeeklyRecap(true);
     achievementsFirstRun.current = false; earnedRef.current = {}; setEarned({});
     AsyncStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify({ earned: {} })).catch(() => {});
@@ -1379,7 +1389,7 @@ export default function App() {
             />
             {/* Waits for any other sheet (a focus timer or workout opened from a link) to close. */}
             <WhatsNewSheet
-              visible={whatsNewOpen && !focusOpen && !workoutOpen && recapOpen === null && !achievementsOpen}
+              visible={whatsNewOpen && ready && !pendingLink && !focusOpen && !workoutOpen && recapOpen === null && !achievementsOpen}
               onClose={() => { setWhatsNewOpen(false); AsyncStorage.setItem(STORAGE_WHATS_NEW, WHATS_NEW_VERSION).catch(() => {}); }}
             />
             {toasts.length > 0 && (

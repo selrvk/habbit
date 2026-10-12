@@ -1,4 +1,4 @@
-import { habitCreatedKey, habitDays, habitStats, skipAllowance } from '../src/habitStats';
+import { habitCreatedKey, habitDays, habitStats, habitsOverview, skipAllowance } from '../src/habitStats';
 import type { Commission, CompletionRecord } from '../src/types';
 
 // 2026-10-01 is a Thursday.
@@ -141,5 +141,49 @@ describe('weekly habits (N× a week)', () => {
   it('does not hold a part first week against the habit', () => {
     const h = gym({ id: created('2026-09-24') }); // a Thursday, done once that week
     expect(habitStats(h, doneOn(h.id, ['2026-09-26']), TODAY)).toMatchObject({ current: 0, missed: 0, rate: null });
+  });
+});
+
+describe('habitsOverview', () => {
+  const read  = habit({ id: 'read', label: 'Read' });
+  const water = habit({ id: 'water', label: 'Drink water', timesPerDay: 8, completionCount: 5 });
+  const walk  = habit({ id: 'walk', label: 'Walk', completed: true, completionCount: 1 });
+  const gymH  = habit({ id: created('2026-09-21'), label: 'Gym', perWeek: 3 });
+  const day   = (date: string, done: string[], skipped: string[] = []): CompletionRecord => ({
+    date, scheduledIds: ['read', 'water', 'walk'], completedIds: done, skippedIds: skipped,
+    completed: ['read', 'water', 'walk'].every(id => done.includes(id) || skipped.includes(id)) && done.length > 0,
+  });
+  const all = ['read', 'water', 'walk'];
+
+  it('takes today from the habits, since the day has no record until it is perfect', () => {
+    const o = habitsOverview([read, water, walk, gymH], week.map(d => day(d, all)), TODAY);
+    expect(o.none).toBe(false);
+    expect(o.today).toEqual({ done: 1, of: 3, skipped: 0, left: ['Read', 'Drink water (5 of 8)'] });
+  });
+
+  it('leaves skipped and unscheduled habits out of today', () => {
+    const o = habitsOverview([habit({ id: 'read', label: 'Read', skipped: true }), walk, habit({ id: 'mon', label: 'Mondays', days: [1] })], [], TODAY);
+    expect(o.today).toEqual({ done: 1, of: 1, skipped: 1, left: [] });
+  });
+
+  it('counts perfect days over the 6 days before today, and names what the others missed', () => {
+    const history = [
+      day('2026-09-24', []),                      // a week ago: outside the 6 days
+      day('2026-09-25', all), day('2026-09-26', ['read', 'walk']), day('2026-09-27', all),
+      day('2026-09-28', ['walk'], ['read', 'water']), // skips are neutral: still perfect
+      day('2026-09-29', [], all),                     // everything skipped: a rest day
+      day('2026-09-30', ['read', 'water', 'gone']),
+    ];
+    expect(habitsOverview([read, water, walk], history, TODAY).recent).toEqual({
+      days: 5, perfect: 3,
+      notPerfect: [{ date: '2026-09-26', missed: ['Drink water'] }, { date: '2026-09-30', missed: ['Walk'] }],
+    });
+  });
+
+  it('has nothing for a new user, and gives weekly goals their week', () => {
+    expect(habitsOverview([], [], TODAY)).toMatchObject({ none: true, today: { done: 0, of: 0 }, recent: { days: 0, perfect: 0 } });
+    const o = habitsOverview([gymH], [{ date: '2026-09-29', completed: false, scheduledIds: [], completedIds: [gymH.id] }], TODAY);
+    expect(o.weeklyGoals).toEqual([{ label: 'Gym', done: 1, target: 3 }]);
+    expect(o.today.of).toBe(0);
   });
 });

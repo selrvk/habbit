@@ -16,7 +16,7 @@ interface PaywallScreenProps {
 }
 
 export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
-  const { purchasePro, restorePurchases, monthlyPrice, yearlyPrice } = useProStatus();
+  const { purchasePro, restorePurchases, monthlyPrice, yearlyPrice, yearlySaving } = useProStatus();
   const [loading, setLoading]     = useState(false);
   const [selected, setSelected]   = useState<'monthly' | 'yearly'>('monthly'); // default to monthly
 
@@ -125,7 +125,7 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
           period="yearly"
           price={yearlyPrice}
           label="Yearly"
-          sublabel="best value 🎉"
+          sublabel={yearlySaving ? `save ${yearlySaving}% 🎉` : 'per year'}
         />
       </View>
 

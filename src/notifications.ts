@@ -15,8 +15,15 @@ export const initNotifications = async () => {
     if (Platform.OS==='android') {
       await notifee.createChannel({id:NOTIF_CHANNEL,name:'Habbit Reminders',importance:AndroidImportance.HIGH});
     }
-    await notifee.requestPermission();
   } catch {}
+};
+
+/**
+ * Asks to send notifications (iOS shows its prompt once). Not on first launch: someone new
+ * is asked as they finish onboarding, once they know what the reminders are for.
+ */
+export const requestNotificationPermission = async () => {
+  try { await notifee.requestPermission(); } catch {}
 };
 
 const getNextWeeklyTimestamp = (dow:number,hour:number,minute:number):number => {

@@ -263,6 +263,9 @@ export const OnboardingScreen = ({ onComplete, cloudBackup, onRestoreCloud, onDe
             <TouchableOpacity onPress={handleFinish} activeOpacity={0.85} style={{ backgroundColor: '#D4956A', borderRadius: 18, paddingVertical: 16, width: '100%', alignItems: 'center', shadowColor: '#D4956A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 }}>
               <Text style={{ fontFamily: 'DynaPuff', color: '#fff', fontSize: 17 }}>Let's hop to it! 🐰</Text>
             </TouchableOpacity>
+            <Text style={{ fontFamily: 'Jua', fontSize: 12, color: 'rgba(232,213,192,0.45)', textAlign: 'center', lineHeight: 17, marginTop: 14 }}>
+              Next, your iPhone will ask about notifications. Habbit uses them for your reminders and a recap of your week on Sundays.
+            </Text>
           </View>
         );
 

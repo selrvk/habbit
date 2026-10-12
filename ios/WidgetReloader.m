@@ -1,4 +1,5 @@
 #import <React/RCTBridgeModule.h>
+#import <UIKit/UIKit.h>
 
 static void reloadWidgetTimelines(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -55,6 +56,11 @@ RCT_EXPORT_METHOD(setPro:(BOOL)pro) {
 
 RCT_EXPORT_METHOD(reloadAll) {
   reloadWidgetTimelines();
+}
+
+/** Puts text on the clipboard (the account ID in Settings). */
+RCT_EXPORT_METHOD(copyText:(NSString *)text) {
+  dispatch_async(dispatch_get_main_queue(), ^{ UIPasteboard.generalPasteboard.string = text; });
 }
 
 /** The app's version and build, for Settings › About. */

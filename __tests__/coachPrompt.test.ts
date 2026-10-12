@@ -1,5 +1,6 @@
-import { focusStatus, workoutStatus } from '../src/utils/coachPrompt';
+import { focusStatus, habitStatus, workoutStatus } from '../src/utils/coachPrompt';
 import type { FocusOverview } from '../src/focus';
+import type { HabitsOverview } from '../src/habitStats';
 import type { WorkoutOverview } from '../src/workout';
 
 const overview = (over: Partial<FocusOverview> = {}): FocusOverview => ({
@@ -65,5 +66,42 @@ describe('workoutStatus', () => {
   it('says when there were no workouts lately', () => {
     expect(workoutStatus({ ...overview, running: null, recent: [], exercises: [] }).split('\n')[1])
       .toBe('No workouts in the last 7 days (the 7 days before: 1).');
+  });
+});
+
+describe('habitStatus', () => {
+  const habits = (over: Partial<HabitsOverview> = {}): HabitsOverview => ({
+    none: false,
+    today: { done: 1, of: 4, skipped: 0, left: ['Drink water (5 of 8)', 'Read 20 pages', 'Study (2 of 4)'] },
+    recent: { days: 6, perfect: 6, notPerfect: [] },
+    weeklyGoals: [{ label: 'Gym', done: 2, target: 3 }],
+    ...over,
+  });
+
+  it('spells out today, the days before it and weekly goals', () => {
+    expect(habitStatus(habits()).split('\n')).toEqual([
+      'Today (still going): 1 of 4 habits done so far. Left to do: Drink water (5 of 8), Read 20 pages, Study (2 of 4).',
+      'The 6 days tracked before today (last 6 days): all 6 were perfect days (every scheduled habit done).',
+      'Weekly goals (any days, Monday to Sunday): Gym 2 of 3 this week.',
+    ]);
+  });
+
+  it('names the days that were not perfect', () => {
+    // 2026-09-29 is a Tuesday, 2026-10-02 a Friday.
+    const recent = { days: 5, perfect: 3, notPerfect: [{ date: '2026-09-29', missed: ['Read 20 pages'] }, { date: '2026-10-02', missed: [] }] };
+    expect(habitStatus(habits({ recent, weeklyGoals: [] })).split('\n')[1])
+      .toBe('The 5 days tracked before today (last 6 days): 3 of 5 were perfect days (every scheduled habit done). Not perfect: Tuesday (missed Read 20 pages); Friday.');
+  });
+
+  it('covers a finished day, rest days and a first day', () => {
+    const first = (over: Partial<HabitsOverview>) => habitStatus(habits(over)).split('\n')[0];
+    expect(first({ today: { done: 4, of: 4, skipped: 0, left: [] } })).toBe('Today: all 4 habits done.');
+    expect(first({ today: { done: 1, of: 1, skipped: 2, left: [] } })).toBe('Today: all 1 habit done. 2 skipped today.');
+    expect(first({ today: { done: 0, of: 0, skipped: 3, left: [] } })).toBe('Today: a rest day, every habit skipped.');
+    expect(first({ today: { done: 0, of: 0, skipped: 0, left: [] } })).toBe('Today: no habits scheduled.');
+    expect(habitStatus(habits({ recent: { days: 0, perfect: 0, notPerfect: [] } })).split('\n')[1]).toBe('The 6 days before today: nothing tracked.');
+    expect(habitStatus(habits({ recent: { days: 1, perfect: 1, notPerfect: [] } })).split('\n')[1])
+      .toBe('The one day tracked before today (last 6 days): it was a perfect day (every scheduled habit done).');
+    expect(habitStatus(habits({ none: true }))).toBe('No habits set up yet.');
   });
 });

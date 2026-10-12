@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image, NativeModules
+  View, Text, ScrollView, TouchableOpacity, Platform, Alert, Image, NativeModules, Share
 } from 'react-native';
 import { useAppSettings } from './../context/SettingsContext';
 import type { FontSize } from './../context/SettingsContext';
@@ -274,6 +274,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [accountId, setAccountId] = useState<string | null>(null);
   // RevenueCat must be logged in as the account id for the coach to recognise Pro.
   const [purchasesLinked, setPurchasesLinked] = useState<boolean | null>(null);
+
+  // "Copied" shows on the button for a moment.
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+  const copyAccountId = () => {
+    if (!accountId) return;
+    haptic.light();
+    // Copied natively on iOS (WidgetReloader.m); elsewhere the share sheet offers Copy.
+    if (NativeModules.WidgetReloader?.copyText) { NativeModules.WidgetReloader.copyText(accountId); setCopied(true); }
+    else Share.share({ message: accountId }).catch(() => {});
+  };
 
   const refreshAccount = async () => {
     try {
@@ -638,6 +653,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             label="Account ID"
             sublabel={`${accountId ?? '—'}\n${purchasesLinked === null ? '' : purchasesLinked ? 'Purchases linked ✓' : 'Purchases not linked — tap to fix'}`}
             onPress={purchasesLinked === false ? handleLink : undefined}
+            rightEl={accountId ? (
+              <TouchableOpacity onPress={copyAccountId} hitSlop={10} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Copy account ID"
+                style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.15)', borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: copied ? C.muted : C.accent }}>{copied ? 'Copied ✓' : 'Copy'}</Text>
+              </TouchableOpacity>
+            ) : undefined}
             last
           />
         </Section>

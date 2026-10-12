@@ -10,7 +10,7 @@ import type {
   CommissionsData, FinanceData, DailyTotal, CompletionRecord, Stats, Settings,
 } from '../types';
 import { isScheduledForDay, getLast7DayKeys } from '../helpers';
-import { habitStats } from '../habitStats';
+import { habitsOverview, type HabitsOverview } from '../habitStats';
 import { categoryOf } from '../categories';
 import type { BudgetState } from '../budget';
 import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
@@ -22,6 +22,9 @@ import { parseActiveWorkout, parseWorkoutLog, workoutOverview, type WorkoutOverv
 export interface WeeklySnapshotDay {
   date: string;
   dayName: string;
+  /** False for an earlier day with no record: the app wasn't opened that day. */
+  tracked: boolean;
+  /** Of the habits scheduled and not skipped that day. */
   habitsCompleted: number;
   habitsScheduled: number;
   habitLabelsCompleted: string[];
@@ -47,15 +50,7 @@ export interface CoachContext {
   bestStreak: number;
   currency: string;
   dailyBudget: number;
-  habits: {
-    total: number;
-    completedToday: number;
-    daysFullyCompletedLast7: number;
-    missedDaysLast7: number;
-    habitsMostMissed: string[];
-    /** "N× a week" habits and how far along they are this week. */
-    weeklyGoals: { label: string; done: number; target: number }[];
-  };
+  habits: HabitsOverview;
   finance: {
     spentToday: number;
     totalSpentLast7Days: number;
@@ -121,27 +116,13 @@ export async function buildCoachContext(
   const stats: Stats | null                     = statsRaw ? JSON.parse(statsRaw) : null;
   const settings: Settings | null               = settingsRaw ? JSON.parse(settingsRaw) : null;
 
-  const habits      = commissionsData?.items ?? [];
-  const totalHabits = habits.length;
+  const habits = commissionsData?.items ?? [];
 
   const habitLabelById: Record<string, string> = {};
   habits.forEach(h => { habitLabelById[h.id] = h.label; });
 
   const todayDow = new Date().getDay();
-  const completedToday = habits.filter(h => h.completed).length;
-  const habitsMostMissed = habits
-    .filter(h => !h.completed && !h.skipped && isScheduledForDay(h, todayDow))
-    .map(h => h.label)
-    .slice(0, 3);
-
-  const weeklyGoals = habits
-    .filter(h => h.perWeek)
-    .map(h => ({ label: h.label, done: habitStats(h, completionHistory, last7[last7.length - 1]).thisWeek, target: h.perWeek! }));
-
   const last7Set = new Set(last7);
-  const recentRecords           = completionHistory.filter(r => last7Set.has(r.date));
-  const daysFullyCompletedLast7 = recentRecords.filter(r => r.completed).length;
-  const missedDaysLast7         = 7 - daysFullyCompletedLast7;
 
   const spentToday  = financeData?.spentToday ?? 0;
   const dailyBudget = budget?.dailyAllowance ?? settings?.allocatedPerDay ?? 0;
@@ -204,8 +185,13 @@ export async function buildCoachContext(
     const finance = allLast7Spending.find(d => d.date === date);
     const dow     = new Date(date + 'T00:00:00').getDay();
 
-    const completedIds: string[] = record?.completedIds ?? [];
-    const scheduledIds: string[] = record?.scheduledIds ?? [];
+    // Today has no record until it's perfect, so it comes from the habits as they stand.
+    const isToday = date === todayStr;
+    const todays  = habits.filter(h => isScheduledForDay(h, todayDow) && !h.skipped);
+    const completedIds: string[] = isToday ? habits.filter(h => h.completed).map(h => h.id) : record?.completedIds ?? [];
+    const scheduledIds: string[] = isToday
+      ? todays.map(h => h.id)
+      : (record?.scheduledIds ?? []).filter(id => !record?.skippedIds?.includes(id));
     const habitLabelsCompleted   = completedIds
       .map(id => habitLabelById[id])
       .filter(Boolean);
@@ -213,6 +199,7 @@ export async function buildCoachContext(
     return {
       date,
       dayName: DAY_NAMES[dow],
+      tracked: isToday || !!record,
       // Weekly habits done that day are named below but aren't part of the day's schedule.
       habitsCompleted: completedIds.filter(id => scheduledIds.includes(id)).length,
       habitsScheduled: scheduledIds.length,
@@ -229,14 +216,7 @@ export async function buildCoachContext(
     bestStreak: stats?.bestStreak ?? streak,
     currency,
     dailyBudget,
-    habits: {
-      total: totalHabits,
-      completedToday,
-      daysFullyCompletedLast7,
-      missedDaysLast7,
-      habitsMostMissed,
-      weeklyGoals,
-    },
+    habits: habitsOverview(habits, completionHistory, todayStr),
     finance: {
       spentToday: Math.round(spentToday * 100) / 100,
       totalSpentLast7Days: Math.round(totalSpentLast7Days * 100) / 100,

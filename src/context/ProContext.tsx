@@ -5,6 +5,7 @@ import Purchases from 'react-native-purchases';
 import type { CustomerInfo } from 'react-native-purchases';
 import { syncRevenueCatUser } from '../utils/revenueCatIdentity';
 import { syncWidgetPro } from '../utils/syncWidget';
+import { yearlySaving } from '../utils/pricing';
 
 const PRO_ENTITLEMENT = 'Habbit: Habits & Finance Pro'; 
 
@@ -12,7 +13,9 @@ interface ProContextValue {
   isPro: boolean;
   isLoading: boolean;
   monthlyPrice: string | null;
-  yearlyPrice: string | null;   // ← add
+  yearlyPrice: string | null;
+  /** Percent a year saves over 12 months, or null when it saves nothing (pricing.ts). */
+  yearlySaving: number | null;
   restorePurchases: () => Promise<void>;
   purchasePro: (period: 'monthly' | 'yearly') => Promise<void>; 
 }
@@ -22,7 +25,8 @@ const ProContext = createContext<ProContextValue>({
   isPro: false,
   isLoading: true,
   monthlyPrice: null,
-  yearlyPrice: null,  // ← add
+  yearlyPrice: null,
+  yearlySaving: null,
   restorePurchases: async () => {},
   purchasePro: async () => {},
 });
@@ -30,6 +34,7 @@ const ProContext = createContext<ProContextValue>({
 export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [monthlyPrice, setMonthlyPrice] = useState<string | null>(null);
   const [yearlyPrice, setYearlyPrice]   = useState<string | null>(null);
+  const [saving, setSaving]             = useState<number | null>(null);
   const [isPro, setIsPro] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,11 +63,12 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       Purchases.getOfferings().then(offerings => {
         const packages = offerings.current?.availablePackages ?? [];
-        packages.forEach(pkg => {
-          // RevenueCat identifies these by packageType
-          if (pkg.packageType === 'MONTHLY') setMonthlyPrice(pkg.product.priceString);
-          if (pkg.packageType === 'ANNUAL')  setYearlyPrice(pkg.product.priceString);
-        });
+        // RevenueCat identifies these by packageType
+        const monthly = packages.find(pkg => pkg.packageType === 'MONTHLY')?.product;
+        const yearly  = packages.find(pkg => pkg.packageType === 'ANNUAL')?.product;
+        if (monthly) setMonthlyPrice(monthly.priceString);
+        if (yearly)  setYearlyPrice(yearly.priceString);
+        setSaving(monthly && yearly ? yearlySaving(monthly.price, yearly.price) : null);
       }).catch(() => {});
 
     Purchases.addCustomerInfoUpdateListener(checkStatus);
@@ -94,7 +100,7 @@ export const ProProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { if (!isLoading) syncWidgetPro(isPro); }, [isPro, isLoading]);
 
   return (
-    <ProContext.Provider value={{ isPro, isLoading, monthlyPrice, yearlyPrice, restorePurchases, purchasePro }}>
+    <ProContext.Provider value={{ isPro, isLoading, monthlyPrice, yearlyPrice, yearlySaving: saving, restorePurchases, purchasePro }}>
       {children}
     </ProContext.Provider>
   );

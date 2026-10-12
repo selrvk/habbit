@@ -1,8 +1,9 @@
 // src/utils/coachPrompt.ts
 
 import type { CoachContext } from './buildCoachContext';
-import { getTodayKey } from '../helpers';
+import { getTodayKey, parseDateKey } from '../helpers';
 import { durationLabel, type FocusOverview } from '../focus';
+import type { HabitsOverview } from '../habitStats';
 import type { WorkoutOverview } from '../workout';
 
 /** The FOCUS TIMER section: what's running, and time focused lately. */
@@ -55,6 +56,33 @@ export function workoutStatus(w: WorkoutOverview): string {
   return lines.join('\n');
 }
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * The HABITS section: today so far, the days before it, and weekly goals. Every count is
+ * spelled out, because the model miscounts when it has to work one out from the daily list.
+ */
+export const habitStatus = (h: HabitsOverview): string => {
+  if (h.none) return 'No habits set up yet.';
+  const { today: t, recent: r } = h;
+  const habits = (n: number) => `${n} habit${n === 1 ? '' : 's'}`;
+  const lines = [
+    (t.of === 0 ? (t.skipped > 0 ? 'Today: a rest day, every habit skipped.' : 'Today: no habits scheduled.')
+      : t.done === t.of ? `Today: all ${habits(t.of)} done.`
+      : `Today (still going): ${t.done} of ${habits(t.of)} done so far. Left to do: ${t.left.join(', ')}.`)
+    + (t.of > 0 && t.skipped > 0 ? ` ${t.skipped} skipped today.` : ''),
+    r.days === 0 ? 'The 6 days before today: nothing tracked.'
+      : `The ${r.days === 1 ? 'one day' : `${r.days} days`} tracked before today (last 6 days): `
+        + (r.perfect === r.days ? `${r.days === 1 ? 'it was a perfect day' : `all ${r.days} were perfect days`} (every scheduled habit done).`
+          : `${r.perfect} of ${r.days} ${r.days === 1 ? 'was a perfect day' : 'were perfect days'} (every scheduled habit done). Not perfect: `
+            + r.notPerfect.map(d => `${WEEKDAYS[parseDateKey(d.date).getDay()]}${d.missed.length > 0 ? ` (missed ${d.missed.join(', ')})` : ''}`).join('; ') + '.'),
+  ];
+  if (h.weeklyGoals.length > 0) {
+    lines.push(`Weekly goals (any days, Monday to Sunday): ${h.weeklyGoals.map(g => `${g.label} ${g.done} of ${g.target} this week`).join(', ')}.`);
+  }
+  return lines.join('\n');
+};
+
 export function buildSystemPrompt(ctx: CoachContext): string {
   const sym = ctx.currency === 'USD' ? '$'
     : ctx.currency === 'PHP' ? '₱'
@@ -62,17 +90,6 @@ export function buildSystemPrompt(ctx: CoachContext): string {
     : ctx.currency === 'GBP' ? '£'
     : ctx.currency === '__carrot__' ? '🥕'
     : ctx.currency;
-
-  const habitStatus = ctx.habits.total === 0
-    ? 'No habits set up yet.'
-    : `${ctx.habits.completedToday}/${ctx.habits.total} done today. `
-    + `${ctx.habits.daysFullyCompletedLast7}/7 full days completed this week.`
-    + (ctx.habits.habitsMostMissed.length > 0
-        ? ` Still pending today: ${ctx.habits.habitsMostMissed.join(', ')}.`
-        : ' All habits done today!')
-    + (ctx.habits.weeklyGoals.length > 0
-        ? ` Weekly goals (any days, Monday to Sunday): ${ctx.habits.weeklyGoals.map(g => `${g.label} ${g.done}/${g.target}`).join(', ')}.`
-        : '');
 
   const periodStatus = ctx.budgetPeriod
     ? `The user budgets ${ctx.budgetPeriod.period}: ${sym}${ctx.budgetPeriod.budget} this ${ctx.budgetPeriod.period === 'weekly' ? 'week' : 'month'}, `
@@ -102,12 +119,12 @@ export function buildSystemPrompt(ctx: CoachContext): string {
 
   // ── Weekly snapshot table ──────────────────────────────────────────────────
   const snapshotLines = ctx.weeklySnapshot
-    .filter(day => day.habitsScheduled > 0 || day.spent > 0 || day.focusMinutes > 0 || day.workouts.length > 0)
+    .filter(day => day.tracked || day.spent > 0 || day.focusMinutes > 0 || day.workouts.length > 0)
     .map(day => {
       const isToday  = day.date === getTodayKey();
       const label    = isToday ? 'Today' : day.dayName;
-      const habStr   = day.habitsScheduled > 0
-        ? `${day.habitsCompleted}/${day.habitsScheduled} habits`
+      const habStr   = !day.tracked ? 'app not opened'
+        : day.habitsScheduled > 0 ? `${day.habitsCompleted} of ${day.habitsScheduled} habits done${isToday ? ' so far' : ''}`
         : 'no habits scheduled';
       const spendStr = day.spent > 0 ? `${sym}${day.spent.toFixed(2)} spent` : 'no spend logged';
       const names    = day.habitLabelsCompleted.length > 0
@@ -144,6 +161,8 @@ Never repeat the raw numbers back robotically. Interpret them and give one clear
 Look for patterns between habit completion and spending — e.g. days where habits were skipped often show higher spend. Only mention this if the data actually supports it, don't force it.
 When the user asks a vague question like "how did my week go?", lead with the most interesting pattern you see, not a list of stats.
 When the user asks what they spent money on, use the SPENDING ENTRIES section below — it contains the actual items and notes.
+For how many habits or days were done, use the numbers in the HABITS section exactly as written; don't count them again from the LAST 7 DAYS list.
+Today isn't over: never call today missed or unfinished, and don't count it against the user's week.
 Habits can be timed with the focus timer (set up when editing a habit, started with the ▶︎ on it): blocks of focused time, each finished block counting as one check-off. The FOCUS TIMER section has the user's numbers; it's a good thing to suggest for habits like studying or reading.
 Habits can also log workouts: routines (like Push, Pull, Legs) that take turns, with sets × reps and weights filled in from last time, a rest timer between sets, and finishing one checks the habit off. The WORKOUTS section has the user's routines, recent workouts and lifts. Keep training advice general and safe: consistency, rest days, small steady weight increases; never tell them to push through pain, and suggest a professional for injuries or health questions.
 If no note was recorded for an entry, say so honestly rather than guessing.
@@ -154,8 +173,8 @@ Name: ${ctx.userName}
 Current streak: ${ctx.streak} day${ctx.streak === 1 ? '' : 's'}
 Best streak ever: ${ctx.bestStreak} day${ctx.bestStreak === 1 ? '' : 's'}
 
-HABITS TODAY
-${habitStatus}
+HABITS
+${habitStatus(ctx.habits)}
 ${ctx.focus ? `\nFOCUS TIMER\n${focusStatus(ctx.focus)}\n` : ''}${ctx.workouts ? `\nWORKOUTS\n${workoutStatus(ctx.workouts)}\n` : ''}
 SPENDING TODAY
 ${financeStatus}
