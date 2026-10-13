@@ -1,12 +1,14 @@
 // src/components/NumpadModal.tsx
 
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Animated, Image, TextInput, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Animated, Image, TextInput, TouchableWithoutFeedback, Platform, ActivityIndicator } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { applyNumpadKey } from '../helpers';
 import { CurrencyAmount } from './CurrencyAmount';
 import { CategoryGrid } from './CategoryGrid';
+import { Icon } from './Icon';
+import type { ScanFill } from '../utils/receiptScan';
 
 const haptic = {
   light:   () => ReactNativeHapticFeedback.trigger('impactLight',         { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -20,7 +22,7 @@ const NOTE_MODAL_SHIFT = Platform.OS === 'ios' ? -130 : -110;
 // The category grid makes the note step taller, so it needs to move further for the keyboard.
 const CATEGORY_MODAL_SHIFT = Platform.OS === 'ios' ? -165 : -140;
 
-export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra, initialNote, initialCategory }: {
+export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra, initialNote, initialCategory, onScan }: {
   visible: boolean; title: string; hint?: string; confirmLabel: string; amount: string; currency: string;
   onChangeAmount: (v: string) => void; onConfirm: (note?: string, category?: string) => void; onClose: () => void;
   withNote?: boolean;
@@ -32,6 +34,8 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   /** Filled in when it opens, e.g. from a habbit://spend link. */
   initialNote?: string;
   initialCategory?: string;
+  /** Spending: scans a receipt and fills in the amount, note and category from it, to check and save. */
+  onScan?: () => Promise<ScanFill | null>;
 }) => {
   const scaleAnim      = useRef(new Animated.Value(0.88)).current;
   const opacityAnim    = useRef(new Animated.Value(0)).current;
@@ -43,6 +47,12 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   const [step, setStep] = useState<'amount' | 'note'>('amount');
   const [note, setNote] = useState('');
   const [category, setCategory] = useState<string | undefined>(undefined);
+  const [scanning, setScanning] = useState(false);
+  // What the last scan found: an amount a line called the total, a best guess, or none.
+  const [scanned, setScanned]   = useState<'sure' | 'guess' | 'no-total' | null>(null);
+  // A scan that comes back after the sheet was closed is dropped.
+  const openRef = useRef(visible);
+  openRef.current = visible;
 
   useEffect(() => {
     if (visible) {
@@ -50,6 +60,8 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
       setStep('amount');
       setNote(initialNote ?? '');
       setCategory(initialCategory);
+      setScanning(false);
+      setScanned(null);
       noteAnim.setValue(0);
       modalShiftAnim.setValue(0);
     }
@@ -98,17 +110,48 @@ const goToNote = () => {
     Animated.spring(modalShiftAnim, { toValue: up ? CATEGORY_MODAL_SHIFT : 0, useNativeDriver: true, tension: 140, friction: 10 }).start();
   };
 
+  /** Reads a receipt into the sheet, then shows it all on the second step to check. */
+  const runScan = async () => {
+    if (!onScan || scanning) return;
+    haptic.light();
+    setScanning(true);
+    const fill = await onScan().catch(() => null);
+    if (!openRef.current) return;
+    setScanning(false);
+    if (!fill) return;
+    if (fill.note) setNote(fill.note.slice(0, 60));
+    if (fill.category) setCategory(fill.category);
+    if (!fill.amount) { setScanned('no-total'); return; }
+    haptic.success();
+    onChangeAmount(fill.amount);
+    setScanned(fill.sure ? 'sure' : 'guess');
+    setStep('note');
+    Animated.spring(noteAnim, { toValue: 1, useNativeDriver: true, tension: 140, friction: 10 }).start();
+  };
+
+  /** Back to the number pad to correct a scanned amount; the note and category stay. */
+  const backToAmount = () => {
+    haptic.light();
+    noteInputRef.current?.blur();
+    setStep('amount');
+    noteAnim.setValue(0);
+    modalShiftAnim.setValue(0);
+  };
+
   const handleConfirm = (skipNote = false) => {
     haptic.success();
     onConfirm(skipNote ? undefined : note.trim() || undefined, category);
     setStep('amount');
     setNote('');
     setCategory(undefined);
+    setScanned(null);
     noteAnim.setValue(0);
     modalShiftAnim.setValue(0);
   };
 
   const hasAmount = parseFloat(amount || '0') > 0;
+  // A scanned amount is shown at full strength on the second step: it's there to be checked.
+  const reviewing = step === 'note' && (scanned === 'sure' || scanned === 'guess');
 
   const noteSlideY    = noteAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
   const noteOpacity   = noteAnim;
@@ -149,7 +192,9 @@ const goToNote = () => {
               {headerExtra && step === 'amount' && <View style={{ marginBottom: 14 }}>{headerExtra}</View>}
 
               {/* Amount display — always visible, dims on note step */}
-              <View style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: step === 'note' ? 'rgba(212,149,106,0.15)' : (hasAmount ? '#D4956A' : 'rgba(212,149,106,0.2)'), paddingVertical: 16, paddingHorizontal: 20, marginBottom: hint && step === 'amount' ? 6 : 18, alignItems: 'center' }}>
+              <TouchableOpacity disabled={!reviewing} onPress={backToAmount} activeOpacity={0.8}
+                accessibilityRole={reviewing ? 'button' : undefined} accessibilityHint={reviewing ? 'Changes the amount' : undefined}
+                style={{ backgroundColor: '#5C3D2E', borderRadius: 16, borderWidth: 1.5, borderColor: reviewing ? '#D4956A' : step === 'note' ? 'rgba(212,149,106,0.15)' : (hasAmount ? '#D4956A' : 'rgba(212,149,106,0.2)'), paddingVertical: 16, paddingHorizontal: 20, marginBottom: reviewing || (hint && step === 'amount') ? 6 : 18, alignItems: 'center' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                   <CurrencyAmount
                     currency={currency}
@@ -159,15 +204,35 @@ const goToNote = () => {
                       fontSize: 42,
                       minWidth: 60,
                       textAlign: 'center',
-                      color: step === 'note' ? 'rgba(232,213,192,0.3)' : (hasAmount ? '#e8d5c0' : 'rgba(232,213,192,0.25)'),
+                      color: reviewing ? '#e8d5c0' : step === 'note' ? 'rgba(232,213,192,0.3)' : (hasAmount ? '#e8d5c0' : 'rgba(232,213,192,0.25)'),
                     }}
                     imageSize={36}
                   />
                 </View>
-              </View>
+              </TouchableOpacity>
+
+              {reviewing && (
+                <Text style={{ fontFamily: 'Jua', fontSize: 12, textAlign: 'center', color: scanned === 'guess' ? '#F5C26B' : 'rgba(232,213,192,0.5)', marginBottom: 14 }}>
+                  {scanned === 'guess' ? 'Best guess from your receipt. Check it, and tap the amount to change it.' : 'From your receipt. Tap the amount to change it.'}
+                </Text>
+              )}
 
               {hint && step === 'amount' && (
                 <Text style={{ fontFamily: 'Jua', fontSize: 12, textAlign: 'center', color: 'rgba(232,213,192,0.35)', marginBottom: 16 }}>{hint}</Text>
+              )}
+
+              {onScan && step === 'amount' && (
+                <View style={{ alignItems: 'center', marginBottom: 14 }}>
+                  <TouchableOpacity onPress={runScan} disabled={scanning} activeOpacity={0.7}
+                    accessibilityRole="button" accessibilityLabel={scanning ? 'Reading the receipt' : 'Scan a receipt'}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 99, backgroundColor: 'rgba(212,149,106,0.1)', borderWidth: 1, borderColor: 'rgba(212,149,106,0.25)' }}>
+                    {scanning ? <ActivityIndicator size="small" color="#D4956A" /> : <Icon name="receipt" size={18} />}
+                    <Text style={{ fontFamily: 'Jua', fontSize: 13, color: '#D4956A' }}>{scanning ? 'Reading the receipt…' : 'Scan a receipt'}</Text>
+                  </TouchableOpacity>
+                  {scanned === 'no-total' && !scanning && (
+                    <Text style={{ fontFamily: 'Jua', fontSize: 12, textAlign: 'center', color: '#F5C26B', marginTop: 8 }}>Couldn’t find the total on it. Type it in.</Text>
+                  )}
+                </View>
               )}
 
               {/* Note step */}
@@ -213,7 +278,7 @@ const goToNote = () => {
                     {NUMPAD_KEYS.map(key => {
                       const isBack = key === '⌫'; const isDot = key === '.';
                       return (
-                        <TouchableOpacity key={key} onPress={() => { haptic.light(); onChangeAmount(applyNumpadKey(amount, key)); }} activeOpacity={0.55}
+                        <TouchableOpacity key={key} onPress={() => { haptic.light(); setScanned(null); onChangeAmount(applyNumpadKey(amount, key)); }} activeOpacity={0.55}
                           style={{ width: '30.5%', paddingVertical: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
                             backgroundColor: isBack ? 'rgba(200,80,60,0.12)' : 'rgba(212,149,106,0.1)',
                             borderWidth: 1, borderColor: isBack ? 'rgba(200,80,60,0.25)' : 'rgba(212,149,106,0.2)' }}>

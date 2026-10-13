@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_AI_CONSENT } from '../storage';
+import { STORAGE_AI_CONSENT, STORAGE_RECEIPT_AI } from '../storage';
 
 /** 'allowed' (18 or older and said yes), 'under18' (Bonbon stays off), or 'no' (not yet, or turned off). */
 export type AiConsent = 'allowed' | 'under18' | 'no';
@@ -63,4 +63,62 @@ export const useAiConsent = (): AiConsent | null => {
     return () => { listeners.delete(setConsent); };
   }, []);
   return consent;
+};
+
+// ── Receipts ─────────────────────────────────────────────────────────────────
+// A scanned receipt's text is more than Bonbon was first allowed to send, so it has its own
+// yes: asked the first time a receipt is scanned with Bonbon's AI on, and changed in
+// Settings. Without it (or with Bonbon off) a receipt is read on the phone alone.
+
+/** What's sent for a receipt, for the prompt and Settings. */
+export const RECEIPT_SHARING_TEXT =
+  'Your iPhone reads the receipt’s text by itself. Bonbon can then pick the shop and category ' +
+  'by sending that text to Google’s Gemini AI, with long numbers like card and phone numbers ' +
+  'blanked out. The photo never leaves your iPhone.';
+
+/** null until it's been answered. */
+let receiptAi: boolean | null | undefined;
+const receiptListeners = new Set<(allowed: boolean | null) => void>();
+
+const readReceiptAi = async (): Promise<boolean | null> => {
+  if (receiptAi === undefined) {
+    try {
+      const saved = await AsyncStorage.getItem(STORAGE_RECEIPT_AI);
+      receiptAi = saved === 'allowed' ? true : saved === 'no' ? false : null;
+    } catch { receiptAi = null; }
+  }
+  return receiptAi;
+};
+
+export const setReceiptAi = async (allowed: boolean): Promise<void> => {
+  receiptAi = allowed;
+  receiptListeners.forEach(l => l(allowed));
+  await AsyncStorage.setItem(STORAGE_RECEIPT_AI, allowed ? 'allowed' : 'no').catch(() => {});
+};
+
+/**
+ * Whether a receipt's text may go to Bonbon. Never without Bonbon's AI on. The first time,
+ * it asks (`ask` false skips the question and answers no for now).
+ */
+export const receiptAiAllowed = async (ask = true): Promise<boolean> => {
+  if (!(await getAiConsent())) return false;
+  const saved = await readReceiptAi();
+  if (saved !== null || !ask) return saved === true;
+  return new Promise(resolve => {
+    Alert.alert('Let Bonbon read your receipts?', `${RECEIPT_SHARING_TEXT} You can change this anytime in Settings › Data & Privacy.`, [
+      { text: 'Let Bonbon help', onPress: () => { setReceiptAi(true).then(() => resolve(true)); } },
+      { text: 'Keep it on my iPhone', style: 'cancel', onPress: () => { setReceiptAi(false).then(() => resolve(false)); } },
+    ]);
+  });
+};
+
+/** The answer so far (null: not asked, or still loading), kept up to date wherever it changes. */
+export const useReceiptAi = (): boolean | null => {
+  const [allowed, setAllowed] = useState<boolean | null>(receiptAi ?? null);
+  useEffect(() => {
+    receiptListeners.add(setAllowed);
+    readReceiptAi().then(setAllowed);
+    return () => { receiptListeners.delete(setAllowed); };
+  }, []);
+  return allowed;
 };

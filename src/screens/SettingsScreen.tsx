@@ -28,7 +28,7 @@ import {
 import { describeBackupContents, describeBackupTime } from '../backupFormat';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../icons';
-import { askAiConsent, setAiConsent, useAiConsent } from '../utils/aiConsent';
+import { RECEIPT_SHARING_TEXT, askAiConsent, setAiConsent, setReceiptAi, useAiConsent, useReceiptAi } from '../utils/aiConsent';
 import { PRIVACY_URL, TERMS_URL } from '../legal';
 
 // ─── Design tokens (match the rest of the app) ────────────────────────────────
@@ -266,6 +266,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     Alert.alert('Turn off Bonbon’s AI?', 'Nothing more will be sent to Google. Bonbon can’t chat or write your Sunday note until you allow it again.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Turn off', style: 'destructive', onPress: () => { setAiConsent('no'); } },
+    ]);
+  };
+  const receiptAi = useReceiptAi();
+  const toggleReceiptAi = () => {
+    if (receiptAi) { setReceiptAi(false); return; }
+    Alert.alert('Let Bonbon read your receipts?', RECEIPT_SHARING_TEXT, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Let Bonbon help', onPress: () => { setReceiptAi(true); } },
     ]);
   };
   const [restoring, setRestoring] = useState(false);
@@ -610,6 +618,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               : 'Off · nothing is sent to Google'}
             rightEl={<Toggle enabled={aiConsent === 'allowed'} onToggle={toggleAi} />}
           />
+          {aiConsent === 'allowed' && (
+            <Row
+              icon="receipt"
+              label="Bonbon reads receipts"
+              sublabel={receiptAi ? 'On · a scanned receipt’s text goes to Google’s Gemini' : 'Off · receipts are read on your iPhone only'}
+              rightEl={<Toggle enabled={receiptAi === true} onToggle={toggleReceiptAi} />}
+            />
+          )}
           <Row
             icon="document"
             label="Terms of Use"

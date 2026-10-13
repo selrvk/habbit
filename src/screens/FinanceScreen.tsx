@@ -17,6 +17,7 @@ import { BillEditor, scheduleWithNext, type BillFormData } from '../components/B
 import { upcomingDueDate, type Bill } from '../bills';
 import { SavingsJars, type Jar } from '../components/SavingsJar';
 import { NetWorthSheet, worthSummary, type Worth } from '../components/NetWorthSheet';
+import { useReceiptScan } from '../hooks/useReceiptScan';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
 
@@ -123,6 +124,7 @@ export const FinanceScreen = ({
   const [billEditor, setBillEditor]   = useState<Bill | 'new' | null>(null);
   const [summaryMonth, setSummaryMonth] = useState<string | null>(null);
   const [worthOpen, setWorthOpen]     = useState(false);
+  const scanReceipt = useReceiptScan();
   const summaryData: MonthSummaryData = useMemo(() => ({
     todayKey, dailyTotals, todayHistory, spentToday, topUps, bills, savings: jar.savings,
     history: completionHistory, budgetPeriod: budget.period, budgetAmount, currency,
@@ -284,6 +286,7 @@ export const FinanceScreen = ({
         withCategory
         notePlaceholder="Add a note (optional)"
         initialNote={spendPrefill.note}
+        onScan={scanReceipt}
         initialCategory={spendPrefill.category}
       />
 

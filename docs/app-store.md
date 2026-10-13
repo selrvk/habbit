@@ -111,9 +111,11 @@ Choose **"Yes, we collect data"**. For every type below, the answers are: used f
 | User Content › Other User Content | No | Messages to Bonbon, sent to Google's Gemini |
 | Contact Info › Name | No | First name, included in Bonbon's summary |
 | Health & Fitness › Fitness | No | Workouts, included in Bonbon's summary |
-| Financial Info › Other Financial Info | No | Spending, included in Bonbon's summary |
+| Financial Info › Other Financial Info | No | Spending, included in Bonbon's summary; the text of a scanned receipt, when the user lets Bonbon read receipts |
 
 Everything else you track stays on the phone and isn't "collected" in Apple's sense.
+
+Receipt photos are read on the phone and never leave it, so **Photos or Videos** stays unticked. The camera is used only for scanning a receipt.
 
 ## Age Rating
 

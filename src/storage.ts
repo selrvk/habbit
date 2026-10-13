@@ -34,6 +34,8 @@ export const STORAGE_WORKOUT_LOG        = '@habbit_rabbit_workout_log';
 export const STORAGE_WEEK_NOTES         = '@habbit_rabbit_week_notes';
 /** Whether Bonbon may send things to Google's AI ('allowed' / 'under18' / 'no'; aiConsent.ts). Not backed up. */
 export const STORAGE_AI_CONSENT         = '@habbit_rabbit_ai_consent';
+/** Whether Bonbon may be sent the text of scanned receipts ('allowed' / 'no'; aiConsent.ts). Not backed up. */
+export const STORAGE_RECEIPT_AI         = '@habbit_rabbit_receipt_ai';
 /** The "What's new" pages last seen (WHATS_NEW_VERSION, WhatsNewSheet.tsx). Not backed up. */
 export const STORAGE_WHATS_NEW          = '@habbit_rabbit_whats_new';
 
@@ -64,6 +66,7 @@ export const ALL_STORAGE_KEYS = [
   STORAGE_SETTINGS,
   STORAGE_ONBOARDED,
   STORAGE_AI_CONSENT,
+  STORAGE_RECEIPT_AI,
   STORAGE_WHATS_NEW,
   STORAGE_QUICK_FOCUS,
 ];

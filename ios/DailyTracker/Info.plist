@@ -46,6 +46,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Habbit uses the camera to scan a receipt, so it can fill in the amount and shop for you. The photo isn't saved or sent anywhere.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>RCTNewArchEnabled</key>

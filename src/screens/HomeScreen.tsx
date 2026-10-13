@@ -12,6 +12,7 @@ import type { ActiveWorkout } from '../workout';
 import type { Commission } from '../types';
 import type { HabitSummary } from '../habitStats';
 import { useFontSize } from '../hooks/useFontSize';
+import { useReceiptScan } from '../hooks/useReceiptScan';
 import { CurrencyAmount } from '../components/CurrencyAmount';
 import { Icon } from '../components/Icon';
 import { PERIOD_LABELS, type BudgetState } from '../budget';
@@ -82,6 +83,7 @@ export const HomeScreen = ({
 }) => {
   const navHeight = useNavHeight();
   const fs = useFontSize();
+  const scanReceipt = useReceiptScan();
   const [showCompleted, setShowCompleted] = useState(false);
   const [addingAmount, setAddingAmount]   = useState('');
   const [modalVisible, setModalVisible]   = useState(false);
@@ -153,7 +155,7 @@ export const HomeScreen = ({
 
   return (
     <>
-      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote withCategory notePlaceholder="Add a note (optional)" />
+      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote withCategory notePlaceholder="Add a note (optional)" onScan={scanReceipt} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
 
         {/* ── Header: greeting + streak ── */}

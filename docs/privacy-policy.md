@@ -50,6 +50,13 @@ Google handles it under the [Gemini API terms](https://ai.google.dev/gemini-api/
 
 Please don't share sensitive information, like passwords or account numbers, with Bonbon.
 
+## Scanning receipts
+
+You can fill in an expense by scanning a receipt. Habbit uses your camera, or a photo you choose, only for this.
+- Your iPhone reads the text on the receipt by itself. The photo isn't saved by Habbit and never leaves your iPhone.
+- If Bonbon's AI is on, Habbit asks once whether Bonbon may also read your receipts. If you agree, the text of the receipt you scanned is sent the same way as a message to Bonbon, so he can pick the shop and category. Long numbers, like card, phone and tax numbers, are blanked out first.
+- You can turn this off in Settings › Data & Privacy. With it off, receipts are read on your iPhone only.
+
 ## Your Habbit account ID
 
 To count your daily Bonbon messages and check whether you have Pro, the app creates an anonymous account on Habbit's server. It has no name, email or phone number, just a random ID kept in your iPhone's Keychain. You can see it in Settings › Subscription. The server stores this ID and how many messages you sent each day.
