@@ -13,8 +13,8 @@ import { PERIOD_LABELS, periodStart, type BudgetPeriod, type BudgetState, type T
 import { UNCATEGORIZED, categoryOf, spendingByCategory } from '../categories';
 import { CategoryGrid } from '../components/CategoryGrid';
 import { CategoryIcon, Icon } from '../components/Icon';
-import { BillEditor, dueLabel, type BillFormData } from '../components/BillEditor';
-import { billScheduleLabel, upcomingDueDate, type Bill } from '../bills';
+import { BillEditor, scheduleWithNext, type BillFormData } from '../components/BillEditor';
+import { upcomingDueDate, type Bill } from '../bills';
 import { LeftoverBanner, SavingsJars, type Jar } from '../components/SavingsJar';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
@@ -529,7 +529,7 @@ export const FinanceScreen = ({
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }} numberOfLines={1}>{bill.name}</Text>
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted }} numberOfLines={1}>
-                    {billScheduleLabel(bill)}{next !== '9999' ? ` · next ${dueLabel(next, todayKey)}` : ''}{!isDaily && !bill.inBudget ? ' · not in budget' : ''}
+                    {scheduleWithNext(bill, next === '9999' ? null : next, todayKey)}{!isDaily && !bill.inBudget ? ' · not in budget' : ''}
                   </Text>
                 </View>
                 <CurrencyAmount currency={currency} amount={fmt(bill.amount)} imageSize={fs(15)}

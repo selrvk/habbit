@@ -1,7 +1,8 @@
 // src/components/BillEditor.tsx
 //
-// Add or edit a recurring bill: name, amount, monthly day or weekday, whether it comes out
-// of the budget, and a due-day reminder. Shown as a page sheet from Finance.
+// Add or edit a recurring bill: name, amount, when it's due (a day of the month, a weekday,
+// or a date each year), whether it comes out of the budget, and when to be reminded. Shown
+// as a page sheet from Finance.
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -11,15 +12,20 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DAY_LABELS } from '../constants';
 import { useFontSize } from '../hooks/useFontSize';
-import { billScheduleLabel, upcomingDueDate, type Bill, type BillRepeat } from '../bills';
+import {
+  billScheduleLabel, daysInMonth, defaultRemindBefore, MONTHS, remindChoices, remindLabel, upcomingDueDate, type Bill, type BillRepeat,
+} from '../bills';
 import { PERIOD_LABELS, type BudgetPeriod } from '../budget';
+import { currencyStr } from '../helpers';
 
 export type BillFormData = Omit<Bill, 'id' | 'startDate' | 'lastLogged'>;
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-const SUGGESTIONS = ['Rent', 'Internet', 'Phone', 'Electricity', 'Water', 'Spotify', 'Netflix'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const SUGGESTIONS = ['Rent', 'Internet', 'Phone', 'Electricity', 'Water', 'Spotify', 'Netflix', 'Insurance'];
+const REPEATS: { key: BillRepeat; label: string }[] = [
+  { key: 'monthly', label: 'Every month' }, { key: 'weekly', label: 'Every week' }, { key: 'yearly', label: 'Every year' },
+];
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', muted: 'rgba(232,213,192,0.5)', border: 'rgba(212,149,106,0.2)' };
 
@@ -49,12 +55,40 @@ const ToggleRow = ({ title, sub, value, onChange }: { title: string; sub: string
   );
 };
 
+/** Days of a month to pick from, seven to a row. */
+const DayGrid = ({ count, day, onPick }: { count: number; day: number; onPick: (d: number) => void }) => {
+  const fs = useFontSize();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      {Array.from({ length: count }, (_, i) => i + 1).map(d => {
+        const active = d === day;
+        return (
+          <View key={d} style={{ width: `${100 / 7}%`, aspectRatio: 1, padding: 2 }}>
+            <TouchableOpacity onPress={() => { haptic(); onPick(d); }} activeOpacity={0.7}
+              accessibilityLabel={`Day ${d}`} accessibilityState={{ selected: active }}
+              style={{ flex: 1, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? C.accent : 'transparent' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.7)' }}>{d}</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
 /** "today", "tomorrow" or "Nov 1". */
 export const dueLabel = (due: string, todayKey: string) => {
   const d = new Date(due + 'T00:00:00');
   const t = new Date(todayKey + 'T00:00:00');
   const days = Math.round((d.getTime() - t.getTime()) / 86_400_000);
   return days === 0 ? 'today' : days === 1 ? 'tomorrow' : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+};
+
+/** "Monthly on the 1st · next Nov 1". A yearly bill's schedule already says its date, so it only adds "today" or "tomorrow". */
+export const scheduleWithNext = (bill: Pick<Bill, 'repeat' | 'day' | 'month'>, next: string | null, todayKey: string) => {
+  const label = next ? dueLabel(next, todayKey) : '';
+  const show  = label !== '' && (bill.repeat !== 'yearly' || label === 'today' || label === 'tomorrow');
+  return `${billScheduleLabel(bill)}${show ? ` · next ${label}` : ''}`;
 };
 
 export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, onSave, onDelete, onClose }: {
@@ -75,8 +109,10 @@ export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, on
   const [amount, setAmount]     = useState('');
   const [repeat, setRepeat]     = useState<BillRepeat>('monthly');
   const [day, setDay]           = useState(1);
+  const [month, setMonth]       = useState(0);
   const [inBudget, setInBudget] = useState(true);
   const [remind, setRemind]     = useState(true);
+  const [remindBefore, setRemindBefore] = useState(0);
 
   // Fill the form each time it opens.
   useEffect(() => {
@@ -85,15 +121,28 @@ export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, on
     setAmount(bill ? String(bill.amount) : '');
     setRepeat(bill?.repeat ?? 'monthly');
     setDay(bill?.day ?? new Date(todayKey + 'T00:00:00').getDate());
+    setMonth(bill?.month ?? new Date(todayKey + 'T00:00:00').getMonth());
     setInBudget(bill?.inBudget ?? true);
     setRemind(bill?.remind ?? true);
+    setRemindBefore(bill?.remindBefore ?? 0);
   }, [visible]);
 
+  /** A new schedule starts from today's date and what suits it: a yearly bill stays out of the budget, with a week's notice. */
   const setRepeatKeepingSense = (r: BillRepeat) => {
+    if (r === repeat) return;
     haptic();
-    setRepeat(r);
     const today = new Date(todayKey + 'T00:00:00');
     setDay(r === 'weekly' ? today.getDay() : today.getDate());
+    setMonth(today.getMonth());
+    if (r === 'yearly' || repeat === 'yearly') { setInBudget(r !== 'yearly'); setRemindBefore(defaultRemindBefore(r)); }
+    else if (!remindChoices(r).includes(remindBefore)) setRemindBefore(defaultRemindBefore(r));
+    setRepeat(r);
+  };
+
+  const pickMonth = (m: number) => {
+    haptic();
+    setMonth(m);
+    setDay(d => Math.min(d, daysInMonth(m)));
   };
 
   const value   = parseFloat(amount || '0');
@@ -101,13 +150,18 @@ export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, on
   const isDaily = budgetPeriod === 'daily';
 
   // Preview the next due date as the new/edited bill would see it.
-  const preview: Bill = { id: '', name, amount: value, repeat, day, inBudget, remind, startDate: bill?.startDate ?? todayKey, lastLogged: bill?.lastLogged };
+  const yearly  = repeat === 'yearly';
+  const preview: Bill = { id: '', name, amount: value, repeat, day, month, inBudget, remind, startDate: bill?.startDate ?? todayKey, lastLogged: bill?.lastLogged };
   const next    = upcomingDueDate(preview, todayKey);
-  const summary = `${billScheduleLabel({ repeat, day })}${next ? ` · next ${dueLabel(next, todayKey)}` : ''}`;
+  const summary = scheduleWithNext({ repeat, day, month }, next, todayKey);
+  const noun    = PERIOD_LABELS[budgetPeriod].noun;
 
   const save = () => {
     if (!canSave) return;
-    onSave({ name: name.trim(), amount: Math.round(value * 100) / 100, repeat, day, inBudget, remind });
+    onSave({
+      name: name.trim(), amount: Math.round(value * 100) / 100, repeat, day, month: yearly ? month : undefined,
+      inBudget, remind, remindBefore: remindBefore > 0 ? remindBefore : undefined,
+    });
   };
 
   return (
@@ -150,30 +204,39 @@ export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, on
           <Label>When is it due?</Label>
           <Card>
             <View style={{ flexDirection: 'row', backgroundColor: 'rgba(212,149,106,0.1)', borderRadius: 12, padding: 3, marginBottom: 14 }}>
-              {(['monthly', 'weekly'] as const).map(r => (
+              {REPEATS.map(({ key: r, label }) => (
                 <TouchableOpacity key={r} onPress={() => setRepeatKeepingSense(r)} activeOpacity={0.8}
                   accessibilityRole="button" accessibilityState={{ selected: repeat === r }}
                   style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: repeat === r ? C.accent : 'transparent' }}>
-                  <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: repeat === r ? '#fff' : 'rgba(232,213,192,0.6)' }}>{r === 'monthly' ? 'Every month' : 'Every week'}</Text>
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: repeat === r ? '#fff' : 'rgba(232,213,192,0.6)' }} numberOfLines={1}>{label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {repeat === 'monthly' ? (
+            {yearly ? (
               <>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
-                    const active = d === day;
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 }}>
+                  {MONTHS.map((m, i) => {
+                    const active = i === month;
                     return (
-                      <View key={d} style={{ width: `${100 / 7}%`, aspectRatio: 1, padding: 2 }}>
-                        <TouchableOpacity onPress={() => { haptic(); setDay(d); }} activeOpacity={0.7}
-                          accessibilityLabel={`Day ${d}`} accessibilityState={{ selected: active }}
-                          style={{ flex: 1, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? C.accent : 'transparent' }}>
-                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.7)' }}>{d}</Text>
+                      <View key={m} style={{ width: `${100 / 6}%`, padding: 3 }}>
+                        <TouchableOpacity onPress={() => pickMonth(i)} activeOpacity={0.7}
+                          accessibilityLabel={['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i]}
+                          accessibilityState={{ selected: active }}
+                          style={{ paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: active ? C.accent : 'rgba(212,149,106,0.05)', borderWidth: 1.5, borderColor: active ? C.accent : 'rgba(212,149,106,0.15)' }}>
+                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m}</Text>
                         </TouchableOpacity>
                       </View>
                     );
                   })}
                 </View>
+                <DayGrid count={daysInMonth(month)} day={day} onPick={setDay} />
+                {month === 1 && day === 29 && (
+                  <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginTop: 6 }}>In other years it's due on Feb 28.</Text>
+                )}
+              </>
+            ) : repeat === 'monthly' ? (
+              <>
+                <DayGrid count={31} day={day} onPick={setDay} />
                 {day > 28 && (
                   <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginTop: 6 }}>In shorter months it's due on the last day.</Text>
                 )}
@@ -202,15 +265,32 @@ export const BillEditor = ({ visible, bill, currency, budgetPeriod, todayKey, on
               </Text>
             ) : (
               <ToggleRow title="Comes out of my budget"
-                sub={`Set aside from your ${PERIOD_LABELS[budgetPeriod].adjective.toLowerCase()} budget up front, so your daily amount already allows for it.`}
+                sub={yearly
+                  ? `Off: it's logged and tracked, and your budget stays as it is. On: all of it is set aside from the ${noun} it's due in.`
+                  : `Set aside from your ${PERIOD_LABELS[budgetPeriod].adjective.toLowerCase()} budget up front, so your daily amount already allows for it.`}
                 value={inBudget} onChange={setInBudget} />
             )}
             <View style={{ height: 1, backgroundColor: 'rgba(212,149,106,0.12)', marginVertical: 14 }} />
-            <ToggleRow title="Remind me on the day" sub="A nudge at 9 AM when it's due." value={remind} onChange={setRemind} />
+            <ToggleRow title="Remind me" sub="A nudge at 9 AM." value={remind} onChange={setRemind} />
+            {remind && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {remindChoices(repeat).map(d => {
+                  const active = d === remindBefore;
+                  return (
+                    <TouchableOpacity key={d} onPress={() => { haptic(); setRemindBefore(d); }} activeOpacity={0.7}
+                      accessibilityRole="button" accessibilityLabel={`Remind me ${remindLabel(d).toLowerCase()}`} accessibilityState={{ selected: active }}
+                      style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 99, backgroundColor: active ? C.accent : 'rgba(212,149,106,0.08)', borderWidth: 1, borderColor: active ? C.accent : 'rgba(212,149,106,0.22)' }}>
+                      <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: active ? '#fff' : 'rgba(232,213,192,0.65)' }}>{remindLabel(d)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </Card>
 
           <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, textAlign: 'center', marginTop: 18 }}>
             {summary}{'\n'}It's logged as Bills spending on the day, automatically.
+            {yearly && value > 0 ? `\nThat's about ${currencyStr(currency, (Math.round(value / 12 * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }))} a month to put aside.` : ''}
           </Text>
 
           {bill && onDelete && (

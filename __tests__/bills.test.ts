@@ -1,4 +1,7 @@
-import { billScheduleLabel, dueDatesBetween, logDueBills, nextDueDate, upcomingDueDate, type Bill } from '../src/bills';
+import {
+  billScheduleLabel, daysInMonth, defaultRemindBefore, dueDatesBetween, logDueBills, nextDueDate, remindChoices, reminderDate, reminderText,
+  remindLabel, upcomingDueDate, type Bill,
+} from '../src/bills';
 import { computeBudget } from '../src/budget';
 
 // 2026-10-01 is a Thursday.
@@ -23,6 +26,60 @@ describe('due dates', () => {
     expect(billScheduleLabel({ repeat: 'monthly', day: 22 })).toBe('Monthly on the 22nd');
     expect(billScheduleLabel({ repeat: 'monthly', day: 11 })).toBe('Monthly on the 11th');
     expect(billScheduleLabel({ repeat: 'weekly', day: 1 })).toBe('Weekly on Monday');
+    expect(billScheduleLabel({ repeat: 'yearly', day: 15, month: 2 })).toBe('Yearly on Mar 15');
+  });
+});
+
+describe('yearly bills', () => {
+  const insurance = (over: Partial<Bill> = {}) => bill({ id: 'ins', name: 'Insurance', amount: 12000, repeat: 'yearly', day: 15, month: 2, inBudget: false, ...over });
+
+  it('are due once a year, on their month and day', () => {
+    expect(dueDatesBetween(insurance({ startDate: '2026-01-01' }), '2026-01-01', '2028-12-31')).toEqual(['2026-03-15', '2027-03-15', '2028-03-15']);
+    expect(nextDueDate(insurance(), '2026-10-13')).toBe('2027-03-15');
+    expect(nextDueDate(insurance(), '2027-03-15')).toBe('2027-03-15');
+    expect(upcomingDueDate(insurance({ lastLogged: '2027-03-15' }), '2027-03-15')).toBe('2028-03-15');
+  });
+
+  it('use Feb 28 when there is no Feb 29, and pick days the month has', () => {
+    const leap = insurance({ day: 29, month: 1 });
+    expect([nextDueDate(leap, '2026-10-13'), nextDueDate(leap, '2027-03-01')]).toEqual(['2027-02-28', '2028-02-29']);
+    expect([daysInMonth(1), daysInMonth(3), daysInMonth(11)]).toEqual([29, 30, 31]);
+  });
+
+  it('are logged once when their day comes, and only count against the budget if asked', () => {
+    const today = { spentToday: 0, date: '2027-03-15', history: [] };
+    const r = logDueBills([insurance({ lastLogged: '2026-03-15' })], today, [], '2027-03-15');
+    expect(r.finance.history.map(e => e.id)).toEqual(['bill-ins-2027-03-15']);
+    expect(r.finance.spentToday).toBe(12000);
+    expect(logDueBills(r.bills, r.finance, r.dailyTotals, '2027-03-16').changed).toBe(false);
+
+    const base = { period: 'monthly' as const, amount: 20000, spentToday: 0, dailyTotals: [], topUps: [] };
+    expect(computeBudget({ ...base, todayKey: '2027-03-01', bills: [insurance()] }).billsSetAside).toBe(0);
+    expect(computeBudget({ ...base, todayKey: '2027-03-01', bills: [insurance({ inBudget: true })] }).billsSetAside).toBe(12000);
+    expect(computeBudget({ ...base, todayKey: '2027-04-01', bills: [insurance({ inBudget: true })] }).billsSetAside).toBe(0);
+  });
+});
+
+describe('reminders', () => {
+  it('come on the day unless the bill asks for notice; a yearly one starts with a week', () => {
+    expect(reminderDate(bill(), '2026-11-01')).toBe('2026-11-01');
+    expect(reminderDate(bill({ remindBefore: 1 }), '2026-11-01')).toBe('2026-10-31');
+    expect(reminderDate(bill({ remindBefore: 7 }), '2027-03-03')).toBe('2027-02-24');
+    expect([defaultRemindBefore('monthly'), defaultRemindBefore('weekly'), defaultRemindBefore('yearly')]).toEqual([0, 0, 7]);
+  });
+
+  it('offer a week ahead except for weekly bills', () => {
+    expect(remindChoices('monthly')).toEqual([0, 1, 3, 7]);
+    expect(remindChoices('yearly')).toEqual([0, 1, 3, 7]);
+    expect(remindChoices('weekly')).toEqual([0, 1, 3]);
+    expect([0, 1, 3, 7].map(remindLabel)).toEqual(['On the day', 'The day before', '3 days before', 'A week before']);
+  });
+
+  it('say when the bill is due', () => {
+    expect(reminderText(bill(), '₱8,000', '2026-11-01')).toBe('Rent (₱8,000) is due today. Habbit logs it for you.');
+    expect(reminderText(bill({ remindBefore: 1 }), '₱8,000', '2026-11-01')).toBe('Rent (₱8,000) is due tomorrow.');
+    expect(reminderText(bill({ remindBefore: 3 }), '₱8,000', '2026-11-01')).toBe('Rent (₱8,000) is due in 3 days, on Nov 1.');
+    expect(reminderText(bill({ remindBefore: 7 }), '₱8,000', '2026-11-01')).toBe('Rent (₱8,000) is due in a week, on Nov 1.');
   });
 });
 

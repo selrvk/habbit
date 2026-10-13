@@ -26,6 +26,14 @@ describe('backup round trip', () => {
     expect(parseBackup(JSON.stringify(file, null, 2))).toEqual(file);
   });
 
+  it('is marked version 2 only when it holds a yearly bill, which older versions would log monthly', () => {
+    expect(file.version).toBe(1);
+    const bills = (repeat: string) => createBackup({ ...stored, [BACKUP_SECTIONS.bills]: JSON.stringify([{ id: 'b', repeat, day: 1 }]) });
+    expect(bills('monthly').version).toBe(1);
+    expect(bills('yearly').version).toBe(2);
+    expect(parseBackup(JSON.stringify(bills('yearly'))).version).toBe(2);
+  });
+
   it('restores stored values and clears sections the backup lacks', () => {
     const { set, remove } = backupToStorage(file);
     expect(JSON.parse(set[BACKUP_SECTIONS.habits])).toEqual(habits);

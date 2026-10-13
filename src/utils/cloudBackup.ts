@@ -10,7 +10,7 @@
 import { Share, TurboModuleRegistry, type TurboModule } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  BACKUP_SECTIONS, BACKUP_VERSION, backupToStorage, createBackup, parseBackup, spendingCsv, summarizeBackup,
+  BACKUP_SECTIONS, backupToStorage, createBackup, parseBackup, spendingCsv, summarizeBackup,
   type BackupFile, type BackupSummary,
 } from '../backupFormat';
 import { STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_NOTIF_VERSION, STORAGE_ONBOARDED, STORAGE_TOPUPS } from '../storage';
@@ -92,7 +92,7 @@ export const backUpToICloud = async (always = false): Promise<'saved' | 'unchang
   const data = JSON.stringify(file.data);
   if (!always && status.ours && data === lastSavedData) return 'unchanged';
 
-  const meta: CloudBackupMeta = { ...summarizeBackup(file), installId: await getInstallId(), version: BACKUP_VERSION };
+  const meta: CloudBackupMeta = { ...summarizeBackup(file), installId: await getInstallId(), version: file.version };
   await Native.save(JSON.stringify(file), meta);
   lastSavedData = data;
   return 'saved';

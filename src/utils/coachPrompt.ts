@@ -99,7 +99,7 @@ export function buildSystemPrompt(ctx: CoachContext): string {
     : '';
   const billsStatus = ctx.bills.length > 0
     ? `Recurring bills (logged automatically on the day; they don't count against the daily allowance): `
-      + ctx.bills.map(b => `${b.name} ${sym}${b.amount} ${b.schedule.toLowerCase()}${b.next ? `, next ${b.next}` : ''}`).join('; ') + '. '
+      + ctx.bills.map(b => `${b.name} ${sym}${b.amount} ${b.schedule.charAt(0).toLowerCase()}${b.schedule.slice(1)}${b.next ? `, next ${b.next}` : ''}`).join('; ') + '. '
     : '';
 
   const lastMonthStatus = ctx.lastMonth

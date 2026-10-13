@@ -1,47 +1,69 @@
 // src/bills.ts
 //
-// Recurring bills (rent, subscriptions). Each due date is logged as spending in the Bills
-// category automatically, backdated to its day if the app wasn't opened then. Bills that
-// count toward a weekly or monthly budget are set aside from it up front (computeBudget),
-// so the daily allowance already allows for them and their entries aren't counted again.
+// Recurring bills (rent, subscriptions, a yearly insurance). Each due date is logged as
+// spending in the Bills category automatically, backdated to its day if the app wasn't
+// opened then. Bills that count toward a weekly or monthly budget are set aside from it up
+// front (computeBudget), so the daily allowance already allows for them and their entries
+// aren't counted again.
 
 import type { DailyTotal, FinanceData, SpendingEntry } from './types';
-import { addDaysToKey, parseDateKey } from './helpers';
+import { addDaysToKey, parseDateKey, toDateKey } from './helpers';
 import { addEntryOnDay } from './dayRollover';
 
-export type BillRepeat = 'monthly' | 'weekly';
+export type BillRepeat = 'monthly' | 'weekly' | 'yearly';
 
 export type Bill = {
   id: string;
   name: string;
   amount: number;
   repeat: BillRepeat;
-  /** Monthly: day of the month (1–31; short months use their last day). Weekly: 0 = Sunday. */
+  /** Monthly and yearly: day of the month (1–31; short months use their last day). Weekly: 0 = Sunday. */
   day: number;
+  /** Yearly: the month, 0 = January. */
+  month?: number;
   /** Set aside from weekly/monthly budgets. Daily budgets only track bills. */
   inBudget: boolean;
-  /** A reminder on the due day. */
+  /** A reminder at 9 AM. */
   remind: boolean;
+  /** How many days before the due day the reminder comes. Not set: on the day. */
+  remindBefore?: number;
   /** The first day it can be due (the day it was added). */
   startDate: string;
   /** The last due date logged as spending. */
   lastLogged?: string;
 };
 
-// Due dates are found by checking each day, so cap how far a scan goes.
+// Weekly and monthly due dates are found by checking each day, so cap how far a scan goes.
+// A yearly bill's are worked out a year at a time.
 const MAX_SCAN_DAYS = 400;
+const MAX_SCAN_YEARS = 50;
 
 export const isDueOn = (bill: Bill, dayKey: string): boolean => {
   const d = parseDateKey(dayKey);
   if (bill.repeat === 'weekly') return d.getDay() === bill.day;
+  if (bill.repeat === 'yearly' && d.getMonth() !== (bill.month ?? 0)) return false;
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   return d.getDate() === Math.min(bill.day, lastDay);
+};
+
+/** A yearly bill's due date in one year. */
+const yearlyDueIn = (bill: Bill, year: number): string => {
+  const month = bill.month ?? 0;
+  return toDateKey(new Date(year, month, Math.min(bill.day, new Date(year, month + 1, 0).getDate())));
 };
 
 /** Due dates from `fromKey` to `toKey` inclusive, never before the bill started. */
 export const dueDatesBetween = (bill: Bill, fromKey: string, toKey: string): string[] => {
   const dates: string[] = [];
   let key = fromKey < bill.startDate ? bill.startDate : fromKey;
+  if (bill.repeat === 'yearly') {
+    const first = parseDateKey(key).getFullYear();
+    for (let year = first; year <= parseDateKey(toKey).getFullYear() && year < first + MAX_SCAN_YEARS; year++) {
+      const due = yearlyDueIn(bill, year);
+      if (due >= key && due <= toKey) dates.push(due);
+    }
+    return dates;
+  }
   for (let i = 0; key <= toKey && i < MAX_SCAN_DAYS; i++, key = addDaysToKey(key, 1)) {
     if (isDueOn(bill, key)) dates.push(key);
   }
@@ -100,7 +122,38 @@ const ORDINAL = (n: number) => {
   return `${n}${s}`;
 };
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "Monthly on the 1st", "Weekly on Monday". */
-export const billScheduleLabel = (bill: Pick<Bill, 'repeat' | 'day'>) =>
-  bill.repeat === 'monthly' ? `Monthly on the ${ORDINAL(bill.day)}` : `Weekly on ${WEEKDAYS[bill.day]}`;
+/** "Monthly on the 1st", "Weekly on Monday", "Yearly on Mar 15". */
+export const billScheduleLabel = (bill: Pick<Bill, 'repeat' | 'day' | 'month'>) =>
+  bill.repeat === 'yearly' ? `Yearly on ${MONTHS[bill.month ?? 0]} ${bill.day}`
+    : bill.repeat === 'monthly' ? `Monthly on the ${ORDINAL(bill.day)}` : `Weekly on ${WEEKDAYS[bill.day]}`;
+
+/** The days a month can have, for picking a yearly bill's day (February: 29, due on the 28th in other years). */
+export const daysInMonth = (month: number): number => [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month] ?? 31;
+
+// ── Reminders ────────────────────────────────────────────────────────────────
+
+/** How far ahead a reminder can come, in days: on the day, the day before, 3 days, a week. */
+const REMIND_BEFORE = [0, 1, 3, 7];
+
+/** The choices for a bill. A weekly one is never reminded a week ahead: that's its last due day. */
+export const remindChoices = (repeat: BillRepeat): number[] => REMIND_BEFORE.filter(d => repeat !== 'weekly' || d < 7);
+
+/** A new bill's reminder: a week's notice for a yearly one, on the day for the rest. */
+export const defaultRemindBefore = (repeat: BillRepeat): number => (repeat === 'yearly' ? 7 : 0);
+
+export const remindLabel = (days: number): string =>
+  days === 0 ? 'On the day' : days === 1 ? 'The day before' : days === 7 ? 'A week before' : `${days} days before`;
+
+/** The day a due date's reminder comes. */
+export const reminderDate = (bill: Pick<Bill, 'remindBefore'>, due: string): string => addDaysToKey(due, -(bill.remindBefore ?? 0));
+
+/** What the reminder says: "Rent (₱8,000) is due tomorrow." `amount` comes formatted. */
+export const reminderText = (bill: Pick<Bill, 'name' | 'remindBefore'>, amount: string, due: string): string => {
+  const before = bill.remindBefore ?? 0;
+  const d      = parseDateKey(due);
+  const on     = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  const when   = before === 0 ? 'today. Habbit logs it for you' : before === 1 ? 'tomorrow' : before === 7 ? `in a week, on ${on}` : `in ${before} days, on ${on}`;
+  return `${bill.name} (${amount}) is due ${when}.`;
+};

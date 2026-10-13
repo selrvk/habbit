@@ -13,7 +13,15 @@ import type { DailyTotal, FinanceData } from './types';
 import type { TopUp } from './budget';
 import { categoryOf } from './categories';
 
-export const BACKUP_VERSION = 1;
+/** The newest backup this version reads. */
+export const BACKUP_VERSION = 2;
+
+/**
+ * The version a backup has to be read by: 2 once it holds a yearly bill, which version 1
+ * would log every month. Anything else is still written as 1, so an older app can restore it.
+ */
+const versionNeeded = (data: BackupFile['data']): number =>
+  Array.isArray(data.bills) && data.bills.some(b => b?.repeat === 'yearly') ? 2 : 1;
 
 /** Section name in the file → AsyncStorage key. */
 export const BACKUP_SECTIONS = {
@@ -77,7 +85,7 @@ export const createBackup = (stored: Record<string, string | null>, now = new Da
     if (!raw) continue;
     try { data[section] = JSON.parse(raw); } catch {}
   }
-  return { app: 'habbit', version: BACKUP_VERSION, createdAt: now.toISOString(), data };
+  return { app: 'habbit', version: versionNeeded(data), createdAt: now.toISOString(), data };
 };
 
 /** Parses and checks a backup file's text. Throws BackupError with a user-facing message. */

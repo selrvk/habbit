@@ -2,7 +2,7 @@
 
 import { Platform } from 'react-native';
 import { addDaysToKey, computeSplitTimes, currencyStr, getTodayKey, hasSingleReminder, isScheduledForDay, parseDateKey } from './helpers';
-import { nextDueDate, type Bill } from './bills';
+import { nextDueDate, reminderDate, reminderText, type Bill } from './bills';
 import notifee, { TriggerType, RepeatFrequency, AndroidImportance } from '@notifee/react-native';
 import type { Commission, ReminderTime } from './types';
 import { transitionText, upcomingTransitions, type FocusSession } from './focus';
@@ -226,8 +226,9 @@ export const scheduleWeeklyRecap = async (enabled: boolean) => {
 };
 
 // ── Bills ────────────────────────────────────────────────────────────────────
-// One-off reminders at 9 AM on each bill's next two due dates, re-planned whenever the
-// app loads or a bill changes (iOS can't repeat monthly).
+// One-off reminders at 9 AM for each bill's next two due dates (the next one, for a yearly
+// bill), on the day or as far ahead as the bill asks. Re-planned whenever the app loads or
+// a bill changes (iOS can't repeat monthly).
 
 const BILL_REMINDER_HOUR = 9;
 
@@ -238,17 +239,19 @@ export const scheduleBillReminders = async (bills: Bill[], currency: string) => 
 
     for (const bill of bills) {
       if (!bill.remind) continue;
+      const planned = bill.repeat === 'yearly' ? 1 : 2;
       let from = getTodayKey();
-      for (let n = 0; n < 2; ) {
+      // A due date whose reminder time has passed is skipped, so look a few ahead.
+      for (let n = 0, tries = 0; n < planned && tries < 6; tries++) {
         const due = nextDueDate(bill, from);
         if (!due) break;
         from = addDaysToKey(due, 1);
-        const at = parseDateKey(due); at.setHours(BILL_REMINDER_HOUR, 0, 0, 0);
+        const at = parseDateKey(reminderDate(bill, due)); at.setHours(BILL_REMINDER_HOUR, 0, 0, 0);
         if (at.getTime() <= Date.now()) continue;
         const amount = currencyStr(currency, bill.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }));
         await notifee.createTriggerNotification(
           {
-            id: `bill-${bill.id}-${n}`, title: 'Habbit 🧾', body: `${bill.name} (${amount}) is due today. Habbit logs it for you.`,
+            id: `bill-${bill.id}-${n}`, title: 'Habbit 🧾', body: reminderText(bill, amount, due),
             android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
           },
           { type: TriggerType.TIMESTAMP, timestamp: at.getTime() },

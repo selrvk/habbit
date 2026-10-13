@@ -1,5 +1,6 @@
 import notifee from '@notifee/react-native';
-import { scheduleHabitNotifs } from '../src/notifications';
+import { scheduleBillReminders, scheduleHabitNotifs } from '../src/notifications';
+import type { Bill } from '../src/bills';
 import type { Commission } from '../src/types';
 
 jest.mock('@notifee/react-native', () => ({
@@ -65,5 +66,40 @@ describe('scheduleHabitNotifs', () => {
     jest.clearAllMocks();
     await scheduleHabitNotifs(habit({ skipped: true, days: [1, 3, 5] })); // Mon/Wed/Fri
     expect(created().map(p => p.at.getDate())).toEqual([2, 5, 7]); // Fri 2, Mon 5, Wed 7
+  });
+});
+
+describe('scheduleBillReminders', () => {
+  const bill = (over: Partial<Bill> = {}): Bill => ({
+    id: 'rent', name: 'Rent', amount: 8000, repeat: 'monthly', day: 5, inBudget: true, remind: true, startDate: '2026-09-01', ...over,
+  });
+  const bodies = () => mock.createTriggerNotification.mock.calls.map(([n, t]) => ({ id: n.id, body: n.body, at: new Date(t.timestamp) }));
+
+  it('reminds at 9 AM on the next two due days, replacing the old ones', async () => {
+    mock.getTriggerNotificationIds.mockResolvedValueOnce(['bill-rent-0', 'hr-h1-daily-0']);
+    await scheduleBillReminders([bill(), bill({ id: 'off', remind: false })], '₱');
+    expect(mock.cancelTriggerNotifications).toHaveBeenCalledWith(['bill-rent-0']);
+    expect(bodies()).toEqual([
+      { id: 'bill-rent-0', body: 'Rent (₱8,000) is due today. Habbit logs it for you.', at: new Date(2026, 9, 5, 9, 0) },
+      { id: 'bill-rent-1', body: 'Rent (₱8,000) is due today. Habbit logs it for you.', at: new Date(2026, 10, 5, 9, 0) },
+    ]);
+  });
+
+  it('comes as far ahead as the bill asks, skipping a due date whose reminder time has passed', async () => {
+    await scheduleBillReminders([bill({ remindBefore: 1 })], '₱');
+    expect(bodies().map(b => [b.body, b.at])).toEqual([
+      ['Rent (₱8,000) is due tomorrow.', new Date(2026, 9, 4, 9, 0)],
+      ['Rent (₱8,000) is due tomorrow.', new Date(2026, 10, 4, 9, 0)],
+    ]);
+    jest.clearAllMocks();
+    // Due on the 5th with a week's notice: October's reminder was due on Sep 28.
+    await scheduleBillReminders([bill({ remindBefore: 7 })], '₱');
+    expect(bodies().map(b => b.at)).toEqual([new Date(2026, 9, 29, 9, 0), new Date(2026, 10, 28, 9, 0)]);
+    expect(bodies()[0].body).toBe('Rent (₱8,000) is due in a week, on Nov 5.');
+  });
+
+  it('plans one reminder for a yearly bill', async () => {
+    await scheduleBillReminders([bill({ id: 'ins', name: 'Insurance', amount: 12000, repeat: 'yearly', day: 15, month: 2, remindBefore: 7 })], '₱');
+    expect(bodies()).toEqual([{ id: 'bill-ins-0', body: 'Insurance (₱12,000) is due in a week, on Mar 15.', at: new Date(2027, 2, 8, 9, 0) }]);
   });
 });
