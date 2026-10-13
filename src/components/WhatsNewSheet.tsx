@@ -31,7 +31,7 @@ const PAGES: Page[] = [
     ] },
   { icons: ['stopwatch', 'dumbbell'], title: 'Focus and workouts',
     lines: [
-      'Time a Habbit in focus blocks, with the timer on your Lock Screen',
+      'Time a Habbit in focus rounds, with the timer on your Lock Screen',
       'Log workouts: routines that take turns, last time’s weights and a rest timer between sets',
     ],
     hint: 'Turn them on when you add or edit a Habbit.' },

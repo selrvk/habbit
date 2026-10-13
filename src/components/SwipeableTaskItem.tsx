@@ -247,12 +247,12 @@ export const SwipeableTaskItem = ({
   })();
 
   const showMeta = (item.days && item.days.length > 0 && item.days.length < 7) || reminderLabel || streak > 0 || !!week || !!focus?.running || !!workout?.running;
-  // ▶︎ starts a focus block or a workout; it stays while one runs for this habit, to get back to it.
+  // ▶︎ starts the focus timer or a workout; it stays while one runs for this habit, to get back to it.
   const play     = focus ? { running: !!focus.running, onPress: focus.onPress } : workout;
   const showPlay = !!play && (play.running || (canComplete && !weekMet));
   const playIcon: IconName | null = !play?.running ? null : focus ? 'stopwatch' : 'dumbbell';
   const playA11y = focus
-    ? (play?.running ? `Show the ${item.label} focus timer` : `Start a focus block for ${item.label}`)
+    ? (play?.running ? `Show the ${item.label} focus timer` : `Start the focus timer for ${item.label}`)
     : (play?.running ? `Back to your ${item.label} workout` : `Start a ${item.label} workout`);
 
   return (

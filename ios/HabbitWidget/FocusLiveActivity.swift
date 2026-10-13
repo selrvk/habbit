@@ -1,8 +1,11 @@
 // FocusLiveActivity.swift
 //
 // The focus timer's Live Activity (FocusActivity.swift): the countdown on the Lock Screen and
-// in the Dynamic Island, with a pause button. The countdowns run by themselves; once a block
-// runs out (the activity goes stale) it shows the break that follows, until the app catches up.
+// in the Dynamic Island, with a pause button. The countdowns run by themselves. The session
+// moves from round to break to round on its own, but the activity only changes when the app
+// updates it or when it goes stale, so it can follow one switch without the app: once the
+// phase it was given runs out, it shows the one that follows. After that it waits at 0:00
+// until the app next runs (opening it, or tapping one of the notifications each switch sends).
 
 import ActivityKit
 import AppIntents
@@ -22,29 +25,37 @@ private struct FocusDisplay {
   let canPause: Bool
   let paused: Bool
 
+  /// When the whole session wraps up, while more than the phase shown is still to come.
+  let sessionEnds: Date?
+
   init(_ context: ActivityViewContext<FocusActivityAttributes>) {
     let s = context.state
-    let label = context.attributes.label
-    let of = s.blocks > 1 ? " \(s.block) of \(s.blocks)" : ""
+    title = context.attributes.label
     paused = s.paused
-    let finished = s.done || (context.isStale && s.phase == "focus" && s.block >= s.blocks)
-    short = finished ? "Done 🎉" : s.paused ? "Paused" : s.phase == "break" || context.isStale ? "Break" : s.blocks > 1 ? "Block \(s.block)/\(s.blocks)" : "Focus"
-    if finished {
-      kicker = "All done 🎉"; title = label; range = nil; fixedLeft = nil; color = .habbitGreen; canPause = false
-    } else if s.phase == "focus" && !context.isStale {
-      kicker = s.paused ? "Paused" : s.blocks > 1 ? "Block\(of)" : "Focus"
-      title = label; range = s.paused ? nil : s.startedAt...s.endsAt; fixedLeft = s.pausedLeft
-      color = .habbitAccent; canPause = true
-    } else if s.phase == "focus", let breakEnds = s.breakEndsAt {
-      kicker = "Break · \(s.block) of \(s.blocks) done"; title = label; range = s.endsAt...breakEnds; fixedLeft = nil
-      color = .habbitGreen; canPause = false
-    } else if s.phase == "break" && !context.isStale {
-      kicker = "Break · \(s.block) of \(s.blocks) done"; title = label; range = s.startedAt...s.endsAt; fixedLeft = nil
-      color = .habbitGreen; canPause = false
-    } else {
-      kicker = s.phase == "break" ? "Break’s over" : "Block\(of) done"; title = "Ready for the next block?"
-      range = nil; fixedLeft = 0; color = .habbitGreen; canPause = false
+    // Stale: the phase the app last gave has run out, so show the one after it.
+    let shown: FocusActivityAttributes.ContentState? = context.isStale ? s.following : s
+    guard !s.done, let p = shown else {
+      kicker = "All done 🎉"; short = "Done 🎉"; range = nil; fixedLeft = nil; color = .habbitGreen; canPause = false
+      sessionEnds = nil
+      return
     }
+    let round = p.blocks > 1 ? "Round \(p.block) of \(p.blocks)" : "Focus"
+    if p.phase == "focus" {
+      kicker = p.paused ? "Paused" : round
+      short = p.paused ? "Paused" : p.blocks > 1 ? "Round \(p.block)/\(p.blocks)" : "Focus"
+      range = p.paused ? nil : p.startedAt...p.endsAt
+      fixedLeft = p.pausedLeft
+      color = .habbitAccent
+    } else {
+      kicker = "\(p.onLongBreak ? "Long break" : "Break") · \(p.block) of \(p.blocks) done"
+      short = "Break"
+      range = p.startedAt...p.endsAt
+      fixedLeft = nil
+      color = .habbitGreen
+    }
+    // The button works on the phase the app knows about, so not once the activity has moved on.
+    canPause = p.phase == "focus" && !context.isStale
+    sessionEnds = !p.paused && p.following != nil ? p.sessionEndsAt : nil
   }
 }
 
@@ -123,6 +134,12 @@ private struct FocusLockScreen: View {
         if d.canPause { PauseButton(display: d) }
       }
       ProgressBar(display: d, state: context.state)
+      if let ends = d.sessionEnds {
+        Text("All rounds wrap up at \(ends.formatted(date: .omitted, time: .shortened))")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(Color.habbitCream.opacity(0.55))
+          .lineLimit(1)
+      }
     }
     .padding(16)
   }

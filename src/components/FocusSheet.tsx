@@ -1,8 +1,9 @@
 // src/components/FocusSheet.tsx
 //
-// The focus timer, full screen: a ring of ticks counting down the block (or the break after
-// it), with pause and stop. Closing it doesn't stop the timer: it carries on, with a
-// notification when the block ends. The app counts the block (App.tsx, focus.ts).
+// The focus timer, full screen: a ring of ticks counting down the round (or the break after
+// it), with pause and stop. It moves from round to break to round by itself. Closing it
+// doesn't stop the timer: it carries on, with a notification at each switch. The app counts
+// the rounds (App.tsx, focus.ts).
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, Image, Alert } from 'react-native';
@@ -10,7 +11,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { avatarImage } from '../helpers';
-import { clock, durationLabel, progress, timeLeft, type FocusSession } from '../focus';
+import { breakMinutesAfter, clock, durationLabel, onLongBreak, progress, sessionEndsAt, timeLeft, type FocusSession } from '../focus';
 import { Icon } from './Icon';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', muted: 'rgba(232,213,192,0.5)', track: 'rgba(212,149,106,0.16)' };
@@ -20,6 +21,9 @@ const haptic = {
   light:   () => ReactNativeHapticFeedback.trigger('impactLight', HAPTIC_OPTIONS),
   success: () => ReactNativeHapticFeedback.trigger('notificationSuccess', HAPTIC_OPTIONS),
 };
+
+/** "3:40 PM". */
+const endTime = (ms: number) => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
 const TICKS = 60;
 const RING  = 270;
@@ -56,9 +60,9 @@ export type FocusDone = { label: string; minutes: number; blocks: number };
 export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMinutes, onPause, onResume, onStop, onNext, onElapsed, onClose }: {
   visible: boolean;
   session: FocusSession | null;
-  /** How many of the day's blocks the habit has had (focus or tapped), for the break. */
+  /** How many of the day's rounds the habit has had (timed or tapped), for the break. */
   doneSoFar: number;
-  /** Shown once the day's last block is done. */
+  /** Shown once the day's last round is done. */
   done: FocusDone | null;
   avatar: string;
   /** Minutes focused today, all habits. */
@@ -66,9 +70,9 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
-  /** Starts the next block (after a break, or skipping it). */
+  /** Skips the break: the next round starts now. */
   onNext: () => void;
-  /** The block's countdown reached zero with the sheet open. */
+  /** A round's or break's countdown reached zero with the sheet open. */
   onElapsed: () => void;
   onClose: () => void;
 }) => {
@@ -83,33 +87,37 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
     setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
-  }, [ticking, session?.id, session?.phase]);
+  }, [ticking, session?.id, session?.phase, session?.block]);
 
-  // Tell the app once when a block runs out while it's on screen.
+  // Tell the app once when a round or a break runs out while it's on screen: it moves on.
   const elapsedFor = useRef<string | null>(null);
   const left = session ? timeLeft(session, now) : 0;
   useEffect(() => {
-    if (!visible || !session || session.phase !== 'focus' || paused || left > 0) return;
-    if (elapsedFor.current === session.id) return;
-    elapsedFor.current = session.id;
+    if (!visible || !session || paused || left > 0) return;
+    const phase = `${session.id}-${session.block}-${session.phase}`;
+    if (elapsedFor.current === phase) return;
+    elapsedFor.current = phase;
     haptic.success();
     onElapsed();
   }, [visible, session, paused, left, onElapsed]);
 
-  const onBreak   = session?.phase === 'break';
-  const breakOver = onBreak && left === 0;
+  const onBreak = session?.phase === 'break';
+  const rounds  = session?.blocks ?? 1;
+  // After this round: a break, the next round straight away, or nothing more.
+  const restNext = session && !onBreak ? breakMinutesAfter(session) : 0;
+  const lastRound = !!session && session.block >= rounds;
 
   const confirmStop = () => {
     if (!session) return;
     haptic.light();
     const focused = Math.floor((session.minutes * 60_000 - left) / 60_000);
-    Alert.alert('Stop this block?', `It won’t count${focused > 0 ? `, though you’ve focused ${durationLabel(focused)}` : ''}. You can start a fresh one any time.`, [
+    Alert.alert('Stop this round?', `It won’t count${focused > 0 ? `, though you’ve focused ${durationLabel(focused)}` : ''}.${session.block > 1 ? ' The rounds you’ve finished stay.' : ''} You can start again any time.`, [
       { text: 'Keep going', style: 'cancel' },
       { text: 'Stop', style: 'destructive', onPress: onStop },
     ]);
   };
 
-  const title = done ? 'All done for today!' : !session ? '' : onBreak ? (breakOver ? 'Break’s over' : 'Take a breather') : paused ? 'Paused' : 'Focus';
+  const title = done ? 'All done for today!' : !session ? '' : paused ? 'Paused' : onBreak ? (onLongBreak(session) ? 'Long break' : 'Take a breather') : 'Focus';
   const ringColor = onBreak ? C.green : C.accent;
 
   return (
@@ -135,7 +143,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
           </Text>
           {session && session.blocks > 1 && (
             <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.muted, marginTop: 4 }}>
-              {onBreak ? `${Math.min(doneSoFar, session.blocks)} of ${session.blocks} done` : `Block ${session.block} of ${session.blocks}`}
+              {onBreak ? `${Math.min(doneSoFar, session.blocks)} of ${session.blocks} rounds done` : `Round ${session.block} of ${session.blocks}`}
             </Text>
           )}
 
@@ -153,7 +161,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
               )}
               <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, marginTop: 2 }}>
                 {done ? `${done.blocks > 1 ? `${done.blocks} of ${done.blocks} done · ` : ''}${durationLabel(done.minutes)} focused`
-                  : onBreak ? (breakOver ? 'Ready when you are' : 'until the next block') : paused ? 'paused' : 'left'}
+                  : paused ? 'paused' : onBreak ? `until round ${session!.block + 1}` : 'left'}
               </Text>
             </View>
           </View>
@@ -166,7 +174,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
         ) : !session ? null : onBreak ? (
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button label="Done for now" onPress={() => { haptic.light(); onStop(); }} />
-            <Button label={doneSoFar >= session.blocks ? 'Finish' : breakOver ? `Start block ${doneSoFar + 1}` : 'Skip break'} primary onPress={() => { haptic.success(); onNext(); }} />
+            <Button label={doneSoFar >= session.blocks ? 'Finish' : 'Skip break'} primary onPress={() => { haptic.success(); onNext(); }} />
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -176,7 +184,9 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
         )}
         {session && !done && (
           <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, textAlign: 'center', marginTop: 12 }}>
-            {onBreak ? 'Stretch, sip some water, look away from the screen.' : 'You can close this. The timer keeps going and lets you know when it’s done.'}
+            {onBreak ? `Stretch, sip some water, look away from the screen. Round ${session.block + 1} starts by itself.`
+              : lastRound ? 'You can close this. The timer keeps going and lets you know when it’s done.'
+              : `You can close this. ${restNext > 0 ? `A ${restNext}-minute break` : `Round ${session.block + 1}`} follows by itself, and it all wraps up around ${endTime(sessionEndsAt(session, now))}.`}
           </Text>
         )}
       </View>

@@ -12,11 +12,11 @@ export function focusStatus(f: FocusOverview): string {
   const r = f.running;
   if (r) {
     const time  = new Date(f.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    const block = r.blocks > 1 ? `block ${r.block} of ${r.blocks}` : 'a block';
+    const block = r.blocks > 1 ? `round ${r.block} of ${r.blocks}` : 'a round';
     lines.push(`Running as of ${time}: ${r.label}, `
       + (r.phase === 'focus'
         ? `${block} ${r.paused ? `paused with ${r.minutesLeft} min left` : r.minutesLeft > 0 ? `with ${r.minutesLeft} min left` : 'just finished'}.`
-        : `on a break after ${block}, ${r.minutesLeft > 0 ? `${r.minutesLeft} min left` : 'ready for the next block'}.`));
+        : `on a break after ${block}, ${r.minutesLeft > 0 ? `${r.minutesLeft} min left` : 'the next round is about to start'}.`));
   }
   lines.push(`Focused today: ${f.todayMinutes > 0 ? durationLabel(f.todayMinutes) : 'nothing yet'}.`);
   lines.push(f.weekMinutes > 0
@@ -25,7 +25,7 @@ export function focusStatus(f: FocusOverview): string {
       + `; the 7 days before: ${f.prevWeekMinutes > 0 ? `${durationLabel(f.prevWeekMinutes)}, so ${f.weekMinutes >= f.prevWeekMinutes ? 'up' : 'down'} ${Math.round(Math.abs(f.weekMinutes - f.prevWeekMinutes) / f.prevWeekMinutes * 100)}%` : 'none'}.`
     : 'Nothing focused in the last 7 days.');
   if (f.timed.length > 0) {
-    lines.push(`Habits with a focus timer: ${f.timed.map(t => `${t.label} (${t.minutes}-min blocks${t.breakMinutes > 0 ? `, ${t.breakMinutes}-min breaks` : ''})`).join(', ')}.`);
+    lines.push(`Habits with a focus timer: ${f.timed.map(t => `${t.label} (${t.rounds > 1 ? `${t.rounds} rounds of ${t.minutes} min` : `one ${t.minutes}-min round`}${t.rounds > 1 && t.breakMinutes > 0 ? `, ${t.breakMinutes}-min breaks` : ''})`).join(', ')}.`);
   }
   return lines.join('\n');
 }
@@ -163,7 +163,7 @@ When the user asks a vague question like "how did my week go?", lead with the mo
 When the user asks what they spent money on, use the SPENDING ENTRIES section below — it contains the actual items and notes.
 For how many habits or days were done, use the numbers in the HABITS section exactly as written; don't count them again from the LAST 7 DAYS list.
 Today isn't over: never call today missed or unfinished, and don't count it against the user's week.
-Habits can be timed with the focus timer (set up when editing a habit, started with the ▶︎ on it): blocks of focused time, each finished block counting as one check-off. The FOCUS TIMER section has the user's numbers; it's a good thing to suggest for habits like studying or reading.
+Habits can be timed with the focus timer, a Pomodoro (set up when editing a habit, started with the ▶︎ on it): rounds of focused time with short breaks between, running one after another by themselves, each finished round counting as one check-off. The FOCUS TIMER section has the user's numbers; it's a good thing to suggest for habits like studying or reading.
 Habits can also log workouts: routines (like Push, Pull, Legs) that take turns, with sets × reps and weights filled in from last time, a rest timer between sets, and finishing one checks the habit off. The WORKOUTS section has the user's routines, recent workouts and lifts. Keep training advice general and safe: consistency, rest days, small steady weight increases; never tell them to push through pain, and suggest a professional for injuries or health questions.
 If no note was recorded for an entry, say so honestly rather than guessing.
 If the user asks something completely unrelated to habits or finances, gently redirect them.

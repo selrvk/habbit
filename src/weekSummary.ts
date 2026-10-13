@@ -266,7 +266,7 @@ export const weekTip = (s: WeekSummary, commissions: Commission[]): string => {
   if (m.prevSpent && m.spent < m.prevSpent * 0.85) return `You spent ${pct((m.prevSpent - m.spent) / m.prevSpent)} less than last week. Nice!`;
   const f = s.focus;
   if (f && f.prevMinutes > 0 && f.minutes >= f.prevMinutes * 1.25) {
-    return `You focused ${pct((f.minutes - f.prevMinutes) / f.prevMinutes)} longer than last week. Keep those blocks coming 🥕`;
+    return `You focused ${pct((f.minutes - f.prevMinutes) / f.prevMinutes)} longer than last week. Keep those rounds coming 🥕`;
   }
   return 'A steady week. Pick one Habbit to nail next week.';
 };

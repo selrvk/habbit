@@ -1,32 +1,47 @@
 // src/focus.ts
 //
-// The focus timer: a habit can have focus blocks ("Study 4×" → four 25-minute blocks, with a
-// short break between). Each finished block counts as one check-off, applied as an inbox
-// event (inbox.ts) so a block that ends while the app is closed still counts, on the day it
-// ended. One session runs at a time; it's stored, so it carries on across app restarts.
-// Finished blocks also log their minutes, for "focused this week" totals.
+// The focus timer, a Pomodoro: a habit can be timed in rounds ("Study", 4 rounds → four
+// 25-minute rounds with a short break between, and a longer one after every fourth). Once
+// started it runs on its own, round to break to round, until the last round or until it's
+// stopped. The rounds are the habit's count for the day: each finished round is one
+// check-off, applied as an inbox event (inbox.ts) so a round that ends while the app is
+// closed still counts, on the day it ended. Stopping keeps the rounds done; starting again
+// that day carries on from the next. One session runs at a time; it's stored, so it carries
+// on across app restarts. Finished rounds also log their minutes, for "focused this week".
+// ("block" in names here is a round; stored sessions keep the older field names.)
 
 import type { Commission } from './types';
 import type { InboxEvent } from './inbox';
 import { addDaysToKey, toDateKey } from './helpers';
 
-export type FocusSettings = { minutes: number; breakMinutes: number };
+export type FocusSettings = {
+  minutes: number;
+  breakMinutes: number;
+  /** A longer break after every fourth round (0 or missing: the usual break). */
+  longBreakMinutes?: number;
+};
 
 export const FOCUS_LENGTHS = [10, 15, 20, 25, 45, 60];
 export const BREAK_LENGTHS = [0, 5, 10, 15];
+export const LONG_BREAK_LENGTHS = [0, 15, 20, 30];
+/** The long break comes after every this many rounds. */
+export const LONG_BREAK_EVERY = 4;
+/** Rounds a new focus habit starts with. */
+export const DEFAULT_ROUNDS = 4;
 export const DEFAULT_FOCUS: FocusSettings = { minutes: 25, breakMinutes: 5 };
 
 export type FocusSession = {
   id: string;
   habitId: string;
   label: string;
-  /** 'focus' counts down a block; 'break' the rest after one (0 left: ready for the next). */
+  /** 'focus' counts down a round; 'break' the rest after one. */
   phase: 'focus' | 'break';
-  /** The block running, or just finished during a break (1-based), and how many make the day. */
+  /** The round running, or just finished during a break (1-based), and how many make the day. */
   block: number;
   blocks: number;
   minutes: number;
   breakMinutes: number;
+  longBreakMinutes?: number;
   /** When the phase started and ends, in ms. */
   startedAt: number;
   endsAt: number;
@@ -39,16 +54,27 @@ const MINUTE = 60_000;
 /** "2026-10-03" for a timestamp, in local time. */
 export const dayKeyAt = (ms: number): string => toDateKey(new Date(ms));
 
-/** A new block for `habit`: the next of its count for today. */
+/** A new session for `habit`, starting at the next round of its count for today. */
 export const startBlock = (habit: Commission & { focus: FocusSettings }, now: number, id: string): FocusSession => {
   const blocks = Math.max(habit.timesPerDay ?? 1, 1);
   const block  = blocks > 1 ? Math.min((habit.completionCount ?? 0) + 1, blocks) : 1;
   return {
     id, habitId: habit.id, label: habit.label, phase: 'focus', block, blocks,
     minutes: habit.focus.minutes, breakMinutes: habit.focus.breakMinutes,
+    ...(habit.focus.longBreakMinutes ? { longBreakMinutes: habit.focus.longBreakMinutes } : {}),
     startedAt: now, endsAt: now + habit.focus.minutes * MINUTE,
   };
 };
+
+/** Minutes of break after round `s.block`: none after the last, the long one after every fourth. */
+export const breakMinutesAfter = (s: Pick<FocusSession, 'block' | 'blocks' | 'breakMinutes' | 'longBreakMinutes'>): number =>
+  s.block >= s.blocks ? 0
+    : s.longBreakMinutes && s.block % LONG_BREAK_EVERY === 0 ? s.longBreakMinutes
+    : s.breakMinutes;
+
+/** Whether the break running is a long one. */
+export const onLongBreak = (s: FocusSession): boolean =>
+  s.phase === 'break' && !!s.longBreakMinutes && s.block % LONG_BREAK_EVERY === 0;
 
 /** ms left in the current phase. */
 export const timeLeft = (s: FocusSession, now: number): number =>
@@ -56,7 +82,7 @@ export const timeLeft = (s: FocusSession, now: number): number =>
 
 /** How far through the current phase, 0 to 1. */
 export const progress = (s: FocusSession, now: number): number => {
-  const total = (s.phase === 'focus' ? s.minutes : s.breakMinutes) * MINUTE;
+  const total = (s.phase === 'focus' ? s.minutes : breakMinutesAfter(s)) * MINUTE;
   return total > 0 ? Math.min(1, Math.max(0, 1 - timeLeft(s, now) / total)) : 1;
 };
 
@@ -77,44 +103,97 @@ export const clock = (ms: number): string => {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 };
 
-/** The break that follows a finished block, or null when that was the day's last block. */
-const breakAfter = (s: FocusSession): FocusSession | null =>
-  s.block >= s.blocks || s.breakMinutes <= 0
-    ? null
-    : { ...s, phase: 'break', startedAt: s.endsAt, endsAt: s.endsAt + s.breakMinutes * MINUTE };
+/** The next round, starting at `at`. */
+const roundAfter = (s: FocusSession, at: number): FocusSession =>
+  ({ ...s, phase: 'focus', block: s.block + 1, startedAt: at, endsAt: at + s.minutes * MINUTE });
 
 /**
- * Settles a session as of `now`: a focus block that has run out becomes a check-off (an
- * inbox event dated the day it ended) and its minutes, followed by its break if there is
- * one. A break from an earlier day is dropped. Call it on launch, on resume and when the
- * countdown hits zero; it's safe to call again (a settled session has nothing to settle).
+ * What follows the phase that ends at `s.endsAt`, starting right then: a round's break (or
+ * the next round when there's no break), a break's next round, or null after the last round.
+ */
+export const following = (s: FocusSession): FocusSession | null => {
+  if (s.phase === 'focus') {
+    if (s.block >= s.blocks) return null;
+    const rest = breakMinutesAfter(s);
+    if (rest > 0) return { ...s, phase: 'break', startedAt: s.endsAt, endsAt: s.endsAt + rest * MINUTE };
+  }
+  return roundAfter(s, s.endsAt);
+};
+
+/**
+ * Settles a session as of `now`, moving it through every phase that has ended: each round
+ * that ran out becomes a check-off (an inbox event dated the day it ended) and its minutes,
+ * then its break starts, then the next round, and so on until the phase running at `now`,
+ * or null after the last round. Paused sessions wait (one paused on an earlier day is
+ * dropped). Call it on launch, on resume and when a countdown hits zero; it's safe to call
+ * again (a settled session comes back as it is, with nothing to count).
  */
 export const settle = (s: FocusSession | null, now: number, todayKey = dayKeyAt(now)): {
   session: FocusSession | null;
   events: InboxEvent[];
-  logged: { date: string; habitId: string; minutes: number } | null;
+  logged: FocusLogEntry[];
 } => {
-  if (!s) return { session: null, events: [], logged: null };
-  if (s.phase === 'focus' && s.pausedLeft === undefined && s.endsAt <= now) {
-    const date = dayKeyAt(s.endsAt);
-    const next = breakAfter(s);
-    return {
-      session: next && dayKeyAt(next.endsAt) >= todayKey ? next : null,
-      events: [{ id: `focus-${s.id}`, kind: 'habit', date, habitId: s.habitId }],
-      logged: { date, habitId: s.habitId, minutes: s.minutes },
-    };
+  const events: InboxEvent[] = [];
+  const logged: FocusLogEntry[] = [];
+  let session = s;
+  while (session && session.pausedLeft === undefined && session.endsAt <= now) {
+    if (session.phase === 'focus') {
+      const date = dayKeyAt(session.endsAt);
+      events.push({ id: `focus-${session.id}-${session.block}`, kind: 'habit', date, habitId: session.habitId });
+      logged.push({ date, habitId: session.habitId, minutes: session.minutes });
+    }
+    session = following(session);
   }
-  // A break, or a paused block, left over from an earlier day: start fresh today.
-  if (dayKeyAt(s.startedAt) < todayKey && (s.phase === 'break' || s.pausedLeft !== undefined)) {
-    return { session: null, events: [], logged: null };
-  }
-  return { session: s, events: [], logged: null };
+  if (session && session.pausedLeft !== undefined && dayKeyAt(session.startedAt) < todayKey) session = null;
+  return { session, events, logged };
 };
 
-/** The next block after a break (or skipping it), or null when the habit's done for today. */
-export const nextBlock = (s: FocusSession, habit: Commission | undefined, now: number, id: string): FocusSession | null => {
-  if (!habit?.focus || habit.completed || habit.skipped) return null;
-  return startBlock({ ...habit, focus: { minutes: s.minutes, breakMinutes: s.breakMinutes } }, now, id);
+/**
+ * Skipping a break: the next round, starting now. Null when there's none to start (the
+ * last round is done, or the habit was finished or skipped some other way).
+ */
+export const nextBlock = (s: FocusSession, habit: Commission | undefined, now: number): FocusSession | null =>
+  !habit?.focus || habit.completed || habit.skipped || s.block >= s.blocks ? null : roundAfter(s, now);
+
+/** A switch still to come: a round ending (the last one ends the session) or a break ending. */
+export type FocusTransition = {
+  at: number;
+  kind: 'round-done' | 'break-over' | 'all-done';
+  /** The round that just ended, or the one the break followed. */
+  block: number;
+  blocks: number;
+  /** After a round: the break that follows, in minutes (0: the next round starts right away). */
+  restMinutes: number;
+};
+
+/** The switches ahead if the session runs on from here, soonest first. None while paused. */
+export const upcomingTransitions = (s: FocusSession, limit: number): FocusTransition[] => {
+  const list: FocusTransition[] = [];
+  let phase: FocusSession | null = s.pausedLeft === undefined ? s : null;
+  while (phase && list.length < limit) {
+    const { block, blocks } = phase;
+    list.push(phase.phase === 'break' ? { at: phase.endsAt, kind: 'break-over', block, blocks, restMinutes: 0 }
+      : { at: phase.endsAt, kind: block >= blocks ? 'all-done' : 'round-done', block, blocks, restMinutes: breakMinutesAfter(phase) });
+    phase = following(phase);
+  }
+  return list;
+};
+
+/** The notification for a switch (ios/FocusActivity.swift writes the same ones). */
+export const transitionText = (label: string, t: FocusTransition): { title: string; body: string } =>
+  t.kind === 'all-done' ? { title: t.blocks > 1 ? `All ${t.blocks} rounds done 🎉` : 'Focus round done 🥕', body: `${label} is done for today. Great focus!` }
+    : t.kind === 'break-over' ? { title: 'Break’s over 🐰', body: `${label}: round ${t.block + 1} of ${t.blocks} starts now.` }
+    : {
+      title: `Round ${t.block} of ${t.blocks} done 🥕`,
+      body: t.restMinutes > 0 ? `${label}: enjoy a ${t.restMinutes}-minute break.` : `${label}: round ${t.block + 1} starts now.`,
+    };
+
+/** When the whole session ends if it runs on without a pause (ms). */
+export const sessionEndsAt = (s: FocusSession, now: number): number => {
+  let phase: FocusSession | null = s.pausedLeft !== undefined ? resume(s, now) : s;
+  let end = phase.endsAt;
+  while ((phase = following(phase))) end = phase.endsAt;
+  return end;
 };
 
 // ── Focus time ────────────────────────────────────────────────────────────────
@@ -160,7 +239,7 @@ export const parseFocusSession = (raw: unknown): FocusSession | null => {
 export type FocusOverview = {
   /** When this was worked out (ms), for the running timer. */
   at: number;
-  /** The block or break running. */
+  /** The round or break running. */
   running: { label: string; phase: 'focus' | 'break'; block: number; blocks: number; minutesLeft: number; paused: boolean } | null;
   todayMinutes: number;
   /** The last 7 days (today included), and the 7 before them. */
@@ -169,13 +248,13 @@ export type FocusOverview = {
   weekDays: number;
   /** The last 7 days by habit, most first (habits deleted since are left out). */
   byHabit: { label: string; minutes: number }[];
-  /** Habits set up with the focus timer. */
-  timed: { label: string; minutes: number; breakMinutes: number }[];
+  /** Habits set up with the focus timer, and how many rounds a day each has. */
+  timed: { label: string; rounds: number; minutes: number; breakMinutes: number }[];
 };
 
 /** The focus timer at a glance, for Bonbon's chat; null if it's never been set up or used. */
 export const focusOverview = (log: FocusLogEntry[], session: FocusSession | null, habits: Commission[], todayKey: string, now: number): FocusOverview | null => {
-  const timed = habits.flatMap(h => (h.focus ? [{ label: h.label, minutes: h.focus.minutes, breakMinutes: h.focus.breakMinutes }] : []));
+  const timed = habits.flatMap(h => (h.focus ? [{ label: h.label, rounds: Math.max(h.timesPerDay ?? 1, 1), minutes: h.focus.minutes, breakMinutes: h.focus.breakMinutes }] : []));
   if (timed.length === 0 && log.length === 0 && !session) return null;
   const from   = addDaysToKey(todayKey, -6);
   const week   = log.filter(e => e.date >= from && e.date <= todayKey && e.minutes > 0);

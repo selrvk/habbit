@@ -1,5 +1,6 @@
 // src/types.ts
 
+import type { FocusSettings } from './focus';
 import type { WorkoutPlan } from './workout';
 
 export type ReminderTime    = { hour: number; minute: number };
@@ -27,8 +28,8 @@ export type Commission      = {
   completionCount: number;             // current swipe count; resets to 0 at midnight
   reminderTimes: ReminderTime[];       // manual multi-reminder list
   reminderSplit: ReminderSplit | null; // "split evenly between X and Y" config
-  /** Focus timer: each block of this many minutes counts as one check-off (focus.ts). */
-  focus?: { minutes: number; breakMinutes: number };
+  /** Focus timer: `timesPerDay` rounds of this many minutes, each one check-off (focus.ts). */
+  focus?: FocusSettings;
   /** Workout routines, taking turns: finishing a workout checks it off (workout.ts). */
   workout?: WorkoutPlan;
 };
@@ -42,7 +43,7 @@ export type HabbitFormData  = {
   reminderTime: ReminderTime | null;
   reminderTimes: ReminderTime[];
   reminderSplit: ReminderSplit | null;
-  focus: { minutes: number; breakMinutes: number } | null;
+  focus: FocusSettings | null;
   workout: WorkoutPlan | null;
 };
 

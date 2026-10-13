@@ -260,22 +260,23 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_FOCUS_LOG, JSON.stringify(focusLogRef.current)).catch(() => {});
   }, []);
 
-  /** "Study · 4 blocks · 1h 40m": the day's last block is done. */
+  /** "Study · 4 of 4 done · 1h 40m": the day's last round is done. */
   const finishFocus = useCallback((s: FocusSession) => {
     const day = getTodayKey();
-    setFocusDone({ label: s.label, blocks: s.block, minutes: focusMinutes(focusLogRef.current, day, day, s.habitId) });
+    setFocusDone({ label: s.label, blocks: s.blocks, minutes: focusMinutes(focusLogRef.current, day, day, s.habitId) });
   }, []);
 
   /**
-   * A block that has run out becomes a check-off (returned, for catchUp, so it counts on the
-   * day it ended) and its minutes, then its break starts. Safe to call any time.
+   * Moves the session on through whatever has ended: each round that ran out becomes a
+   * check-off (returned, for catchUp, so it counts on the day it ended) and its minutes,
+   * then its break runs, then the next round. Safe to call any time.
    */
   const settleFocus = useCallback((): InboxEvent[] => {
     const before = focusRef.current;
     const r = settle(before, Date.now(), getTodayKey());
     if (r.session === before) return [];
-    if (r.logged) addFocusTime(r.logged);
-    const finished = before && r.logged && !r.session ? before : undefined;
+    r.logged.forEach(addFocusTime);
+    const finished = before && r.logged.length > 0 && !r.session ? before : undefined;
     if (finished) finishFocus(finished);
     saveFocusSession(r.session, finished);
     return r.events;
@@ -306,7 +307,7 @@ export default function App() {
     onNext:   () => {
       const s = focusRef.current;
       if (!s) return;
-      const next = nextBlock(s, liveState.current.commissions.find(c => c.id === s.habitId), Date.now(), generateId());
+      const next = nextBlock(s, liveState.current.commissions.find(c => c.id === s.habitId), Date.now());
       if (!next) finishFocus(s);
       saveFocusSession(next, next ? undefined : s);
     },
@@ -392,17 +393,28 @@ export default function App() {
     catchUp([...events, ...settleFocus(), ...settleActiveWorkout()]);
   }, [catchUp, settleFocus, applyFocusActions, settleActiveWorkout]);
 
-  /** The block ran out with the app open. */
+  /** A round or a break ran out with the app open. */
   const onFocusElapsed = useCallback(() => {
     if (hasLoaded.current) catchUp(settleFocus());
   }, [catchUp, settleFocus]);
 
-  // Count the block when it runs out with the app open, even with the timer closed.
+  // Move on when a round or break runs out with the app open, even with the timer closed.
   useEffect(() => {
-    if (!focusSession || focusSession.phase !== 'focus' || focusSession.pausedLeft !== undefined) return;
+    if (!focusSession || focusSession.pausedLeft !== undefined) return;
     const t = setTimeout(onFocusElapsed, Math.max(0, focusSession.endsAt - Date.now()) + 50);
     return () => clearTimeout(t);
   }, [focusSession, onFocusElapsed]);
+
+  // A habit finished some other way mid-session (tapped off, skipped, deleted) has no more
+  // rounds to run: the session ends at its next break.
+  useEffect(() => {
+    const s = focusSession;
+    if (!s || s.phase !== 'break') return;
+    const habit = commissions.find(c => c.id === s.habitId);
+    if (habit && !habit.completed && !habit.skipped) return;
+    if (habit?.completed) finishFocus(s);
+    saveFocusSession(null, habit?.completed ? s : undefined);
+  }, [focusSession, commissions, finishFocus, saveFocusSession]);
 
   // A rest running out with the app open but the workout closed: buzz, as the workout
   // screen does (its notification only shows when the app's in the background).

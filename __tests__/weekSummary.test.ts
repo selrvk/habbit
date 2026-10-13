@@ -142,7 +142,7 @@ describe('weekTip', () => {
   it('notices more focus time', () => {
     const history = [rec(day(21), ['Read', 'Gym'], ['Read', 'Gym']), rec(day(22), ['Read', 'Gym'], ['Read'])];
     const focusLog = [{ date: day(15), habitId: 'Read', minutes: 50 }, { date: day(22), habitId: 'Read', minutes: 100 }];
-    expect(weekTip(weekSummary(MON, data({ history, focusLog })), commissions)).toBe('You focused 100% longer than last week. Keep those blocks coming 🥕');
+    expect(weekTip(weekSummary(MON, data({ history, focusLog })), commissions)).toBe('You focused 100% longer than last week. Keep those rounds coming 🥕');
   });
   it('celebrates a perfect week', () => {
     const history = [21, 22, 23].map(n => rec(day(n), ['Read'], ['Read']));

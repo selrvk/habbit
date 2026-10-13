@@ -7,7 +7,7 @@ const overview = (over: Partial<FocusOverview> = {}): FocusOverview => ({
   at: new Date('2026-10-03T16:50:00').getTime(), running: null,
   todayMinutes: 50, weekMinutes: 175, prevWeekMinutes: 75, weekDays: 4,
   byHabit: [{ label: 'Study', minutes: 150 }, { label: 'Read', minutes: 25 }],
-  timed: [{ label: 'Study', minutes: 25, breakMinutes: 5 }, { label: 'Read', minutes: 20, breakMinutes: 0 }],
+  timed: [{ label: 'Study', rounds: 4, minutes: 25, breakMinutes: 5 }, { label: 'Read', rounds: 1, minutes: 20, breakMinutes: 0 }],
   ...over,
 });
 
@@ -16,7 +16,7 @@ describe('focusStatus', () => {
     expect(focusStatus(overview()).split('\n')).toEqual([
       'Focused today: 50 min.',
       'Last 7 days: 2h 55m over 4 days (Study 2h 30m, Read 25 min); the 7 days before: 1h 15m, so up 133%.',
-      'Habits with a focus timer: Study (25-min blocks, 5-min breaks), Read (20-min blocks).',
+      'Habits with a focus timer: Study (4 rounds of 25 min, 5-min breaks), Read (one 20-min round).',
     ]);
   });
 
@@ -24,11 +24,11 @@ describe('focusStatus', () => {
     const running = (r: Partial<NonNullable<FocusOverview['running']>>) => focusStatus(overview({
       running: { label: 'Study', phase: 'focus', block: 2, blocks: 4, minutesLeft: 12, paused: false, ...r },
     })).split('\n')[0];
-    expect(running({})).toBe('Running as of 4:50 PM: Study, block 2 of 4 with 12 min left.');
-    expect(running({ paused: true })).toBe('Running as of 4:50 PM: Study, block 2 of 4 paused with 12 min left.');
-    expect(running({ blocks: 1, block: 1 })).toBe('Running as of 4:50 PM: Study, a block with 12 min left.');
-    expect(running({ phase: 'break', minutesLeft: 3 })).toBe('Running as of 4:50 PM: Study, on a break after block 2 of 4, 3 min left.');
-    expect(running({ phase: 'break', minutesLeft: 0 })).toBe('Running as of 4:50 PM: Study, on a break after block 2 of 4, ready for the next block.');
+    expect(running({})).toBe('Running as of 4:50 PM: Study, round 2 of 4 with 12 min left.');
+    expect(running({ paused: true })).toBe('Running as of 4:50 PM: Study, round 2 of 4 paused with 12 min left.');
+    expect(running({ blocks: 1, block: 1 })).toBe('Running as of 4:50 PM: Study, a round with 12 min left.');
+    expect(running({ phase: 'break', minutesLeft: 3 })).toBe('Running as of 4:50 PM: Study, on a break after round 2 of 4, 3 min left.');
+    expect(running({ phase: 'break', minutesLeft: 0 })).toBe('Running as of 4:50 PM: Study, on a break after round 2 of 4, the next round is about to start.');
   });
 
   it('says when focus time dropped', () => {

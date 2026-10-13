@@ -59,9 +59,15 @@ export const isRestRecord = (r: CompletionRecord) =>
   r.scheduledIds.every(id => r.skippedIds?.includes(id));
 /** "Every day", "Weekdays", "M W F", or "3× a week". */
 export const scheduleLabel = (c: Commission) => (c.perWeek ? `${c.perWeek}× a week` : daysLabel(c.days ?? []));
+/**
+ * Reminded once a day: a once-a-day habit, or one timed in rounds that has a single reminder
+ * (its rounds run as one session; ones set up before that keep a reminder per round).
+ */
+export const hasSingleReminder = (c: Commission): boolean =>
+  (c.timesPerDay ?? 1) === 1 || (!!c.focus && !!c.reminderTime);
 /** Short reminder description, e.g. "8:00 PM", "6:00 AM – 8:00 PM", "3 times". */
 export const reminderSummary = (c: Commission): string | null => {
-  if ((c.timesPerDay ?? 1) === 1) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
+  if (hasSingleReminder(c)) return c.reminderTime ? formatTime12(c.reminderTime.hour, c.reminderTime.minute) : null;
   if (c.reminderSplit) {
     const r = c.reminderSplit;
     return `${formatTime12(r.startHour, r.startMinute)} – ${formatTime12(r.endHour, r.endMinute)}`;

@@ -166,12 +166,12 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
                   <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(16), color: C.cream }}>Focus</Text>
                 </View>
                 <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>
-                  {habit.focus.minutes}-min blocks{habit.focus.breakMinutes > 0 ? ` · ${habit.focus.breakMinutes}-min breaks` : ''}
+                  {habit.timesPerDay > 1 ? `${habit.timesPerDay} × ` : ''}{habit.focus.minutes}-min rounds{habit.focus.breakMinutes > 0 ? ` · ${habit.focus.breakMinutes}-min breaks` : ''}
                 </Text>
               </View>
               <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: allMin > 0 ? C.cream : C.muted, marginTop: 8 }}>
                 {allMin === 0
-                  ? 'No focus time yet. Finished blocks add up here.'
+                  ? 'No focus time yet. Finished rounds add up here.'
                   : `Today ${durationLabel(todayMin)}  ·  This week ${durationLabel(weekMin)}  ·  All time ${durationLabel(allMin)}`}
               </Text>
               {canStart && (
@@ -179,7 +179,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
                   accessibilityRole="button"
                   style={{ marginTop: 12, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: '#fff' }}>
-                    {focusRunning ? 'Back to the timer' : `▶︎ Start a ${habit.focus.minutes}-minute block`}
+                    {focusRunning ? 'Back to the timer' : habit.timesPerDay > 1 ? `▶︎ Start round ${Math.min(habit.completionCount + 1, habit.timesPerDay)} of ${habit.timesPerDay}` : `▶︎ Start a ${habit.focus.minutes}-minute round`}
                   </Text>
                 </TouchableOpacity>
               )}

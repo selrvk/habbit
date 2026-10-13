@@ -166,7 +166,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'perfect-week', group: 'habits', icon: 'star-glow',     title: 'Perfect Week',     description: 'Every Habbit, every day, Monday to Sunday',  progress: d => yes(hadPerfectWeek(d)) },
   { id: 'comeback',     group: 'habits', icon: 'seedling',      title: 'Comeback',         description: 'Have a perfect day right after missing one', progress: d => yes(hadComeback(d)) },
   { id: 'weekly-goal',  group: 'habits', icon: 'target',        title: 'Goal Getter',      description: 'Hit an “N× a week” goal',                    progress: d => yes(metWeeklyGoal(d)) },
-  { id: 'focus-first',  group: 'habits', icon: 'stopwatch',     title: 'In the Zone',      description: 'Finish a focus block',                       progress: d => yes(focusTotal(d) > 0) },
+  { id: 'focus-first',  group: 'habits', icon: 'stopwatch',     title: 'In the Zone',      description: 'Finish a focus round',                       progress: d => yes(focusTotal(d) > 0) },
   { id: 'focus-10h',    group: 'habits', icon: 'brain',         title: 'Deep Focus',       description: 'Focus for 10 hours in all',
     progressLabel: p => `${p.value}/${p.target} hours`,
     progress: d => count(Math.floor(focusTotal(d) / 60), 10) },

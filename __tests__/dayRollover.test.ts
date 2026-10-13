@@ -148,4 +148,11 @@ describe('reminderTimesFor', () => {
   });
   it('returns nothing for a single habit without a time', () =>
     expect(reminderTimesFor(habit({ reminderTimes: [{ hour: 9, minute: 0 }] }))).toEqual([]));
+  it('reminds once for a habit timed in rounds, which runs as one session', () => {
+    const focus = { minutes: 25, breakMinutes: 5 };
+    expect(reminderTimesFor(habit({ timesPerDay: 4, focus, reminderTime: { hour: 19, minute: 30 } }))).toEqual([{ hour: 19, minute: 30 }]);
+    // One set up before rounds ran as a session keeps its reminder per round.
+    const split = { startHour: 8, startMinute: 0, endHour: 20, endMinute: 0 };
+    expect(reminderTimesFor(habit({ timesPerDay: 3, focus, reminderSplit: split }))).toHaveLength(3);
+  });
 });

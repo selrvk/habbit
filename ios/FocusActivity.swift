@@ -2,9 +2,12 @@
 //
 // The focus timer as a Live Activity: its countdown on the Lock Screen and in the Dynamic
 // Island (drawn by HabbitWidget/FocusLiveActivity.swift). The app keeps it in step with its
-// own timer (src/utils/focusActivity.ts → FocusActivityController.sync). The pause button
-// runs in the app's process: it updates the activity straight away and tells the app through
-// the inbox, so the app's timer pauses too. Compiled into the app and the widget extension.
+// own timer (src/utils/focusActivity.ts → FocusActivityController.sync). A session runs on
+// by itself from round to break to round (src/focus.ts), and the activity can follow only
+// one switch without the app (see FocusLiveActivity.swift), so `following` here mirrors
+// focus.ts. The pause button runs in the app's process: it updates the activity straight
+// away and tells the app through the inbox, so the app's timer pauses too. Compiled into
+// the app and the widget extension. ("block" in names is a round.)
 
 import ActivityKit
 import AppIntents
@@ -19,6 +22,8 @@ struct FocusActivityAttributes: ActivityAttributes {
     var blocks: Int
     var minutes: Int
     var breakMinutes: Int
+    /// A longer break after every fourth round (nil or 0: the usual break).
+    var longBreakMinutes: Int?
     /// When the phase started (as if never paused, for the progress bar) and ends.
     var startedAt: Date
     var endsAt: Date
@@ -28,9 +33,44 @@ struct FocusActivityAttributes: ActivityAttributes {
     var done: Bool
 
     var paused: Bool { pausedLeft != nil }
-    /// After a block: when its break ends, if one follows.
-    var breakEndsAt: Date? {
-      phase == "focus" && block < blocks && breakMinutes > 0 ? endsAt.addingTimeInterval(Double(breakMinutes) * 60) : nil
+
+    /// Minutes of break after round `block`: none after the last, the long one after every fourth.
+    static func restMinutes(after block: Int, of blocks: Int, breakMinutes: Int, longBreakMinutes: Int?) -> Int {
+      if block >= blocks { return 0 }
+      if let long = longBreakMinutes, long > 0, block % 4 == 0 { return long }
+      return breakMinutes
+    }
+    var restMinutes: Int {
+      Self.restMinutes(after: block, of: blocks, breakMinutes: breakMinutes, longBreakMinutes: longBreakMinutes)
+    }
+    var onLongBreak: Bool { phase == "break" && (longBreakMinutes ?? 0) > 0 && block % 4 == 0 }
+
+    /// What follows this phase, starting when it ends: a round's break (or the next round
+    /// when there's no break), a break's next round, or nil after the last round.
+    var following: ContentState? {
+      var next = self
+      next.pausedLeft = nil
+      next.startedAt = endsAt
+      if phase == "focus" {
+        if block >= blocks { return nil }
+        if restMinutes > 0 {
+          next.phase = "break"
+          next.endsAt = endsAt.addingTimeInterval(Double(restMinutes) * 60)
+          return next
+        }
+      }
+      next.phase = "focus"
+      next.block = block + 1
+      next.endsAt = endsAt.addingTimeInterval(Double(minutes) * 60)
+      return next
+    }
+
+    /// When the whole session ends if it runs on from here.
+    var sessionEndsAt: Date {
+      var end = endsAt
+      var phase = following
+      while let next = phase { end = next.endsAt; phase = next.following }
+      return end
     }
   }
 
@@ -89,13 +129,18 @@ final class FocusActivityController: NSObject {
     guard let phase = s["phase"] as? String, let endsAtMs = (s["endsAt"] as? NSNumber)?.doubleValue else { return nil }
     let minutes      = (s["minutes"] as? NSNumber)?.intValue ?? 25
     let breakMinutes = (s["breakMinutes"] as? NSNumber)?.intValue ?? 0
-    let length       = Double(phase == "break" ? breakMinutes : minutes) * 60
+    let longBreak    = (s["longBreakMinutes"] as? NSNumber)?.intValue
+    let block        = (s["block"] as? NSNumber)?.intValue ?? 1
+    let blocks       = (s["blocks"] as? NSNumber)?.intValue ?? 1
+    let rest         = FocusActivityAttributes.ContentState.restMinutes(after: block, of: blocks, breakMinutes: breakMinutes, longBreakMinutes: longBreak)
+    let length       = Double(phase == "break" ? rest : minutes) * 60
     let pausedLeft   = (s["pausedLeft"] as? NSNumber).map { $0.doubleValue / 1000 }
     // While paused, endsAt is when it would have ended: what's left from now.
     let endsAt = pausedLeft.map { Date().addingTimeInterval($0) } ?? Date(timeIntervalSince1970: endsAtMs / 1000)
     return .init(
-      phase: phase, block: (s["block"] as? NSNumber)?.intValue ?? 1, blocks: (s["blocks"] as? NSNumber)?.intValue ?? 1,
-      minutes: minutes, breakMinutes: breakMinutes, startedAt: endsAt.addingTimeInterval(-length), endsAt: endsAt,
+      phase: phase, block: block, blocks: blocks,
+      minutes: minutes, breakMinutes: breakMinutes, longBreakMinutes: longBreak,
+      startedAt: endsAt.addingTimeInterval(-length), endsAt: endsAt,
       pausedLeft: pausedLeft, done: done)
   }
 
@@ -122,18 +167,34 @@ final class FocusActivityController: NSObject {
   }
 
   // MARK: Notifications
-  // The same ones notifications.ts plans (ids "focus-end" and "focus-break"), for when the
-  // button resumes the timer: the app may be suspended again before it can plan them. Built
-  // the way notifee builds them, so tapping one still opens the timer.
+  // The same ones notifications.ts plans (ids "focus-0" up, one for each switch still ahead:
+  // focus.ts's upcomingTransitions and transitionText), for when the button resumes the
+  // timer: the app may be suspended again before it can plan them. Built the way notifee
+  // builds them, so tapping one still opens the timer.
 
-  static func scheduleNotifications(label: String, state s: FocusActivityAttributes.ContentState) {
-    let last = s.block >= s.blocks
-    let body = last
-      ? "\(label) is done for today. Great focus!"
-      : "\(label): \(s.block) of \(s.blocks) done.\(s.breakMinutes > 0 ? " Enjoy a \(s.breakMinutes)-minute break." : "")"
-    schedule(id: "focus-end", title: "Focus block done 🥕", body: body, at: s.endsAt)
-    if let breakEnds = s.breakEndsAt {
-      schedule(id: "focus-break", title: "Break’s over 🐰", body: "Ready for block \(s.block + 1) of \(label)?", at: breakEnds)
+  /// How many switches are planned ahead (FOCUS_NOTIFS in notifications.ts).
+  static let plannedNotifications = 10
+  /// Every id a session's notifications can have ("focus-end" and "focus-break" are older).
+  static var notificationIds: [String] { (0..<plannedNotifications).map { "focus-\($0)" } + ["focus-end", "focus-break"] }
+
+  static func scheduleNotifications(label: String, state: FocusActivityAttributes.ContentState) {
+    var phase: FocusActivityAttributes.ContentState? = state
+    var index = 0
+    while let s = phase, index < plannedNotifications {
+      let title: String, body: String
+      if s.phase == "break" {
+        title = "Break’s over 🐰"
+        body = "\(label): round \(s.block + 1) of \(s.blocks) starts now."
+      } else if s.block >= s.blocks {
+        title = s.blocks > 1 ? "All \(s.blocks) rounds done 🎉" : "Focus round done 🥕"
+        body = "\(label) is done for today. Great focus!"
+      } else {
+        title = "Round \(s.block) of \(s.blocks) done 🥕"
+        body = s.restMinutes > 0 ? "\(label): enjoy a \(s.restMinutes)-minute break." : "\(label): round \(s.block + 1) starts now."
+      }
+      schedule(id: "focus-\(index)", title: title, body: body, at: s.endsAt)
+      index += 1
+      phase = s.following
     }
   }
 
@@ -175,10 +236,10 @@ struct FocusPauseIntent: LiveActivityIntent {
   func perform() async throws -> some IntentResult {
     let now = Date()
     let resumed = await FocusActivityController.setPaused(pause, at: now)
-    // A paused block mustn't announce that it's done; a resumed one needs its notifications
+    // A paused round mustn't announce that it's done; a resumed one needs its notifications
     // again (notifications.ts plans the same ones when the app gets to run).
     if pause {
-      UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["focus-end", "focus-break"])
+      UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: FocusActivityController.notificationIds)
     } else if let resumed {
       FocusActivityController.scheduleNotifications(label: resumed.label, state: resumed.state)
     }
