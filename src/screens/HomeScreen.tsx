@@ -6,6 +6,7 @@ import { getFormattedDate, isScheduledForDay, avatarImage, currencyStr } from '.
 import { useNavHeight } from '../hooks/useNavHeight';
 import { NumpadModal } from '../components/NumpadModal';
 import { SwipeableTaskItem } from '../components/SwipeableTaskItem';
+import { FocusRow } from '../components/FocusRow';
 import type { FocusSession } from '../focus';
 import type { ActiveWorkout } from '../workout';
 import type { Commission } from '../types';
@@ -56,7 +57,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, workout, onStartWorkout,
+  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, focusMinutesToday, onOpenFocus, workout, onStartWorkout,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -74,6 +75,9 @@ export const HomeScreen = ({
   /** The running focus timer, if any, and starting (or showing) one for a habit. */
   focusSession: FocusSession | null;
   onStartFocus: (id: string) => void;
+  /** Minutes focused today, and the focus row: the running timer, or setting up a quick session. */
+  focusMinutesToday: number;
+  onOpenFocus: () => void;
   /** The workout in progress, if any, and starting (or showing) one. */
   workout: ActiveWorkout | null;
   onStartWorkout: (id: string) => void;
@@ -172,7 +176,7 @@ export const HomeScreen = ({
         </View>
 
         {/* ── Today at a glance ── */}
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
           <View style={tile}>
             <Text style={tileLabel}>Habbits</Text>
             <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(22), color: allDone ? C.green : C.cream, marginVertical: 4 }}>
@@ -206,6 +210,8 @@ export const HomeScreen = ({
             </TouchableOpacity>
           </TouchableOpacity>
         </View>
+
+        <FocusRow session={focusSession} todayMinutes={focusMinutesToday} onPress={onOpenFocus} />
 
         <LeftoverBanner jar={jar} currency={currency} />
 

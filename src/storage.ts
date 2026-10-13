@@ -20,6 +20,8 @@ export const STORAGE_ACHIEVEMENTS       = '@habbit_rabbit_achievements';
 export const STORAGE_CATEGORIES         = '@habbit_rabbit_categories';
 /** The running focus timer (FocusSession, focus.ts). Not backed up. */
 export const STORAGE_FOCUS              = '@habbit_rabbit_focus';
+/** What the last quick focus session was set up with (QuickFocusSettings). Not backed up. */
+export const STORAGE_QUICK_FOCUS        = '@habbit_rabbit_quick_focus';
 /** Minutes focused per day and habit (FocusLogEntry[]). */
 export const STORAGE_FOCUS_LOG          = '@habbit_rabbit_focus_log';
 /** The workout in progress (ActiveWorkout, workout.ts). Not backed up. */
@@ -60,4 +62,5 @@ export const ALL_STORAGE_KEYS = [
   STORAGE_ONBOARDED,
   STORAGE_AI_CONSENT,
   STORAGE_WHATS_NEW,
+  STORAGE_QUICK_FOCUS,
 ];

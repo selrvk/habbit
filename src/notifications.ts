@@ -283,7 +283,7 @@ export const scheduleFocusNotifs = async (s: FocusSession | null) => {
       if (t.at <= now) continue;
       await notifee.createTriggerNotification(
         {
-          id: `focus-${i}`, ...transitionText(s.label, t), data: { link: FOCUS_LINK },
+          id: `focus-${i}`, ...transitionText(s, t), data: { link: FOCUS_LINK },
           android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
         },
         { type: TriggerType.TIMESTAMP, timestamp: t.at },

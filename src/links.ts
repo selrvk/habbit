@@ -11,11 +11,12 @@
 //   habbit://add-money                habbit://recap
 //   habbit://coach                    habbit://profile
 //   habbit://week (the weekly recap)  habbit://focus (the running focus timer)
+//   habbit://focus/start (the running timer, or setting up a quick session)
 //   habbit://workout (the workout in progress)
 
 import { categoryOf } from './categories';
 
-type PlainScreen = 'home' | 'habits' | 'new-habit' | 'finance' | 'add-money' | 'recap' | 'week' | 'coach' | 'profile' | 'focus' | 'workout';
+type PlainScreen = 'home' | 'habits' | 'new-habit' | 'finance' | 'add-money' | 'recap' | 'week' | 'coach' | 'profile' | 'focus' | 'quick-focus' | 'workout';
 
 export type LinkTarget =
   | { screen: PlainScreen }
@@ -57,6 +58,9 @@ export const parseLink = (url: string): LinkTarget | null => {
 
   if ((head === 'habits' || head === 'habbits') && second) {
     return second.toLowerCase() === 'new' ? { screen: 'new-habit' } : { screen: 'habit', id: second };
+  }
+  if ((head === 'focus' || head === 'timer') && second) {
+    return ['start', 'new', 'quick'].includes(second.toLowerCase()) ? { screen: 'quick-focus' } : { screen: 'focus' };
   }
   if (head === 'spend' || head === 'expense') {
     const amount   = numpadAmount(params.amount);

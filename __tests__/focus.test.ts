@@ -1,6 +1,7 @@
 import {
-  breakMinutesAfter, clock, durationLabel, focusMinutes, focusOverview, following, logFocus, nextBlock, onLongBreak, pause, progress, resume,
-  sessionEndsAt, settle, startBlock, timeLeft, transitionText, upcomingTransitions,
+  DEFAULT_QUICK_FOCUS, QUICK_FOCUS_ID, breakMinutesAfter, clock, durationLabel, focusMinutes, focusOverview, following, logFocus, nextBlock,
+  onLongBreak, parseQuickFocus, pause, progress, resume, sessionEndsAt, sessionLength, settle, startBlock, startQuickFocus, timeLeft,
+  transitionText, upcomingTransitions,
 } from '../src/focus';
 import type { FocusSettings } from '../src/focus';
 import type { Commission } from '../src/types';
@@ -113,7 +114,7 @@ describe('focus rounds', () => {
     const s = startBlock(study({ completionCount: 2 }), start, 'a'); // rounds 3 and 4
     const ahead = upcomingTransitions(s, 10);
     expect(ahead.map(t => [t.kind, (t.at - start) / MIN])).toEqual([['round-done', 25], ['break-over', 30], ['all-done', 55]]);
-    expect(ahead.map(t => transitionText('Study', t))).toEqual([
+    expect(ahead.map(t => transitionText(s, t))).toEqual([
       { title: 'Round 3 of 4 done 🥕', body: 'Study: enjoy a 5-minute break.' },
       { title: 'Break’s over 🐰', body: 'Study: round 4 of 4 starts now.' },
       { title: 'All 4 rounds done 🎉', body: 'Study is done for today. Great focus!' },
@@ -122,9 +123,9 @@ describe('focus rounds', () => {
     expect(upcomingTransitions(pause(s, start + MIN), 10)).toEqual([]);
     // No break: the round's own notification says the next one has started.
     const noBreak = startBlock(study({ completionCount: 2, focus: { minutes: 25, breakMinutes: 0 } }), start, 'b');
-    expect(upcomingTransitions(noBreak, 10).map(t => transitionText('Study', t).body)).toEqual(['Study: round 4 starts now.', 'Study is done for today. Great focus!']);
+    expect(upcomingTransitions(noBreak, 10).map(t => transitionText(noBreak, t).body)).toEqual(['Study: round 4 starts now.', 'Study is done for today. Great focus!']);
     const once = startBlock(study({ timesPerDay: 1, completionCount: 0 }), start, 'c');
-    expect(transitionText('Read', upcomingTransitions(once, 10)[0]).title).toBe('Focus round done 🥕');
+    expect(transitionText(once, upcomingTransitions(once, 10)[0]).title).toBe('Focus round done 🥕');
   });
 
   it('know when the whole session ends', () => {
@@ -133,6 +134,58 @@ describe('focus rounds', () => {
     expect(sessionEndsAt(settle(s, start + 40 * MIN).session!, start + 40 * MIN)).toBe(start + 115 * MIN);
     // Paused 10 minutes in, looked at an hour later: the rest runs from then.
     expect(sessionEndsAt(pause(s, start + 10 * MIN), start + 70 * MIN)).toBe(start + 175 * MIN);
+  });
+});
+
+describe('quick focus', () => {
+  const start = at('2026-10-03', 9);
+  const quick = (over = {}, label = '') => startQuickFocus({ rounds: 2, minutes: 25, breakMinutes: 5, ...over }, label, start, 'q');
+
+  it('starts at round 1 with no habit, named or not', () => {
+    expect(quick()).toMatchObject({ habitId: QUICK_FOCUS_ID, label: 'Quick focus', phase: 'focus', block: 1, blocks: 2, endsAt: start + 25 * MIN });
+    expect(quick({}, '  Thesis ').label).toBe('Thesis');
+    // A single round has no break; a long break only applies past four rounds.
+    expect(quick({ rounds: 1 }).breakMinutes).toBe(0);
+    expect(quick({ rounds: 4, longBreakMinutes: 20 }).longBreakMinutes).toBeUndefined();
+    expect(quick({ rounds: 6, longBreakMinutes: 20 }).longBreakMinutes).toBe(20);
+    expect(quick({ rounds: 40 }).blocks).toBe(10);
+  });
+
+  it('logs its minutes but checks nothing off', () => {
+    const all = settle(quick(), start + 2 * 60 * MIN);
+    expect(all.session).toBeNull();
+    expect(all.events).toEqual([]);
+    expect(all.logged).toEqual([
+      { date: '2026-10-03', habitId: QUICK_FOCUS_ID, minutes: 25 },
+      { date: '2026-10-03', habitId: QUICK_FOCUS_ID, minutes: 25 },
+    ]);
+  });
+
+  it('skips its break without a habit to ask', () => {
+    const rest = settle(quick(), start + 26 * MIN).session!;
+    expect(rest.phase).toBe('break');
+    expect(nextBlock(rest, undefined, start + 26 * MIN)).toMatchObject({ phase: 'focus', block: 2, startedAt: start + 26 * MIN });
+  });
+
+  it('ends on a session, not a day', () => {
+    const s = quick({}, 'Thesis');
+    const last = upcomingTransitions(s, 10).pop()!;
+    expect(transitionText(s, last)).toEqual({ title: 'All 2 rounds done 🎉', body: 'Thesis: that’s the whole session. Great focus!' });
+  });
+
+  it('knows how long a session takes', () => {
+    expect(sessionLength(4, { minutes: 25, breakMinutes: 5 })).toBe(115);
+    expect(sessionLength(1, { minutes: 25, breakMinutes: 5 })).toBe(25);
+    expect(sessionLength(8, { minutes: 25, breakMinutes: 5, longBreakMinutes: 20 })).toBe(8 * 25 + 6 * 5 + 20);
+    expect(sessionLength(4, { minutes: 25, breakMinutes: 5, longBreakMinutes: 20 })).toBe(115); // too few rounds for a long break
+    const s = quick({ rounds: 8, longBreakMinutes: 20 });
+    expect(sessionEndsAt(s, start)).toBe(start + sessionLength(8, { minutes: 25, breakMinutes: 5, longBreakMinutes: 20 }) * MIN);
+  });
+
+  it('remembers the last settings, falling back on anything it can’t use', () => {
+    expect(parseQuickFocus(null)).toEqual(DEFAULT_QUICK_FOCUS);
+    expect(parseQuickFocus({ rounds: 6, minutes: 45, breakMinutes: 10, longBreakMinutes: 30 })).toEqual({ rounds: 6, minutes: 45, breakMinutes: 10, longBreakMinutes: 30 });
+    expect(parseQuickFocus({ rounds: 0, minutes: 7, breakMinutes: 'x', longBreakMinutes: 0 })).toEqual(DEFAULT_QUICK_FOCUS);
   });
 });
 
@@ -164,14 +217,15 @@ describe('focusOverview', () => {
     { date: '2026-09-30', habitId: 'study', minutes: 75 },
     { date: '2026-09-30', habitId: 'gone', minutes: 25 },
     { date: '2026-10-03', habitId: 'read', minutes: 20 },
+    { date: '2026-10-02', habitId: QUICK_FOCUS_ID, minutes: 30 },
   ];
   const habits = [study(), { ...study({ id: 'read', label: 'Read' }), focus: undefined }];
 
   it('sums up today, the last 7 days and the 7 before', () => {
     expect(focusOverview(log, null, habits, '2026-10-03', at('2026-10-03', 9))).toEqual({
       at: at('2026-10-03', 9), running: null,
-      todayMinutes: 20, weekMinutes: 170, prevWeekMinutes: 50, weekDays: 3,
-      byHabit: [{ label: 'Study', minutes: 125 }, { label: 'Read', minutes: 20 }], // "gone" was deleted
+      todayMinutes: 20, weekMinutes: 200, prevWeekMinutes: 50, weekDays: 4,
+      byHabit: [{ label: 'Study', minutes: 125 }, { label: 'Quick focus', minutes: 30 }, { label: 'Read', minutes: 20 }], // "gone" was deleted
       timed: [{ label: 'Study', rounds: 4, minutes: 25, breakMinutes: 5 }],
     });
   });

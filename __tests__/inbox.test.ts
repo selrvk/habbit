@@ -22,6 +22,9 @@ describe('parseInbox', () => {
       { id: 'q', kind: 'focus', date: MON, action: 'stop', at: 1790990000000 },
       { id: 'r', kind: 'focus', date: MON, action: 'resume' },
     ]))).toEqual([{ id: 'p', kind: 'focus', date: MON, action: 'pause', at: 1790990000000 }]);
+    // Siri and Shortcuts starting a quick session.
+    const start = { id: 's', kind: 'focus', date: MON, action: 'start', at: 1790990000000 };
+    expect(parseInbox(JSON.stringify([start]))).toEqual([start]);
   });
 
   it('keeps well-formed events and drops the rest', () => {

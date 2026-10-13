@@ -11,12 +11,12 @@ import Foundation
 // MARK: - Opening a screen
 
 enum HabbitScreen: String, AppEnum {
-  case today, habits, logExpense, addHabit, money, bonbon
+  case today, habits, logExpense, addHabit, money, bonbon, focus
 
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Screen"
   static var caseDisplayRepresentations: [HabbitScreen: DisplayRepresentation] = [
     .today: "Today", .habits: "Habits", .logExpense: "Log Expense",
-    .addHabit: "Add Habit", .money: "Money", .bonbon: "Bonbon",
+    .addHabit: "Add Habit", .money: "Money", .bonbon: "Bonbon", .focus: "Focus Timer",
   ]
 
   /// The app's link for the screen (src/links.ts).
@@ -28,6 +28,7 @@ enum HabbitScreen: String, AppEnum {
     case .addHabit:   return URL(string: "habbit://habits/new")!
     case .money:      return URL(string: "habbit://finance")!
     case .bonbon:     return URL(string: "habbit://coach")!
+    case .focus:      return URL(string: "habbit://focus/start")!
     }
   }
 }

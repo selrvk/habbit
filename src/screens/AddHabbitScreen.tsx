@@ -12,7 +12,8 @@ import { TimeField } from '../components/TimePicker';
 import { daysLabel, formatTime12, computeSplitTimes, generateId } from '../helpers';
 import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, HabbitFormData, ReminderTime } from '../types';
-import { BREAK_LENGTHS, DEFAULT_FOCUS, DEFAULT_ROUNDS, FOCUS_LENGTHS, LONG_BREAK_EVERY, LONG_BREAK_LENGTHS, durationLabel, type FocusSettings } from '../focus';
+import { DEFAULT_FOCUS, DEFAULT_ROUNDS, LONG_BREAK_EVERY, durationLabel, sessionLength, type FocusSettings } from '../focus';
+import { FocusPicker } from '../components/FocusPicker';
 import { DEFAULT_REST, fromTemplate, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
 
 /** "90-second", "2-minute". */
@@ -160,8 +161,7 @@ export const AddHabbitScreen = ({
   const saveEnabled  = canSave && !(reminderEnabled && !oneReminder && mode === 'split' && splitInvalid);
   const longBreak    = dailyTimes > LONG_BREAK_EVERY ? focus.longBreakMinutes ?? 0 : 0;
   // "about 1h 55m": the rounds and the breaks between them.
-  const sessionMinutes = dailyTimes * focus.minutes
-    + Array.from({ length: dailyTimes - 1 }, (_, i) => (longBreak > 0 && (i + 1) % LONG_BREAK_EVERY === 0 ? longBreak : focus.breakMinutes)).reduce((a, b) => a + b, 0);
+  const sessionMinutes = sessionLength(dailyTimes, focus);
 
   const chooseTimes = (n: number) => {
     haptic.light();
@@ -340,82 +340,7 @@ export const AddHabbitScreen = ({
 
           {focusOn && (
             <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(212,149,106,0.12)' }}>
-              <Text style={[subText, { marginBottom: 8 }]}>Rounds</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                {TIMES_OPTIONS.map(n => {
-                  const active = n === timesPerDay;
-                  return (
-                    <TouchableOpacity key={n} onPress={() => chooseTimes(n)} activeOpacity={0.7}
-                      accessibilityLabel={`${n} round${n === 1 ? '' : 's'}`} accessibilityState={{ selected: active }}
-                      style={{
-                        flexBasis: '17%', flexGrow: 1, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
-                        backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
-                        borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
-                      }}>
-                      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{n}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={[subText, { marginBottom: 8 }]}>Minutes in each round</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {FOCUS_LENGTHS.map(m => {
-                  const active = m === focus.minutes;
-                  return (
-                    <TouchableOpacity key={m} onPress={() => chooseFocus(() => setFocus(f => ({ ...f, minutes: m })))} activeOpacity={0.7}
-                      accessibilityLabel={`${m} minute rounds`} accessibilityState={{ selected: active }}
-                      style={{
-                        flexBasis: '14%', flexGrow: 1, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
-                        backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
-                        borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
-                      }}>
-                      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(14), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {dailyTimes > 1 && (
-                <>
-                  <Text style={[subText, { marginTop: 14, marginBottom: 8 }]}>Break between rounds</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {BREAK_LENGTHS.map(m => {
-                      const active = m === focus.breakMinutes;
-                      return (
-                        <TouchableOpacity key={m} onPress={() => chooseFocus(() => setFocus(f => ({ ...f, breakMinutes: m })))} activeOpacity={0.7}
-                          accessibilityLabel={m === 0 ? 'No break' : `${m} minute break`} accessibilityState={{ selected: active }}
-                          style={{
-                            flex: 1, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center',
-                            backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
-                            borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
-                          }}>
-                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m === 0 ? 'None' : `${m} min`}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </>
-              )}
-              {dailyTimes > LONG_BREAK_EVERY && (
-                <>
-                  <Text style={[subText, { marginTop: 14, marginBottom: 8 }]}>Longer break after every {LONG_BREAK_EVERY} rounds</Text>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {LONG_BREAK_LENGTHS.map(m => {
-                      const active = m === (focus.longBreakMinutes ?? 0);
-                      return (
-                        <TouchableOpacity key={m} onPress={() => chooseFocus(() => setFocus(f => ({ ...f, longBreakMinutes: m })))} activeOpacity={0.7}
-                          accessibilityLabel={m === 0 ? 'No longer break' : `${m} minute long break`} accessibilityState={{ selected: active }}
-                          style={{
-                            flex: 1, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center',
-                            backgroundColor: active ? '#D4956A' : 'rgba(212,149,106,0.08)',
-                            borderWidth: 1.5, borderColor: active ? '#D4956A' : 'rgba(212,149,106,0.2)',
-                          }}>
-                          <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: active ? '#fff' : 'rgba(232,213,192,0.6)' }}>{m === 0 ? 'Off' : `${m} min`}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </>
-              )}
+              <FocusPicker rounds={timesPerDay} focus={focus} onRounds={chooseTimes} onFocus={next => chooseFocus(() => setFocus(next))} />
               <Text style={[subText, { marginTop: 12 }]}>
                 {dailyTimes > 1
                   ? `Tap ▶︎ on Home to start. It runs from round to round by itself, about ${durationLabel(sessionMinutes)} in all, and each round counts 1 of ${dailyTimes}. Stop early and you can pick up from the next round later that day.`

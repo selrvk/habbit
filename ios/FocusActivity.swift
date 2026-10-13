@@ -74,8 +74,11 @@ struct FocusActivityAttributes: ActivityAttributes {
     }
   }
 
+  /// The habit's id, or "quick" for a session without one (QUICK_FOCUS_ID in focus.ts).
   var habitId: String
   var label: String
+
+  var isQuick: Bool { habitId == "quick" }
 }
 
 @objc(FocusActivityController)
@@ -146,8 +149,8 @@ final class FocusActivityController: NSObject {
 
   /// The pause button: pauses or resumes the activity straight away. Returns what it resumed.
   @discardableResult
-  static func setPaused(_ pause: Bool, at now: Date) async -> (label: String, state: FocusActivityAttributes.ContentState)? {
-    var resumed: (label: String, state: FocusActivityAttributes.ContentState)?
+  static func setPaused(_ pause: Bool, at now: Date) async -> (attributes: FocusActivityAttributes, state: FocusActivityAttributes.ContentState)? {
+    var resumed: (attributes: FocusActivityAttributes, state: FocusActivityAttributes.ContentState)?
     for activity in Activity<FocusActivityAttributes>.activities {
       var state = activity.content.state
       guard state.phase == "focus", !state.done, state.paused != pause else { continue }
@@ -161,7 +164,7 @@ final class FocusActivityController: NSObject {
         state.pausedLeft = nil
       }
       await activity.update(ActivityContent(state: state, staleDate: state.paused ? nil : state.endsAt))
-      if !pause { resumed = (activity.attributes.label, state) }
+      if !pause { resumed = (activity.attributes, state) }
     }
     return resumed
   }
@@ -177,7 +180,8 @@ final class FocusActivityController: NSObject {
   /// Every id a session's notifications can have ("focus-end" and "focus-break" are older).
   static var notificationIds: [String] { (0..<plannedNotifications).map { "focus-\($0)" } + ["focus-end", "focus-break"] }
 
-  static func scheduleNotifications(label: String, state: FocusActivityAttributes.ContentState) {
+  static func scheduleNotifications(for attributes: FocusActivityAttributes, state: FocusActivityAttributes.ContentState) {
+    let label = attributes.label
     var phase: FocusActivityAttributes.ContentState? = state
     var index = 0
     while let s = phase, index < plannedNotifications {
@@ -187,7 +191,7 @@ final class FocusActivityController: NSObject {
         body = "\(label): round \(s.block + 1) of \(s.blocks) starts now."
       } else if s.block >= s.blocks {
         title = s.blocks > 1 ? "All \(s.blocks) rounds done 🎉" : "Focus round done 🥕"
-        body = "\(label) is done for today. Great focus!"
+        body = attributes.isQuick ? "\(label): that’s the whole session. Great focus!" : "\(label) is done for today. Great focus!"
       } else {
         title = "Round \(s.block) of \(s.blocks) done 🥕"
         body = s.restMinutes > 0 ? "\(label): enjoy a \(s.restMinutes)-minute break." : "\(label): round \(s.block + 1) starts now."
@@ -241,7 +245,7 @@ struct FocusPauseIntent: LiveActivityIntent {
     if pause {
       UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: FocusActivityController.notificationIds)
     } else if let resumed {
-      FocusActivityController.scheduleNotifications(label: resumed.label, state: resumed.state)
+      FocusActivityController.scheduleNotifications(for: resumed.attributes, state: resumed.state)
     }
     HabbitStore.queueFocus(action: pause ? "pause" : "resume", at: now)
     return .result()

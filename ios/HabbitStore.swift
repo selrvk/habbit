@@ -213,7 +213,8 @@ enum HabbitStore {
     DispatchQueue.main.async { NotificationCenter.default.post(name: inboxChanged, object: nil) }
   }
 
-  /// The focus timer's Live Activity button: pause or resume, as of `at` (FocusActivity.swift).
+  /// The focus timer, as of `at`: its Live Activity button ("pause", "resume";
+  /// FocusActivity.swift), or Siri and Shortcuts starting a quick session ("start").
   static func queueFocus(action: String, at: Date) {
     queue(["id": newId(), "kind": "focus", "date": todayKey(), "action": action, "at": (at.timeIntervalSince1970 * 1000).rounded()])
   }

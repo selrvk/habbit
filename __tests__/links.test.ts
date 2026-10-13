@@ -15,6 +15,14 @@ describe('parseLink', () => {
     expect(parseLink('habbit://workout')).toEqual({ screen: 'workout' });
   });
 
+  it('opens the focus timer, or a quick session to set up', () => {
+    expect(parseLink('habbit://focus')).toEqual({ screen: 'focus' });
+    expect(parseLink('habbit://timer')).toEqual({ screen: 'focus' });
+    expect(parseLink('habbit://focus/start')).toEqual({ screen: 'quick-focus' });
+    expect(parseLink('habbit://focus/New')).toEqual({ screen: 'quick-focus' });
+    expect(parseLink('habbit://focus/else')).toEqual({ screen: 'focus' });
+  });
+
   it('fills in an expense', () => {
     expect(parseLink('habbit://spend')).toEqual({ screen: 'spend' });
     expect(parseLink('habbit://spend?amount=150&category=Food&note=Lunch%20with%20Ana'))

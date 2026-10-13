@@ -72,15 +72,15 @@
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>plus.circle</string>
+			<string>timer</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Add Habit</string>
+			<string>Start Focus</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.selrvk.habbit.new-habit</string>
+			<string>com.selrvk.habbit.focus</string>
 			<key>UIApplicationShortcutItemUserInfo</key>
 			<dict>
 				<key>url</key>
-				<string>habbit://habits/new</string>
+				<string>habbit://focus/start</string>
 			</dict>
 		</dict>
 		<dict>

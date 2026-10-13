@@ -24,7 +24,7 @@ import { logDueBills, type Bill } from './src/bills';
 import { EMPTY_SAVINGS, leftoverOffer, parseSavings, storedSavings, type Savings, type SavingsJar } from './src/savings';
 import { parseCustomCategories, setCustomCategories, type Category, type CustomCategory } from './src/categories';
 import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
-import { focusMinutes, logFocus, nextBlock, parseFocusLog, parseFocusSession, pause as pauseFocus, resume as resumeFocus, settle, startBlock, type FocusLogEntry, type FocusSession } from './src/focus';
+import { DEFAULT_QUICK_FOCUS, focusMinutes, isQuickFocus, logFocus, nextBlock, parseFocusLog, parseFocusSession, parseQuickFocus, pause as pauseFocus, resume as resumeFocus, settle, startBlock, startQuickFocus, type FocusLogEntry, type FocusSession, type QuickFocusSettings } from './src/focus';
 import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
 import { syncFocusActivity } from './src/utils/focusActivity';
 import { finishWorkout, logWorkout, newBests, nextRoutine, nextUp, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
@@ -38,7 +38,7 @@ import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { WhatsNewSheet, WHATS_NEW_VERSION } from './src/components/WhatsNewSheet';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, STORAGE_QUICK_FOCUS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -75,7 +75,7 @@ const formFields = (data: HabbitFormData) => ({
 const LINK_TABS: Record<LinkTarget['screen'], TabKey> = {
   home: 'home', habits: 'tasks', 'new-habit': 'tasks', habit: 'tasks',
   finance: 'finance', spend: 'finance', 'add-money': 'finance', recap: 'finance', week: 'home',
-  coach: 'chat', profile: 'profile', focus: 'home', workout: 'home',
+  coach: 'chat', profile: 'profile', focus: 'home', 'quick-focus': 'home', workout: 'home',
 };
 
 const DEFAULT_EVENING_REMINDER: EveningReminder = { enabled: false, hour: 20, minute: 0 };
@@ -121,6 +121,10 @@ export default function App() {
   const focusLogRef                               = useRef<FocusLogEntry[]>([]);
   const [focusOpen, setFocusOpen]                 = useState(false);
   const [focusDone, setFocusDone]                 = useState<FocusDone | null>(null);
+  // A quick session (no habit): its setup showing in the timer's sheet, and what the last one used.
+  const [quickSetup, setQuickSetup]               = useState(false);
+  const [quickFocus, setQuickFocus]               = useState<QuickFocusSettings>(DEFAULT_QUICK_FOCUS);
+  const quickFocusRef                             = useRef<QuickFocusSettings>(DEFAULT_QUICK_FOCUS);
   const [workout, setWorkout]                     = useState<ActiveWorkout | null>(null);
   const workoutRef                                = useRef<ActiveWorkout | null>(null);
   const [workoutLog, setWorkoutLog]               = useState<WorkoutLog[]>([]);
@@ -242,9 +246,39 @@ export default function App() {
     else syncFocusActivity(next);
   }, []);
 
-  /** Pause or resume pressed on the Live Activity (queued by the native side, as of `at`). */
+  /** Starts a quick session (no habit), remembering its settings for the next one. */
+  const beginQuickFocus = useCallback((q: QuickFocusSettings, label: string) => {
+    quickFocusRef.current = q;
+    setQuickFocus(q);
+    AsyncStorage.setItem(STORAGE_QUICK_FOCUS, JSON.stringify(q)).catch(() => {});
+    setQuickSetup(false);
+    setFocusDone(null);
+    saveFocusSession(startQuickFocus(q, label, Date.now(), generateId()));
+    setFocusOpen(true);
+  }, [saveFocusSession]);
+
+  /** Home's focus row and the "start focus" link: the timer that's running, or a quick session's setup. */
+  const openFocus = useCallback(() => {
+    if (!focusRef.current) { setFocusDone(null); setQuickSetup(true); }
+    setFocusOpen(true);
+  }, []);
+
+  /**
+   * From outside the app (queued by the native side, as of `at`): pause or resume pressed on
+   * the Live Activity, or Siri and Shortcuts starting a quick session with the last settings.
+   */
   const applyFocusActions = useCallback((events: InboxEvent[]) => {
     for (const e of events) {
+      if (e.kind === 'focus' && e.action === 'start') {
+        // Asked for moments ago and the app opened for it. An older one is dropped rather
+        // than starting a timer out of the blue.
+        if (Date.now() - e.at > 60_000) continue;
+        openedByLink.current = true;
+        setWhatsNewOpen(false);
+        if (focusRef.current) setFocusOpen(true);
+        else beginQuickFocus(quickFocusRef.current, '');
+        continue;
+      }
       const s = focusRef.current;
       if (e.kind !== 'focus' || !s || s.phase !== 'focus') continue;
       // Pressed after the block ran out: it's done, so it counts rather than pausing at 0:00.
@@ -252,7 +286,7 @@ export default function App() {
       const next = e.action === 'pause' ? pauseFocus(s, e.at) : resumeFocus(s, e.at);
       if (next !== s) saveFocusSession(next, undefined, true);
     }
-  }, [saveFocusSession]);
+  }, [saveFocusSession, beginQuickFocus]);
 
   const addFocusTime = useCallback((entry: FocusLogEntry) => {
     focusLogRef.current = logFocus(focusLogRef.current, entry);
@@ -263,7 +297,10 @@ export default function App() {
   /** "Study · 4 of 4 done · 1h 40m": the day's last round is done. */
   const finishFocus = useCallback((s: FocusSession) => {
     const day = getTodayKey();
-    setFocusDone({ label: s.label, blocks: s.blocks, minutes: focusMinutes(focusLogRef.current, day, day, s.habitId) });
+    // A habit shows its day's focus time; a quick session, its own.
+    setFocusDone(isQuickFocus(s)
+      ? { label: s.label, blocks: s.blocks, minutes: s.blocks * s.minutes, quick: true }
+      : { label: s.label, blocks: s.blocks, minutes: focusMinutes(focusLogRef.current, day, day, s.habitId) });
   }, []);
 
   /**
@@ -311,7 +348,7 @@ export default function App() {
       if (!next) finishFocus(s);
       saveFocusSession(next, next ? undefined : s);
     },
-    onClose:  () => { setFocusOpen(false); setFocusDone(null); },
+    onClose:  () => { setFocusOpen(false); setFocusDone(null); setQuickSetup(false); },
   }), [saveFocusSession, finishFocus]);
 
   // ── Workouts (workout.ts) ──────────────────────────────────────────────────
@@ -409,7 +446,7 @@ export default function App() {
   // rounds to run: the session ends at its next break.
   useEffect(() => {
     const s = focusSession;
-    if (!s || s.phase !== 'break') return;
+    if (!s || s.phase !== 'break' || isQuickFocus(s)) return;
     const habit = commissions.find(c => c.id === s.habitId);
     if (habit && !habit.completed && !habit.skipped) return;
     if (habit?.completed) finishFocus(s);
@@ -524,6 +561,9 @@ export default function App() {
       const storedFS = await AsyncStorage.getItem(STORAGE_FOCUS);
       focusRef.current = parseFocusSession(storedFS ? JSON.parse(storedFS) : null);
       setFocusSession(focusRef.current);
+      const storedQF = await AsyncStorage.getItem(STORAGE_QUICK_FOCUS);
+      quickFocusRef.current = parseQuickFocus(storedQF ? JSON.parse(storedQF) : null);
+      setQuickFocus(quickFocusRef.current);
       const inbox = await takeInbox();
       applyFocusActions(inbox);
       const unsettled = focusRef.current;
@@ -648,6 +688,7 @@ export default function App() {
     );
     if (t.screen === 'week') setRecapOpen(recapWeek(liveState.current.dayKey));
     if (t.screen === 'focus') setFocusOpen(true);
+    if (t.screen === 'quick-focus') openFocus();
     if (t.screen === 'workout') setWorkoutOpen(true);
     setFinanceRequest(
       t.screen === 'spend' ? { kind: 'spend', amount: t.amount, category: t.category, note: t.note }
@@ -675,7 +716,7 @@ export default function App() {
     setBills([]);
     setSavings(EMPTY_SAVINGS);
     setCustomCategories([]); setCustomCats([]);
-    focusRef.current = null; setFocusSession(null); setFocusOpen(false); setFocusDone(null);
+    focusRef.current = null; setFocusSession(null); setFocusOpen(false); setFocusDone(null); setQuickSetup(false);
     focusLogRef.current = []; setFocusLog([]);
     AsyncStorage.removeItem(STORAGE_FOCUS).catch(() => {});
     workoutRef.current = null; setWorkout(null); setWorkoutOpen(false); setWorkoutDone(null);
@@ -1252,6 +1293,8 @@ export default function App() {
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
             focusSession={focusSession}
             onStartFocus={startFocus}
+            focusMinutesToday={focusMinutes(focusLog, todayKey, todayKey)}
+            onOpenFocus={openFocus}
             workout={workout}
             onStartWorkout={startWorkout}
           />
@@ -1386,9 +1429,12 @@ export default function App() {
             <WeekRecapSheet visible={recapOpen !== null} initialWeek={recapOpen ?? todayKey} data={weekData} onClose={() => { setRecapOpen(null); award(['look-back']); }} />
             <AchievementsSheet visible={achievementsOpen} earned={earned ?? {}} data={achievementData} onClose={() => setAchievementsOpen(false)} />
             <FocusSheet
-              visible={focusOpen && (!!focusSession || !!focusDone)}
+              visible={focusOpen && (!!focusSession || !!focusDone || quickSetup)}
               session={focusSession} done={focusDone} avatar={avatar}
-              doneSoFar={commissions.find(c => c.id === focusSession?.habitId)?.completionCount ?? 0}
+              setup={quickSetup ? { initial: quickFocus, onStart: beginQuickFocus } : null}
+              doneSoFar={focusSession && isQuickFocus(focusSession)
+                ? focusSession.block - (focusSession.phase === 'break' ? 0 : 1)
+                : commissions.find(c => c.id === focusSession?.habitId)?.completionCount ?? 0}
               todayMinutes={focusMinutes(focusLog, todayKey, todayKey)}
               {...focusHandlers}
               onElapsed={onFocusElapsed}

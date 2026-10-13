@@ -105,6 +105,20 @@ struct TodayIntent: AppIntent {
   }
 }
 
+// MARK: - Focus
+
+struct StartFocusIntent: AppIntent {
+  static var title: LocalizedStringResource = "Start a Focus Timer"
+  static var description = IntentDescription("Starts a quick focus session in Habbit, with the rounds and minutes you used last time.")
+  // The timer is the app's: it opens, starts the session and shows it.
+  static var openAppWhenRun = true
+
+  func perform() async throws -> some IntentResult {
+    HabbitStore.queueFocus(action: "start", at: Date())
+    return .result()
+  }
+}
+
 // MARK: - Opening a screen
 
 struct OpenHabbitIntent: AppIntent {
@@ -155,6 +169,12 @@ struct HabbitShortcuts: AppShortcutsProvider {
       "How much money is left in \(.applicationName)",
       "What’s my budget in \(.applicationName)",
     ], shortTitle: "Budget Left", systemImageName: "banknote")
+
+    AppShortcut(intent: StartFocusIntent(), phrases: [
+      "Start a focus timer in \(.applicationName)",
+      "Start focus in \(.applicationName)",
+      "Start a Pomodoro in \(.applicationName)",
+    ], shortTitle: "Start Focus", systemImageName: "timer")
 
     AppShortcut(intent: OpenHabbitIntent(), phrases: [
       "Open \(\.$screen) in \(.applicationName)",

@@ -11,7 +11,7 @@ import { categoryOf, spendingByCategory, type CategoryTotal } from './categories
 import { billSpending, type Bill } from './bills';
 import { monthLabel, withToday } from './monthSummary';
 import { allJarEntries, type Savings } from './savings';
-import { focusMinutes, type FocusLogEntry } from './focus';
+import { focusLabels, focusMinutes, type FocusLogEntry } from './focus';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -163,6 +163,7 @@ export const weekSummary = (week: string, d: WeekData): WeekSummary => {
 
   // ── Focus ──
   const focusDays = d.focusLog.filter(e => e.date >= start && e.date <= end && e.minutes > 0);
+  const focusNames = focusLabels(d.commissions);
   const byHabit   = new Map<string, number>();
   for (const e of focusDays) byHabit.set(e.habitId, (byHabit.get(e.habitId) ?? 0) + e.minutes);
   const focus: WeekSummary['focus'] = focusDays.length === 0 ? null : {
@@ -170,7 +171,7 @@ export const weekSummary = (week: string, d: WeekData): WeekSummary => {
     prevMinutes: focusMinutes(d.focusLog, addDaysToKey(start, -7), addDaysToKey(end, -7)),
     days:        new Set(focusDays.map(e => e.date)).size,
     habits: [...byHabit]
-      .flatMap(([id, minutes]) => (labels.has(id) ? [{ id, label: labels.get(id)!, minutes }] : []))
+      .flatMap(([id, minutes]) => (focusNames.has(id) ? [{ id, label: focusNames.get(id)!, minutes }] : []))
       .sort((a, b) => b.minutes - a.minutes),
   };
 

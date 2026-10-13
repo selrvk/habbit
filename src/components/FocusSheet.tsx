@@ -3,7 +3,8 @@
 // The focus timer, full screen: a ring of ticks counting down the round (or the break after
 // it), with pause and stop. It moves from round to break to round by itself. Closing it
 // doesn't stop the timer: it carries on, with a notification at each switch. The app counts
-// the rounds (App.tsx, focus.ts).
+// the rounds (App.tsx, focus.ts). A quick session (one without a habit) is set up here
+// first (QuickFocusSetup.tsx), and the sheet carries straight on to its timer.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, Image, Alert } from 'react-native';
@@ -11,7 +12,8 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { avatarImage } from '../helpers';
-import { breakMinutesAfter, clock, durationLabel, onLongBreak, progress, sessionEndsAt, timeLeft, type FocusSession } from '../focus';
+import { breakMinutesAfter, clock, durationLabel, onLongBreak, progress, sessionEndsAt, timeLeft, type FocusSession, type QuickFocusSettings } from '../focus';
+import { QuickFocusSetup } from './QuickFocusSetup';
 import { Icon } from './Icon';
 
 const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0', green: '#9de087', muted: 'rgba(232,213,192,0.5)', track: 'rgba(212,149,106,0.16)' };
@@ -55,11 +57,14 @@ const Button = ({ label, onPress, primary = false }: { label: string; onPress: (
   );
 };
 
-export type FocusDone = { label: string; minutes: number; blocks: number };
+/** `quick`: a session without a habit, so it's the session that's done, not the day. */
+export type FocusDone = { label: string; minutes: number; blocks: number; quick?: boolean };
 
-export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMinutes, onPause, onResume, onStop, onNext, onElapsed, onClose }: {
+export const FocusSheet = ({ visible, session, setup, doneSoFar, done, avatar, todayMinutes, onPause, onResume, onStop, onNext, onElapsed, onClose }: {
   visible: boolean;
   session: FocusSession | null;
+  /** Setting up a quick session, while nothing's running: what it starts from, and starting it. */
+  setup: { initial: QuickFocusSettings; onStart: (settings: QuickFocusSettings, label: string) => void } | null;
   /** How many of the day's rounds the habit has had (timed or tapped), for the break. */
   doneSoFar: number;
   /** Shown once the day's last round is done. */
@@ -117,7 +122,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
     ]);
   };
 
-  const title = done ? 'All done for today!' : !session ? '' : paused ? 'Paused' : onBreak ? (onLongBreak(session) ? 'Long break' : 'Take a breather') : 'Focus';
+  const title = done ? (done.quick ? 'Session complete!' : 'All done for today!') : !session ? '' : paused ? 'Paused' : onBreak ? (onLongBreak(session) ? 'Long break' : 'Take a breather') : 'Focus';
   const ringColor = onBreak ? C.green : C.accent;
 
   return (
@@ -134,6 +139,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
           </Text>
         </View>
 
+        {setup && !session && !done ? <QuickFocusSetup initial={setup.initial} onStart={setup.onStart} /> : (<>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontFamily: 'Jua', fontSize: fs(12), letterSpacing: 2, color: onBreak ? C.green : C.accent, opacity: 0.85 }}>
             {title.toUpperCase()}
@@ -189,6 +195,7 @@ export const FocusSheet = ({ visible, session, doneSoFar, done, avatar, todayMin
               : `You can close this. ${restNext > 0 ? `A ${restNext}-minute break` : `Round ${session.block + 1}`} follows by itself, and it all wraps up around ${endTime(sessionEndsAt(session, now))}.`}
           </Text>
         )}
+        </>)}
       </View>
     </Modal>
   );

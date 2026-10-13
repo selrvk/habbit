@@ -8,6 +8,8 @@
 // closed still counts, on the day it ended. Stopping keeps the rounds done; starting again
 // that day carries on from the next. One session runs at a time; it's stored, so it carries
 // on across app restarts. Finished rounds also log their minutes, for "focused this week".
+// A quick session (started from Home, QUICK_FOCUS_ID) has no habit: nothing is checked off,
+// and its minutes count like any others.
 // ("block" in names here is a round; stored sessions keep the older field names.)
 
 import type { Commission } from './types';
@@ -26,9 +28,19 @@ export const BREAK_LENGTHS = [0, 5, 10, 15];
 export const LONG_BREAK_LENGTHS = [0, 15, 20, 30];
 /** The long break comes after every this many rounds. */
 export const LONG_BREAK_EVERY = 4;
-/** Rounds a new focus habit starts with. */
+/** Rounds a new focus habit starts with, and the most one can have. */
 export const DEFAULT_ROUNDS = 4;
+export const MAX_ROUNDS = 10;
 export const DEFAULT_FOCUS: FocusSettings = { minutes: 25, breakMinutes: 5 };
+
+/** The `habitId` of a quick session, and of its minutes in the log. */
+export const QUICK_FOCUS_ID = 'quick';
+export const QUICK_FOCUS_LABEL = 'Quick focus';
+export const isQuickFocus = (s: { habitId: string }): boolean => s.habitId === QUICK_FOCUS_ID;
+
+/** What a quick session was last set up with, remembered for the next one. */
+export type QuickFocusSettings = FocusSettings & { rounds: number };
+export const DEFAULT_QUICK_FOCUS: QuickFocusSettings = { rounds: DEFAULT_ROUNDS, ...DEFAULT_FOCUS };
 
 export type FocusSession = {
   id: string;
@@ -64,6 +76,26 @@ export const startBlock = (habit: Commission & { focus: FocusSettings }, now: nu
     ...(habit.focus.longBreakMinutes ? { longBreakMinutes: habit.focus.longBreakMinutes } : {}),
     startedAt: now, endsAt: now + habit.focus.minutes * MINUTE,
   };
+};
+
+/** A quick session, from round 1. A break only comes between rounds, a long one only past four. */
+export const startQuickFocus = (q: QuickFocusSettings, label: string, now: number, id: string): FocusSession => {
+  const blocks = Math.min(Math.max(Math.round(q.rounds) || 1, 1), MAX_ROUNDS);
+  return {
+    id, habitId: QUICK_FOCUS_ID, label: label.trim() || QUICK_FOCUS_LABEL, phase: 'focus', block: 1, blocks,
+    minutes: q.minutes, breakMinutes: blocks > 1 ? q.breakMinutes : 0,
+    ...(blocks > LONG_BREAK_EVERY && q.longBreakMinutes ? { longBreakMinutes: q.longBreakMinutes } : {}),
+    startedAt: now, endsAt: now + q.minutes * MINUTE,
+  };
+};
+
+/** Minutes a whole session takes: its rounds and the breaks between them. */
+export const sessionLength = (rounds: number, f: FocusSettings): number => {
+  let total = rounds * f.minutes;
+  for (let block = 1; block < rounds; block++) {
+    total += breakMinutesAfter({ block, blocks: rounds, breakMinutes: f.breakMinutes, longBreakMinutes: rounds > LONG_BREAK_EVERY ? f.longBreakMinutes : 0 });
+  }
+  return total;
 };
 
 /** Minutes of break after round `s.block`: none after the last, the long one after every fourth. */
@@ -139,7 +171,8 @@ export const settle = (s: FocusSession | null, now: number, todayKey = dayKeyAt(
   while (session && session.pausedLeft === undefined && session.endsAt <= now) {
     if (session.phase === 'focus') {
       const date = dayKeyAt(session.endsAt);
-      events.push({ id: `focus-${session.id}-${session.block}`, kind: 'habit', date, habitId: session.habitId });
+      // A quick session has no habit to check off.
+      if (!isQuickFocus(session)) events.push({ id: `focus-${session.id}-${session.block}`, kind: 'habit', date, habitId: session.habitId });
       logged.push({ date, habitId: session.habitId, minutes: session.minutes });
     }
     session = following(session);
@@ -152,8 +185,11 @@ export const settle = (s: FocusSession | null, now: number, todayKey = dayKeyAt(
  * Skipping a break: the next round, starting now. Null when there's none to start (the
  * last round is done, or the habit was finished or skipped some other way).
  */
-export const nextBlock = (s: FocusSession, habit: Commission | undefined, now: number): FocusSession | null =>
-  !habit?.focus || habit.completed || habit.skipped || s.block >= s.blocks ? null : roundAfter(s, now);
+export const nextBlock = (s: FocusSession, habit: Commission | undefined, now: number): FocusSession | null => {
+  if (s.block >= s.blocks) return null;
+  if (!isQuickFocus(s) && (!habit?.focus || habit.completed || habit.skipped)) return null;
+  return roundAfter(s, now);
+};
 
 /** A switch still to come: a round ending (the last one ends the session) or a break ending. */
 export type FocusTransition = {
@@ -180,8 +216,11 @@ export const upcomingTransitions = (s: FocusSession, limit: number): FocusTransi
 };
 
 /** The notification for a switch (ios/FocusActivity.swift writes the same ones). */
-export const transitionText = (label: string, t: FocusTransition): { title: string; body: string } =>
-  t.kind === 'all-done' ? { title: t.blocks > 1 ? `All ${t.blocks} rounds done 🎉` : 'Focus round done 🥕', body: `${label} is done for today. Great focus!` }
+export const transitionText = ({ label, habitId }: Pick<FocusSession, 'label' | 'habitId'>, t: FocusTransition): { title: string; body: string } =>
+  t.kind === 'all-done' ? {
+    title: t.blocks > 1 ? `All ${t.blocks} rounds done 🎉` : 'Focus round done 🥕',
+    body: isQuickFocus({ habitId }) ? `${label}: that’s the whole session. Great focus!` : `${label} is done for today. Great focus!`,
+  }
     : t.kind === 'break-over' ? { title: 'Break’s over 🐰', body: `${label}: round ${t.block + 1} of ${t.blocks} starts now.` }
     : {
       title: `Round ${t.block} of ${t.blocks} done 🥕`,
@@ -228,6 +267,25 @@ export const parseFocusLog = (raw: unknown): FocusLogEntry[] =>
     ? raw.filter((e): e is FocusLogEntry => !!e && typeof e.date === 'string' && typeof e.habitId === 'string' && typeof e.minutes === 'number')
     : [];
 
+/** Remembered quick-session settings, or the defaults when there are none (or they're off the lists). */
+export const parseQuickFocus = (raw: unknown): QuickFocusSettings => {
+  const q = raw as Partial<QuickFocusSettings> | null;
+  if (!q || typeof q !== 'object') return DEFAULT_QUICK_FOCUS;
+  const pick = (list: number[], value: unknown, fallback: number) => (list.includes(value as number) ? (value as number) : fallback);
+  const rounds = Number.isInteger(q.rounds) && q.rounds! >= 1 && q.rounds! <= MAX_ROUNDS ? q.rounds! : DEFAULT_QUICK_FOCUS.rounds;
+  const longBreakMinutes = pick(LONG_BREAK_LENGTHS, q.longBreakMinutes, 0);
+  return {
+    rounds,
+    minutes: pick(FOCUS_LENGTHS, q.minutes, DEFAULT_FOCUS.minutes),
+    breakMinutes: pick(BREAK_LENGTHS, q.breakMinutes, DEFAULT_FOCUS.breakMinutes),
+    ...(longBreakMinutes > 0 ? { longBreakMinutes } : {}),
+  };
+};
+
+/** Names for the log's ids: each habit's, and "Quick focus" for sessions without one. */
+export const focusLabels = (habits: Commission[]): Map<string, string> =>
+  new Map([...habits.map(h => [h.id, h.label] as [string, string]), [QUICK_FOCUS_ID, QUICK_FOCUS_LABEL]]);
+
 export const parseFocusSession = (raw: unknown): FocusSession | null => {
   const s = raw as FocusSession | null;
   return s && typeof s.id === 'string' && typeof s.habitId === 'string' && (s.phase === 'focus' || s.phase === 'break')
@@ -246,7 +304,7 @@ export type FocusOverview = {
   weekMinutes: number;
   prevWeekMinutes: number;
   weekDays: number;
-  /** The last 7 days by habit, most first (habits deleted since are left out). */
+  /** The last 7 days by habit, most first, with quick sessions as "Quick focus" (habits deleted since are left out). */
   byHabit: { label: string; minutes: number }[];
   /** Habits set up with the focus timer, and how many rounds a day each has. */
   timed: { label: string; rounds: number; minutes: number; breakMinutes: number }[];
@@ -258,7 +316,7 @@ export const focusOverview = (log: FocusLogEntry[], session: FocusSession | null
   if (timed.length === 0 && log.length === 0 && !session) return null;
   const from   = addDaysToKey(todayKey, -6);
   const week   = log.filter(e => e.date >= from && e.date <= todayKey && e.minutes > 0);
-  const labels = new Map(habits.map(h => [h.id, h.label]));
+  const labels = focusLabels(habits);
   const byHabit = new Map<string, number>();
   for (const e of week) if (labels.has(e.habitId)) byHabit.set(e.habitId, (byHabit.get(e.habitId) ?? 0) + e.minutes);
   return {
