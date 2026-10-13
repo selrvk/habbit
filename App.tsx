@@ -144,6 +144,8 @@ export default function App() {
   // The week the recap sheet is open on (its Monday), or null when closed.
   const [recapOpen, setRecapOpen]                 = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen]           = useState(false);
+  /** The "What's new" pages last seen, which decides how much there is to show. */
+  const [whatsNewSeen, setWhatsNewSeen]           = useState<string | null>(null);
   /** A link opened the app, or arrived while it was open: "What's new" waits for the next launch. */
   const openedByLink = useRef(false);
 
@@ -527,7 +529,7 @@ export default function App() {
       // Someone updating from an earlier version sees what's new, once: on a plain launch,
       // not one that a widget, quick action or Siri opened to do something.
       AsyncStorage.getItem(STORAGE_WHATS_NEW).then(seen => {
-        if (seen !== WHATS_NEW_VERSION && !openedByLink.current) setWhatsNewOpen(true);
+        if (seen !== WHATS_NEW_VERSION && !openedByLink.current) { setWhatsNewSeen(seen); setWhatsNewOpen(true); }
       }).catch(() => {});
       const storedS = await AsyncStorage.getItem(STORAGE_SETTINGS);
       if (storedS) {
@@ -1508,6 +1510,7 @@ export default function App() {
             {/* Waits for any other sheet (a focus timer or workout opened from a link) to close. */}
             <WhatsNewSheet
               visible={whatsNewOpen && ready && !pendingLink && !focusOpen && !workoutOpen && recapOpen === null && !achievementsOpen}
+              seen={whatsNewSeen}
               onClose={() => { setWhatsNewOpen(false); AsyncStorage.setItem(STORAGE_WHATS_NEW, WHATS_NEW_VERSION).catch(() => {}); }}
             />
             {toasts.length > 0 && (

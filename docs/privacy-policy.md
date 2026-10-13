@@ -1,6 +1,6 @@
 # Habbit Privacy Policy
 
-**Effective date:** October 4, 2026
+**Effective date:** October 13, 2026
 
 Habbit is an app for tracking habits, spending, focus time and workouts, with Bonbon, an AI coach. This policy explains what information the app uses, where it goes, and how to delete it. "We" means the developer of Habbit.
 
@@ -8,6 +8,7 @@ Habbit is an app for tracking habits, spending, focus time and workouts, with Bo
 
 - Everything you track is stored on your iPhone.
 - There are no ads, no analytics and no tracking. We don't use your location, and we don't sell your information.
+- The camera is used only to scan a receipt. The photo stays on your iPhone.
 - Bonbon's replies are written by Google's Gemini AI. Bonbon is for people 18 and older. Nothing is sent to it until you allow it in the app, and you can turn it off again in Settings › Data & Privacy.
 - Purchases go through Apple. We never see your payment details.
 

@@ -1,37 +1,40 @@
-# Habbit 3 (build 15): App Store submission
+# Habbit 3.1 (build 17): App Store submission
 
 ## Your steps, in order
 
-1. **Privacy policy:** it's at <https://docs.google.com/document/d/e/2PACX-1vRaehJ-88IhMU8NCGtolO_JnG-gJBGN_eze6f3AMwz_5wUFT52NT8pZYG-fmp7t6c3IIcCTfC7WibFn/pub>, where the paywall, Settings and Bonbon's consent card link to. Put the same URL in App Store Connect › App Privacy › Privacy Policy URL.
-2. **RevenueCat:** remove the promotional Pro you gave yourself for testing.
-3. **Google AI Studio:** check that the API key behind Bonbon is on a project with billing (the paid tier). The consent card and policy say Google doesn't train on Bonbon's chats, which is only true on the paid tier.
-4. **Archive and upload:** in Xcode, choose Any iOS Device, then Product › Archive, then Distribute App › App Store Connect. It’s already set to version 3, build 15.
-5. **In App Store Connect,** fill in everything below, then on the version page add the subscriptions under "In-App Purchases and Subscriptions" if they show "Ready to Submit".
+1. **Privacy policy:** the published Google Doc needs the three additions below, since 3.1 adds net worth and receipt scanning. Edit the same document so the link stays the same (<https://docs.google.com/document/d/e/2PACX-1vRaehJ-88IhMU8NCGtolO_JnG-gJBGN_eze6f3AMwz_5wUFT52NT8pZYG-fmp7t6c3IIcCTfC7WibFn/pub>), and change its effective date. The full text is in `docs/privacy-policy.md`.
+   - Under "The short version", add the line: *The camera is used only to scan a receipt. The photo stays on your iPhone.*
+   - Under "What stays on your iPhone", add the line: *the account balances and debts you enter for your net worth (these are never sent to Bonbon)*
+   - After the Bonbon section, add the section **Scanning receipts** from `docs/privacy-policy.md`.
+2. **Prices:** in App Store Connect › Subscriptions, check the yearly price in each country against twelve months of the monthly one. The US prices are fine ($0.99 and $9.99); the Philippines was the one where yearly cost more.
+3. **Test on your iPhone** what the simulator couldn't show: scanning a receipt with the camera, the screen staying awake while a plank is timed, and the focus timer on the Lock Screen across a few rounds with the app closed.
+4. **Archive and upload:** in Xcode, choose Any iOS Device, then Product › Archive, then Distribute App › App Store Connect. It's already set to version 3.1, build 17.
+5. **In App Store Connect,** create version 3.1 and paste in "What's New" below. The promotional text, description and keywords below are updated too; the review notes have a new paragraph about the camera.
 6. **Submit for review.**
+
+The data label, age rating and screenshots don't have to change. New screenshots would help show the receipt scan and net worth, and I can take them on the simulator.
 
 ---
 
 ## What's New in This Version
 
 ```
-Habbit's biggest update yet!
+A lot of this update came from your feedback. Thank you!
 
-• A streak for every Habbit, "3× a week" goals, and skip days that don't break your streak
-• A page for each Habbit with its calendar, best streak and completion rate
-• Focus timer, with a Live Activity on your Lock Screen
-• Workout tracking: routines that take turns and a rest timer between sets
-• Spending categories, recurring bills, savings jars and a monthly summary
-• A Sunday recap of your week, and 26 achievements to earn
-• New widgets: check off Habbits and log spending right from your Home Screen, Lock Screen and Control Center
-• Siri and Shortcuts: "Log an expense in Habbit"
-• iCloud backup, backup files and a spending export
-• Fresh clay icons all through the app
+• The focus timer is now a real Pomodoro: rounds and breaks run one after the other by themselves
+• Quick focus: start a session without a Habbit, from Home, the app icon or Siri
+• Scan a receipt to fill in an expense
+• Net worth: add up what you have and what you owe, and watch it month by month
+• Yearly bills, and reminders a day, three days or a week ahead
+• Leftover budget is offered to your savings jar quietly, on daily budgets too
+• Workouts: time holds like planks and wall sits
+• Copy your Account ID in Settings, and other small fixes
 ```
 
 ## Promotional Text
 
 ```
-Habits, spending, focus and workouts in one cozy app, with Bonbon the bunny cheering you on. Now with a focus timer, workout tracking and new widgets!
+Habits, spending, focus and workouts in one cozy app, with Bonbon the bunny cheering you on. Now with a Pomodoro timer, receipt scanning and net worth!
 ```
 
 ## Description
@@ -46,12 +49,15 @@ BUILD HABITS THAT FIT YOUR LIFE
 • Each Habbit's calendar, best streak and completion rate
 
 FOCUS AND WORKOUTS
-• A focus timer with breaks, shown on your Lock Screen as a Live Activity
-• Workout routines that take turns, with a rest timer between sets
+• A Pomodoro focus timer: rounds and breaks that run by themselves, shown on your Lock Screen as a Live Activity
+• Quick focus sessions, with or without a Habbit
+• Workout routines that take turns, with a rest timer between sets and timed holds like planks
 
 KNOW WHERE YOUR MONEY GOES
 • A daily, weekly or monthly budget that shows what's left today
-• Spending categories, recurring bills and savings jars
+• Scan a receipt to fill in an expense
+• Spending categories, bills that log themselves (weekly, monthly or yearly) and savings jars
+• Net worth: what you have and what you owe, month by month
 • A monthly summary, and an export for your spreadsheet
 
 MEET BONBON
@@ -59,7 +65,7 @@ Ask Bonbon how your habits went, where your money is going, or what to focus on 
 
 LOG FROM ANYWHERE
 • Home Screen and Lock Screen widgets: check off Habbits and log spending without opening the app
-• Siri and Shortcuts: "Log an expense in Habbit"
+• Siri and Shortcuts: "Log an expense in Habbit", "Start a focus timer in Habbit"
 • A Log Expense button in Control Center
 
 YOUR DATA STAYS YOURS
@@ -81,7 +87,7 @@ Privacy Policy: https://docs.google.com/document/d/e/2PACX-1vRaehJ-88IhMU8NCGtol
 ## Keywords (100 characters)
 
 ```
-habit tracker,budget,expense,streak,routine,focus timer,pomodoro,workout,gym log,savings,goals,coach
+habit tracker,budget,expense,receipt,net worth,streak,focus timer,pomodoro,workout,gym log,savings
 ```
 
 ## App Review Information › Notes
@@ -93,10 +99,12 @@ Bonbon (Chat tab) is an AI chat powered by Google's Gemini API through our serve
 
 Habbit Pro: tap "Free plan · Unlock Pro" on the Profile tab, or any PRO label. There are monthly and yearly auto-renewing subscriptions. Restore purchases is on the paywall and in Settings.
 
-Focus timer and Live Activity: add a Habbit (Habbits tab, +) with "Time it in focus blocks" on, then tap ▶ on its row on Home.
+Camera: used only to scan a receipt. In the "Add spending" sheet, tap "Scan a receipt" and take or choose a photo. The text is read on the device (Apple's Vision) and fills in the amount and shop for the user to check; the photo isn't saved or uploaded. If Bonbon's AI is on, the app asks once whether Bonbon may also read receipts; only then is the receipt's text (never the photo) sent to pick a category. That can be turned off in Settings › Data & Privacy.
+
+Focus timer and Live Activity: tap "Focus timer" on Home for a quick session, or add a Habbit (Habbits tab, +) with "Time it in focus rounds" on, then tap ▶ on its row on Home.
 Workouts: add a Habbit with "Log my workouts" on, then tap ▶ on its row on Home.
 Widgets: add the Habbit widgets from the Home Screen. The Habits widget checks off a Habbit with a tap.
-Siri: "Log an expense in Habbit", "How much can I spend in Habbit".
+Siri: "Log an expense in Habbit", "How much can I spend in Habbit", "Start a focus timer in Habbit".
 ```
 
 ## App Privacy (the data label)
@@ -126,17 +134,12 @@ Answer the questionnaire honestly. These points apply to Habbit:
 - **Violence, mature themes, gambling:** none.
 
 
-## Screenshots to retake
+## Screenshots
 
-The current ones are from v2.0. Upload 6.9-inch screenshots (1320 × 2868, iPhone 17 Pro Max); App Store Connect scales them for the smaller sizes. Suggested set:
-1. Home with streaks, a running focus timer and a workout in progress
-2. A Habbit's page with its calendar and stats
-3. Finance with categories, bills and a savings jar
-4. Chat with Bonbon
-5. The Sunday recap
-6. Widgets on the Home Screen and Lock Screen
-7. The workout screen with the rest timer
-8. The focus timer and its Live Activity
+The current set is from version 3 and still fits. If you'd like 3.1 to show, these would be the ones to add or swap in (6.9-inch, 1320 × 2868, iPhone 17 Pro Max):
+1. The spending sheet filled in from a scanned receipt
+2. Net worth with its month-by-month bars
+3. The focus timer mid-session, showing the round and the break to come
 
 I can take these on the simulator with good-looking sample data.
 

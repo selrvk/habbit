@@ -1,7 +1,9 @@
 // src/components/WhatsNewSheet.tsx
 //
-// "What's new in Habbit 3": a few pages to swipe through, shown once to people updating from
-// an earlier version (App.tsx). New installs skip it; onboarding covers the same ground.
+// "What's new": a few pages to swipe through, shown once to people updating from an earlier
+// version (App.tsx). Someone who saw the pages for Habbit 3 gets the short set for 3.1; someone
+// coming straight from before 3 gets the whole tour, with 3.1 folded in. New installs skip it;
+// onboarding covers the same ground.
 
 import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal } from 'react-native';
@@ -15,11 +17,41 @@ const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0',
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
 /** Bump when there's a new set of pages to show; people who've seen this one get it again. */
-export const WHATS_NEW_VERSION = '3';
+export const WHATS_NEW_VERSION = '3.1';
+/** The version whose pages were the whole tour: having seen it, only what came after is new. */
+const TOUR_VERSION = '3';
 
 type Page = { icons: IconName[]; title: string; lines: string[]; hint?: string };
 
-const PAGES: Page[] = [
+/** For someone who has seen Habbit 3's pages: what 3.1 added. */
+const NEW_PAGES: Page[] = [
+  { icons: ['bonbon'], title: 'New in Habbit 3.1',
+    lines: ['A lot of this came from your feedback. Thank you! Here’s what changed.'] },
+  { icons: ['stopwatch', 'coffee'], title: 'A real Pomodoro timer',
+    lines: [
+      'Focus rounds and breaks now run one after the other, by themselves',
+      'Pick how many rounds, with a longer break after every fourth',
+      'Quick focus: start a session without a Habbit, from the Focus timer on Home',
+    ],
+    hint: 'Hold the app icon for Start Focus, or say “Start a focus timer in Habbit”.' },
+  { icons: ['money-bag', 'receipt'], title: 'More for your money',
+    lines: [
+      'Scan a receipt to fill in an expense',
+      'Net worth: add up what you have and what you owe',
+      'Yearly bills, and reminders a day or a week ahead',
+      'Leftover budget is offered to your jar quietly, on daily budgets too',
+    ],
+    hint: 'Net worth is on the Finance tab, below the month’s recap.' },
+  { icons: ['dumbbell'], title: 'Planks count too',
+    lines: [
+      'Time holds like planks and wall sits in a workout',
+      'Your longest hold counts as a personal best',
+    ],
+    hint: 'Edit a routine and switch an exercise from Reps to Time.' },
+];
+
+/** The whole tour, for someone coming from before Habbit 3. */
+const TOUR_PAGES: Page[] = [
   { icons: ['bonbon'], title: 'Welcome to Habbit 3',
     lines: ['Our biggest update yet! Here’s a quick look at what’s new.'] },
   { icons: ['fire', 'calendar'], title: 'Habbits that fit real life',
@@ -31,21 +63,23 @@ const PAGES: Page[] = [
     ] },
   { icons: ['stopwatch', 'dumbbell'], title: 'Focus and workouts',
     lines: [
-      'Time a Habbit in focus rounds, with the timer on your Lock Screen',
-      'Log workouts: routines that take turns, last time’s weights and a rest timer between sets',
+      'Time a Habbit in focus rounds with breaks, with the timer on your Lock Screen',
+      'Or start a quick focus session from Home, no Habbit needed',
+      'Log workouts: routines that take turns, last time’s weights, timed holds like planks, and a rest timer between sets',
     ],
     hint: 'Turn them on when you add or edit a Habbit.' },
   { icons: ['jar', 'receipt'], title: 'Money that explains itself',
     lines: [
       'Categories, so you can see where it all went',
-      'Bills that log themselves when they’re due',
+      'Bills that log themselves when they’re due, monthly, weekly or yearly',
       'A savings jar for what’s left over',
-      'A summary of every month',
+      'A summary of every month, and your net worth',
     ] },
   { icons: ['lightning'], title: 'Log from anywhere',
     lines: [
       'New widgets: check off Habbits and log spending from your Home Screen',
       'Siri and Shortcuts: “Log an expense in Habbit”',
+      'Scan a receipt to fill in an expense',
       'Hold the app icon for quick actions',
     ],
     hint: 'To add a widget, hold your Home Screen, then tap Edit.' },
@@ -57,7 +91,13 @@ const PAGES: Page[] = [
     ] },
 ];
 
-export const WhatsNewSheet = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
+export const WhatsNewSheet = ({ visible, seen, onClose }: {
+  visible: boolean;
+  /** The WHATS_NEW_VERSION last seen, if any: it decides between the short set and the whole tour. */
+  seen: string | null;
+  onClose: () => void;
+}) => {
+  const PAGES = seen === TOUR_VERSION ? NEW_PAGES : TOUR_PAGES;
   const fs     = useFontSize();
   const insets = useSafeAreaInsets();
   const scroll = useRef<ScrollView>(null);
