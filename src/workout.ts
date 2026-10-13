@@ -7,13 +7,18 @@
 // it checks the habit off once, on the day it finished (as an inbox event, like the focus
 // timer). Ticking a set off starts a rest before the next one. Finished workouts are kept
 // for history.
+//
+// An exercise is counted in reps or, like a plank, timed: each set is a hold of so many
+// seconds. A hold can be timed in the workout (startHold, stopHold), which saves how long
+// it really was; its best is the longest hold.
 
 import type { Commission } from './types';
 import { dayKeyAt } from './focus';
 import { addDaysToKey } from './helpers';
 
 export type WeightUnit = 'kg' | 'lb';
-export type ExercisePlan = { id: string; name: string; sets: number; reps: number };
+/** `seconds`: a timed exercise, each set a hold of that long (`reps` is kept but not used). */
+export type ExercisePlan = { id: string; name: string; sets: number; reps: number; seconds?: number };
 export type Routine = { id: string; name: string; exercises: ExercisePlan[] };
 export type WorkoutPlan = {
   unit: WeightUnit;
@@ -22,8 +27,8 @@ export type WorkoutPlan = {
   restSeconds?: number;
 };
 
-/** A set as done: weight (null for bodyweight) × reps. */
-export type SetLog = { weight: number | null; reps: number };
+/** A set as done: weight (null for bodyweight) × reps, or held for `seconds` (reps is then 0). */
+export type SetLog = { weight: number | null; reps: number; seconds?: number };
 
 /** A finished workout. */
 export type WorkoutLog = {
@@ -40,9 +45,12 @@ export type WorkoutLog = {
   exercises: { name: string; sets: SetLog[] }[];
 };
 
-/** A set while the workout runs: what's typed in, and whether it's ticked off. */
+/**
+ * A set while the workout runs: what's typed in, and whether it's ticked off. For a timed
+ * exercise `reps` is its seconds: the target, then how long it was held.
+ */
 export type LiveSet = { weight: string; reps: string; done: boolean };
-export type LiveExercise = { name: string; sets: LiveSet[] };
+export type LiveExercise = { name: string; sets: LiveSet[]; timed?: boolean };
 
 /** The workout in progress. Stored, so it survives the app closing. */
 export type ActiveWorkout = {
@@ -60,6 +68,8 @@ export type ActiveWorkout = {
   restSeconds: number;
   /** The rest running: when it ends (ms), how long it is, and the set that started it. */
   rest?: { endsAt: number; seconds: number; ex: number; set: number };
+  /** The hold being timed: its set, when it started (ms) and the seconds aimed for. */
+  hold?: { ex: number; set: number; startedAt: number; target: number };
 };
 
 export const DEFAULT_REST = 90;
@@ -69,6 +79,10 @@ const MAX_REST = 600;
 
 export const SET_COUNTS = [1, 2, 3, 4, 5, 6, 8];
 export const MAX_SETS = 12;
+/** A timed exercise starts at this many seconds, and can be set from 5 seconds to 10 minutes. */
+export const DEFAULT_HOLD = 30;
+export const MIN_HOLD = 5;
+export const MAX_HOLD = 600;
 /** A workout untouched this long was forgotten: it's finished (or dropped) when the app next looks. */
 const FORGOTTEN_MS = 12 * 60 * 60 * 1000;
 /** Keep this many workouts (a few years' worth). */
@@ -77,10 +91,29 @@ const KEEP_WORKOUTS = 1000;
 // ── Starting points ──────────────────────────────────────────────────────────
 
 export const EXERCISE_SUGGESTIONS = [
-  'Bench press', 'Squat', 'Deadlift', 'Overhead press', 'Barbell row', 'Pull-up', 'Push-up',
+  'Bench press', 'Squat', 'Deadlift', 'Overhead press', 'Barbell row', 'Pull-up', 'Push-up', 'Plank',
   'Lat pulldown', 'Incline dumbbell press', 'Romanian deadlift', 'Leg press', 'Lunge',
-  'Bicep curl', 'Tricep extension', 'Lateral raise', 'Calf raise',
+  'Bicep curl', 'Tricep extension', 'Lateral raise', 'Calf raise', 'Side plank', 'Wall sit', 'Dead hang',
 ];
+
+/** Suggested exercises that are held for time, and the seconds each starts at. */
+const TIMED_SUGGESTIONS: Record<string, number> = { 'plank': 60, 'side plank': 30, 'wall sit': 45, 'dead hang': 30 };
+
+/** A new exercise for a routine: 3 × 10, or 3 holds for one that's timed (a plank). */
+export const newExercise = (name: string, id: string): ExercisePlan => {
+  const seconds = TIMED_SUGGESTIONS[name.trim().toLowerCase()];
+  return { id, name, sets: 3, reps: 10, ...(seconds ? { seconds } : {}) };
+};
+
+/** The next hold length up or down: by 5 seconds to a minute, by 15 after. */
+export const stepHold = (seconds: number, up: boolean): number =>
+  Math.min(MAX_HOLD, Math.max(MIN_HOLD, up ? seconds + (seconds < 60 ? 5 : 15) : seconds - (seconds <= 60 ? 5 : 15)));
+
+/** "0:45", "1:30". */
+export const holdText = (seconds: number): string => `${Math.floor(seconds / 60)}:${String(Math.round(seconds) % 60).padStart(2, '0')}`;
+
+/** An exercise as planned: "Bench press 3×8", or "Plank 3×0:45" for one that's timed. */
+export const planText = (e: ExercisePlan): string => `${e.name} ${e.sets}×${e.seconds ? holdText(e.seconds) : e.reps}`;
 
 type Template = { name: string; routines: { name: string; exercises: [string, number, number][] }[] };
 
@@ -112,7 +145,10 @@ export const cleanPlan = (plan: WorkoutPlan): WorkoutPlan => ({
   unit: plan.unit,
   restSeconds: plan.restSeconds ?? DEFAULT_REST,
   routines: plan.routines
-    .map(r => ({ ...r, name: r.name.trim(), exercises: r.exercises.map(e => ({ ...e, name: e.name.trim() })).filter(e => e.name) }))
+    .map(r => ({ ...r, name: r.name.trim(), exercises: r.exercises.map(({ seconds, ...e }) => ({
+      ...e, name: e.name.trim(),
+      ...(seconds && seconds > 0 ? { seconds: Math.min(MAX_HOLD, Math.max(MIN_HOLD, Math.round(seconds))) } : {}),
+    })).filter(e => e.name) }))
     .filter(r => r.exercises.length > 0)
     .map((r, i) => ({ ...r, name: r.name || `Workout ${String.fromCharCode(65 + i)}` })),
 });
@@ -165,13 +201,18 @@ export const parseReps = (text: string): number => {
   return Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0;
 };
 
-/** "60 kg × 8, 8, 7", "60 × 8, 55 × 10 kg", "12, 10, 8 reps". */
+/** Whether sets were holds (a timed exercise). */
+export const isTimed = (sets: SetLog[]): boolean => sets.some(s => (s.seconds ?? 0) > 0);
+
+/** "60 kg × 8, 8, 7", "60 × 8, 55 × 10 kg", "12, 10, 8 reps"; holds: "1:00, 0:45", "20 kg × 0:45, 0:40". */
 export const setsLabel = (sets: SetLog[], unit: WeightUnit): string => {
   if (sets.length === 0) return '';
-  if (sets.every(s => s.weight === null)) return `${sets.map(s => s.reps).join(', ')} reps`;
+  const timed  = isTimed(sets);
+  const amount = (s: SetLog) => (timed ? holdText(s.seconds ?? 0) : `${s.reps}`);
+  if (sets.every(s => s.weight === null)) return `${sets.map(amount).join(', ')}${timed ? '' : ' reps'}`;
   const weights = new Set(sets.map(s => s.weight));
-  if (weights.size === 1) return `${weightText(sets[0].weight)} ${unit} × ${sets.map(s => s.reps).join(', ')}`;
-  return `${sets.map(s => (s.weight === null ? `${s.reps}` : `${weightText(s.weight)} × ${s.reps}`)).join(', ')} ${unit}`;
+  if (weights.size === 1) return `${weightText(sets[0].weight)} ${unit} × ${sets.map(amount).join(', ')}`;
+  return `${sets.map(s => (s.weight === null ? amount(s) : `${weightText(s.weight)} × ${amount(s)}`)).join(', ')} ${unit}`;
 };
 
 export const workoutTotals = (w: WorkoutLog) => {
@@ -196,6 +237,8 @@ export type ExercisePoint = {
   e1rm: number;
   /** Most reps in a set (for bodyweight exercises). */
   reps: number;
+  /** The longest hold, in seconds (0 unless the exercise was timed). */
+  seconds: number;
 };
 
 /** Each workout an exercise was done in, oldest first, weights in `unit`. */
@@ -203,12 +246,13 @@ export const exerciseHistory = (log: WorkoutLog[], name: string, unit: WeightUni
   log.flatMap(w => {
     const ex = w.exercises.find(e => sameName(e.name, name));
     if (!ex || ex.sets.length === 0) return [];
-    const sets = ex.sets.map(s => ({ weight: s.weight === null ? null : convertWeight(s.weight, w.unit, unit), reps: s.reps }));
+    const sets = ex.sets.map(s => ({ ...s, weight: s.weight === null ? null : convertWeight(s.weight, w.unit, unit) }));
     const top  = sets.reduce((a, b) => ((b.weight ?? 0) > (a.weight ?? 0) || ((b.weight ?? 0) === (a.weight ?? 0) && b.reps > a.reps) ? b : a));
     return [{
       date: w.date, top,
       e1rm: Math.round(Math.max(...sets.map(s => (s.weight === null ? 0 : oneRepMax(s.weight, s.reps)))) * 10) / 10,
       reps: Math.max(...sets.map(s => s.reps)),
+      seconds: Math.max(...sets.map(s => s.seconds ?? 0)),
     }];
   });
 
@@ -216,11 +260,14 @@ export type ExerciseSummary = {
   name: string;
   times: number;
   last: ExercisePoint;
-  /** Personal bests: heaviest set, best estimated one-rep max, most reps. */
+  /** Personal bests: heaviest set, best estimated one-rep max, most reps; or the longest hold. */
   heaviest: ExercisePoint | null;
   bestE1rm: ExercisePoint | null;
   mostReps: ExercisePoint;
-  /** Weighted, or done with bodyweight only. */
+  longest: ExercisePoint | null;
+  /** Held for time (as it was last done); its best is the longest hold. */
+  timed: boolean;
+  /** Weighted, or done with bodyweight only (for exercises counted in reps). */
   weighted: boolean;
 };
 
@@ -234,18 +281,20 @@ export const exerciseSummaries = (log: WorkoutLog[], habitId: string, unit: Weig
   }
   return [...names.values()].map(name => {
     const points   = exerciseHistory(mine, name, unit);
-    const weighted = points.some(p => p.top.weight !== null);
+    const timed    = points[points.length - 1].seconds > 0;
+    const weighted = !timed && points.some(p => p.top.weight !== null);
     const best = (score: (p: ExercisePoint) => number) => points.reduce((a, b) => (score(b) > score(a) ? b : a));
     return {
-      name, times: points.length, last: points[points.length - 1], weighted,
+      name, times: points.length, last: points[points.length - 1], timed, weighted,
       heaviest: weighted ? best(p => p.top.weight ?? 0) : null,
       bestE1rm: weighted ? best(p => p.e1rm) : null,
       mostReps: best(p => p.reps),
+      longest:  timed ? best(p => p.seconds) : null,
     };
   });
 };
 
-/** Personal bests a finished workout set: "Bench press: 62.5 kg" (heaviest set beaten). */
+/** Personal bests a finished workout set: "Bench press: 62.5 kg" (heaviest set beaten), "Plank: 1:15 hold". */
 export const newBests = (log: WorkoutLog[], w: WorkoutLog): { name: string; label: string }[] => {
   const before = log.filter(x => x.id !== w.id && x.habitId === w.habitId && x.startedAt < w.startedAt);
   return w.exercises.flatMap(e => {
@@ -253,6 +302,10 @@ export const newBests = (log: WorkoutLog[], w: WorkoutLog): { name: string; labe
     if (prev.length === 0) return [];
     const now = exerciseHistory([w], e.name, w.unit)[0];
     if (!now) return [];
+    if (now.seconds > 0) {
+      const longest = Math.max(...prev.map(p => p.seconds));
+      return longest > 0 && now.seconds > longest ? [{ name: e.name, label: `${holdText(now.seconds)} hold` }] : [];
+    }
     if (now.top.weight !== null) {
       const heaviest = Math.max(...prev.map(p => p.top.weight ?? 0));
       return now.top.weight > heaviest ? [{ name: e.name, label: `${weightText(now.top.weight)} ${w.unit} × ${now.top.reps}` }] : [];
@@ -264,21 +317,28 @@ export const newBests = (log: WorkoutLog[], w: WorkoutLog): { name: string; labe
 
 /**
  * Whether any workout beat a personal best (as newBests counts them), in one pass: a heavier
- * top set, or more reps for an exercise only ever done with bodyweight.
+ * top set, more reps for an exercise only ever done with bodyweight, or a longer hold.
  */
 export const hadPersonalBest = (log: WorkoutLog[]): boolean => {
-  const best = new Map<string, { kg: number; weighted: boolean; reps: number }>();
+  const best = new Map<string, { kg: number; weighted: boolean; reps: number; seconds: number }>();
   for (const w of [...log].sort((a, b) => a.startedAt - b.startedAt)) {
     for (const e of w.exercises) {
       if (e.sets.length === 0) continue;
       const key  = `${w.habitId}\n${e.name.trim().toLowerCase()}`;
+      const prev = best.get(key);
+      const seconds = Math.max(...e.sets.map(s => s.seconds ?? 0));
+      if (seconds > 0) {
+        if (prev && prev.seconds > 0 && seconds > prev.seconds) return true;
+        best.set(key, { kg: prev?.kg ?? 0, weighted: !!prev?.weighted, reps: prev?.reps ?? 0, seconds: Math.max(prev?.seconds ?? 0, seconds) });
+        continue;
+      }
       const kgs  = e.sets.filter(s => s.weight !== null).map(s => convertWeight(s.weight!, w.unit, 'kg'));
       const top  = kgs.length > 0 ? Math.max(...kgs) : null;
       const reps = Math.max(...e.sets.map(s => s.reps));
-      const prev = best.get(key);
       if (prev && (top !== null ? top > prev.kg : !prev.weighted && reps > prev.reps)) return true;
       best.set(key, {
         kg: Math.max(prev?.kg ?? 0, top ?? 0), weighted: !!prev?.weighted || top !== null, reps: Math.max(prev?.reps ?? 0, reps),
+        seconds: prev?.seconds ?? 0,
       });
     }
   }
@@ -287,7 +347,7 @@ export const hadPersonalBest = (log: WorkoutLog[]): boolean => {
 
 // ── A workout in progress ────────────────────────────────────────────────────
 
-/** A workout of `routine`, each set filled in from the last time (weights) and the plan (reps). */
+/** A workout of `routine`, each set filled in from the last time (weights) and the plan (reps, or seconds to hold). */
 export const startWorkout = (
   habit: Commission & { workout: WorkoutPlan }, routine: Routine, log: WorkoutLog[], now: number, id: string,
 ): ActiveWorkout => ({
@@ -299,7 +359,10 @@ export const startWorkout = (
       const s = last && (last.sets[i] ?? last.sets[last.sets.length - 1]);
       return s && s.weight !== null ? weightText(convertWeight(s.weight, last.unit, habit.workout.unit)) : '';
     };
-    return { name: e.name, sets: Array.from({ length: e.sets }, (_, i) => ({ weight: weightAt(i), reps: String(e.reps), done: false })) };
+    return {
+      name: e.name, ...(e.seconds ? { timed: true } : {}),
+      sets: Array.from({ length: e.sets }, (_, i) => ({ weight: weightAt(i), reps: String(e.seconds ?? e.reps), done: false })),
+    };
   }),
 });
 
@@ -317,6 +380,8 @@ export const editSet = (w: ActiveWorkout, ex: number, set: number, field: 'weigh
  * starts a rest, unless it was the last set; ticking that set back on cancels its rest.
  */
 export const toggleSet = (w: ActiveWorkout, ex: number, set: number, now: number): ActiveWorkout => {
+  // Ticking the set being held stops its timer, keeping how long it was.
+  if (w.hold && w.hold.ex === ex && w.hold.set === set) return stopHold(w, now);
   const done = !w.exercises[ex].sets[set].done;
   const next = mapExercise(w, ex, e => {
     const weight = e.sets[set].weight;
@@ -329,6 +394,41 @@ export const toggleSet = (w: ActiveWorkout, ex: number, set: number, now: number
       : rested;
   }
   return rest && rest.ex === ex && rest.set === set ? rested : next;
+};
+
+// ── Holds (timed exercises) ──────────────────────────────────────────────────
+
+/** A hold shorter than this was a slip of the thumb: it's dropped, not saved. */
+const SHORTEST_HOLD = 2;
+/** The longest a hold is saved as (the seconds field takes three digits). */
+const LONGEST_HOLD = 999;
+
+/** Starts timing a set of a timed exercise (one at a time; a rest that was running ends). */
+export const startHold = (w: ActiveWorkout, ex: number, set: number, now: number): ActiveWorkout => {
+  const s = w.exercises[ex]?.sets[set];
+  if (!w.exercises[ex]?.timed || !s || s.done) return w;
+  const { rest, ...rested } = w;
+  return { ...rested, updatedAt: now, hold: { ex, set, startedAt: now, target: parseReps(s.reps) } };
+};
+
+/** Seconds into the hold (0 when there's none). */
+export const holdElapsed = (w: ActiveWorkout, now: number): number =>
+  w.hold ? Math.max(0, Math.floor((now - w.hold.startedAt) / 1000)) : 0;
+
+/** Stops timing without saving anything. */
+export const cancelHold = (w: ActiveWorkout): ActiveWorkout => {
+  const { hold, ...held } = w;
+  return hold ? held : w;
+};
+
+/** Stops the hold: the set gets how long it was held and is ticked off, which starts its rest. */
+export const stopHold = (w: ActiveWorkout, now: number): ActiveWorkout => {
+  if (!w.hold) return w;
+  const { ex, set } = w.hold;
+  const seconds = Math.min(holdElapsed(w, now), LONGEST_HOLD);
+  const held    = cancelHold(w);
+  if (seconds < SHORTEST_HOLD || !held.exercises[ex]?.sets[set] || held.exercises[ex].sets[set].done) return { ...held, updatedAt: now };
+  return toggleSet(editSet(held, ex, set, 'reps', String(seconds), now), ex, set, now);
 };
 
 // ── Resting ──────────────────────────────────────────────────────────────────
@@ -365,17 +465,25 @@ export const addSet = (w: ActiveWorkout, ex: number, now: number) =>
     return { ...e, sets: [...e.sets, { weight: last?.weight ?? '', reps: last?.reps ?? '10', done: false }] };
   }, now);
 
-/** One set fewer: the last one, unless it's the only one. */
-export const removeSet = (w: ActiveWorkout, ex: number, now: number) =>
-  mapExercise(w, ex, e => (e.sets.length > 1 ? { ...e, sets: e.sets.slice(0, -1) } : e), now);
+/** One set fewer: the last one, unless it's the only one. A hold being timed on it stops. */
+export const removeSet = (w: ActiveWorkout, ex: number, now: number) => {
+  const sets = w.exercises[ex]?.sets.length ?? 0;
+  const kept = w.hold && w.hold.ex === ex && w.hold.set === sets - 1 && sets > 1 ? cancelHold(w) : w;
+  return mapExercise(kept, ex, e => (e.sets.length > 1 ? { ...e, sets: e.sets.slice(0, -1) } : e), now);
+};
 
 export const setsDone = (w: ActiveWorkout) => w.exercises.reduce((n, e) => n + e.sets.filter(s => s.done).length, 0);
 
-/** The finished workout: its ticked-off sets with reps. Null if there are none. */
+/** The finished workout: its ticked-off sets with reps (or seconds held). Null if there are none. */
 export const finishWorkout = (w: ActiveWorkout, now: number): WorkoutLog | null => {
   const endedAt = Math.max(now, w.startedAt);
   const exercises = w.exercises
-    .map(e => ({ name: e.name, sets: e.sets.filter(s => s.done && parseReps(s.reps) > 0).map(s => ({ weight: parseWeight(s.weight), reps: parseReps(s.reps) })) }))
+    .map(e => ({
+      name: e.name,
+      sets: e.sets.filter(s => s.done && parseReps(s.reps) > 0).map((s): SetLog => (e.timed
+        ? { weight: parseWeight(s.weight), reps: 0, seconds: parseReps(s.reps) }
+        : { weight: parseWeight(s.weight), reps: parseReps(s.reps) })),
+    }))
     .filter(e => e.sets.length > 0);
   if (exercises.length === 0) return null;
   return {
@@ -470,7 +578,8 @@ export const workoutOverview = (
         return {
           habit: h.label, name: s.name, unit, times: s.times,
           last: setsLabel(last.sets.map(x => ({ ...x, weight: x.weight === null ? null : convertWeight(x.weight, last.unit, unit) })), unit),
-          best: s.heaviest ? `${weightText(s.heaviest.top.weight)} ${unit} × ${s.heaviest.top.reps}` : s.times > 1 ? `${s.mostReps.reps} reps` : null,
+          best: s.longest ? (s.times > 1 ? `${holdText(s.longest.seconds)} hold` : null)
+            : s.heaviest ? `${weightText(s.heaviest.top.weight)} ${unit} × ${s.heaviest.top.reps}` : s.times > 1 ? `${s.mostReps.reps} reps` : null,
         };
       });
     }),

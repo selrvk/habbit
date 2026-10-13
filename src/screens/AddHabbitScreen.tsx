@@ -14,7 +14,7 @@ import { useFontSize } from '../hooks/useFontSize';
 import type { Commission, HabbitFormData, ReminderTime } from '../types';
 import { DEFAULT_FOCUS, DEFAULT_ROUNDS, LONG_BREAK_EVERY, durationLabel, sessionLength, type FocusSettings } from '../focus';
 import { FocusPicker } from '../components/FocusPicker';
-import { DEFAULT_REST, fromTemplate, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
+import { DEFAULT_REST, fromTemplate, planText, ROUTINE_TEMPLATES, type WorkoutPlan } from '../workout';
 
 /** "90-second", "2-minute". */
 const restText = (s: number) => (s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`);
@@ -399,7 +399,7 @@ export const AddHabbitScreen = ({
                       <Text style={[subText, { width: 16 }]}>{i + 1}.</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={rowText}>{r.name}</Text>
-                        <Text style={subText} numberOfLines={2}>{r.exercises.map(e => `${e.name} ${e.sets}×${e.reps}`).join(' · ')}</Text>
+                        <Text style={subText} numberOfLines={2}>{r.exercises.map(planText).join(' · ')}</Text>
                       </View>
                     </View>
                   ))}

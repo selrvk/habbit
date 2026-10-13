@@ -58,6 +58,11 @@ RCT_EXPORT_METHOD(reloadAll) {
   reloadWidgetTimelines();
 }
 
+/** Keeps the screen from dimming and locking (while a hold is being timed in a workout), or lets it again. */
+RCT_EXPORT_METHOD(setKeepAwake:(BOOL)on) {
+  dispatch_async(dispatch_get_main_queue(), ^{ UIApplication.sharedApplication.idleTimerDisabled = on; });
+}
+
 /** Puts text on the clipboard (the account ID in Settings). */
 RCT_EXPORT_METHOD(copyText:(NSString *)text) {
   dispatch_async(dispatch_get_main_queue(), ^{ UIPasteboard.generalPasteboard.string = text; });

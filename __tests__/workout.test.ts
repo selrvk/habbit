@@ -2,6 +2,7 @@ import {
   addSet, adjustRest, cleanPlan, endRest, nextUp, parseActiveWorkout, restLeft, convertWeight, editSet, exerciseSummaries, finishWorkout, fromTemplate, lastTime, logWorkout, newBests, nextRoutine, parseWeight, workoutOverview,
   removeSet, ROUTINE_TEMPLATES, setsLabel, settleWorkout, startWorkout, toggleSet, workoutEvent, workoutTotals,
   type WorkoutLog, type WorkoutPlan,
+  cancelHold, hadPersonalBest, holdElapsed, holdText, newExercise, planText, startHold, stepHold, stopHold, setsDone,
 } from '../src/workout';
 import type { Commission } from '../src/types';
 
@@ -204,5 +205,101 @@ describe('numbers', () => {
     expect(setsLabel([{ weight: 60, reps: 8 }, { weight: 60, reps: 7 }], 'kg')).toBe('60 kg × 8, 7');
     expect(setsLabel([{ weight: 60, reps: 8 }, { weight: 55, reps: 10 }], 'lb')).toBe('60 × 8, 55 × 10 lb');
     expect(setsLabel([{ weight: null, reps: 12 }, { weight: null, reps: 10 }], 'kg')).toBe('12, 10 reps');
+  });
+});
+
+describe('timed exercises', () => {
+  const core: WorkoutPlan = {
+    unit: 'kg', restSeconds: 60,
+    routines: [{ id: 'core', name: 'Core', exercises: [{ id: 'p', name: 'Plank', sets: 3, reps: 10, seconds: 60 }, { id: 'c', name: 'Crunch', sets: 2, reps: 15 }] }],
+  };
+  const start = at('2026-10-01', 18);
+  const begin = (log: WorkoutLog[] = []) => startWorkout(gym({ workout: core }), core.routines[0], log, start, 'w1');
+  const held  = (id: string, day: string, seconds: number[], weight: number | null = null) => logged({
+    id, date: day, startedAt: at(day, 18), endedAt: at(day, 19), routineId: 'core', routineName: 'Core',
+    exercises: [{ name: 'Plank', sets: seconds.map(sec => ({ weight, reps: 0, seconds: sec })) }],
+  });
+
+  it('are suggested with a hold, and step by 5 seconds, then 15', () => {
+    expect(newExercise('Plank', 'x')).toEqual({ id: 'x', name: 'Plank', sets: 3, reps: 10, seconds: 60 });
+    expect(newExercise('Squat', 'y')).toEqual({ id: 'y', name: 'Squat', sets: 3, reps: 10 });
+    expect([stepHold(30, true), stepHold(60, true), stepHold(75, false), stepHold(60, false)]).toEqual([35, 75, 60, 55]);
+    expect([stepHold(5, false), stepHold(600, true)]).toEqual([5, 600]);
+    expect([holdText(45), holdText(60), holdText(150)]).toEqual(['0:45', '1:00', '2:30']);
+    expect([planText(newExercise('Plank', 'x')), planText(newExercise('Squat', 'y'))]).toEqual(['Plank 3×1:00', 'Squat 3×10']);
+    // A routine keeps a sensible hold, or goes back to reps.
+    const cleaned = cleanPlan({ unit: 'kg', routines: [{ id: 'r', name: 'Core', exercises: [
+      { id: 'a', name: 'Plank', sets: 3, reps: 10, seconds: 2000 }, { id: 'b', name: 'Crunch', sets: 2, reps: 15, seconds: 0 },
+    ] }] });
+    expect(cleaned.routines[0].exercises).toEqual([{ id: 'a', name: 'Plank', sets: 3, reps: 10, seconds: 600 }, { id: 'b', name: 'Crunch', sets: 2, reps: 15 }]);
+  });
+
+  it('start with their seconds where reps would be', () => {
+    const w = begin();
+    expect(w.exercises[0]).toEqual({ name: 'Plank', timed: true, sets: Array(3).fill({ weight: '', reps: '60', done: false }) });
+    expect(w.exercises[1].timed).toBeUndefined();
+  });
+
+  it('time a hold: stopping saves how long it was, ticks the set off and starts the rest', () => {
+    const holding = startHold(begin(), 0, 0, start + 1000);
+    expect(holding.hold).toEqual({ ex: 0, set: 0, startedAt: start + 1000, target: 60 });
+    expect(holdElapsed(holding, start + 24_500)).toBe(23);
+    const stopped = stopHold(holding, start + 68_400);
+    expect(stopped.hold).toBeUndefined();
+    expect(stopped.exercises[0].sets[0]).toEqual({ weight: '', reps: '67', done: true });
+    expect(stopped.rest).toMatchObject({ ex: 0, set: 0, seconds: 60 });
+    expect(setsDone(stopped)).toBe(1);
+    // Ticking the set that's being held stops its timer the same way.
+    expect(toggleSet(holding, 0, 0, start + 31_000).exercises[0].sets[0]).toEqual({ weight: '', reps: '30', done: true });
+  });
+
+  it('end a rest when a hold starts, and only time sets that can be', () => {
+    const resting = toggleSet(begin(), 1, 0, start);
+    expect(resting.rest).toBeDefined();
+    const holding = startHold(resting, 0, 0, start + 5000);
+    expect(holding.rest).toBeUndefined();
+    expect(holding.hold?.set).toBe(0);
+    expect(startHold(begin(), 1, 0, start).hold).toBeUndefined();          // counted in reps
+    expect(startHold(toggleSet(begin(), 0, 0, start), 0, 0, start).hold).toBeUndefined(); // already done
+  });
+
+  it('drop a slip of the thumb, a cancelled hold, and one whose set was removed', () => {
+    const holding = startHold(begin(), 0, 2, start);
+    expect(stopHold(holding, start + 1200).exercises[0].sets[2]).toEqual({ weight: '', reps: '60', done: false });
+    expect(cancelHold(holding).hold).toBeUndefined();
+    expect(removeSet(holding, 0, start + 2000).hold).toBeUndefined();
+    expect(removeSet(holding, 1, start + 2000).hold).toBeDefined(); // another exercise's set
+  });
+
+  it('finish as holds, and read back as times', () => {
+    let w = stopHold(startHold(begin(), 0, 0, start), start + 67_000);
+    w = toggleSet(w, 0, 1, start + 200_000);                         // ticked without the timer: the target
+    w = toggleSet(editSet(w, 1, 0, 'weight', '10', start), 1, 0, start + 300_000);
+    const done = finishWorkout(w, start + 600_000)!;
+    expect(done.exercises).toEqual([
+      { name: 'Plank', sets: [{ weight: null, reps: 0, seconds: 67 }, { weight: null, reps: 0, seconds: 60 }] },
+      { name: 'Crunch', sets: [{ weight: 10, reps: 15 }] },
+    ]);
+    expect(setsLabel(done.exercises[0].sets, 'kg')).toBe('1:07, 1:00');
+    expect(setsLabel([{ weight: 20, reps: 0, seconds: 45 }, { weight: 20, reps: 0, seconds: 40 }], 'kg')).toBe('20 kg × 0:45, 0:40');
+    expect(workoutTotals(done).volume).toBe(150); // holds lift nothing
+    expect(lastTime([done], 'plank')?.sets[0].seconds).toBe(67);
+  });
+
+  it('have the longest hold as their best', () => {
+    const log = [held('w1', '2026-09-21', [45, 40]), held('w2', '2026-09-24', [60, 50]), held('w3', '2026-09-28', [55])];
+    const [plank] = exerciseSummaries(log, 'gym', 'kg');
+    expect(plank).toMatchObject({ name: 'Plank', timed: true, weighted: false, heaviest: null, times: 3, last: { seconds: 55 } });
+    expect(plank.longest).toMatchObject({ date: '2026-09-24', seconds: 60 });
+    // A weighted hold is still judged by time.
+    expect(exerciseSummaries([held('w1', '2026-09-21', [30], 20)], 'gym', 'kg')[0]).toMatchObject({ timed: true, weighted: false });
+
+    const next = held('w4', '2026-10-01', [75, 50]);
+    expect(newBests(logWorkout(log, next), next)).toEqual([{ name: 'Plank', label: '1:15 hold' }]);
+    expect(newBests(logWorkout(log, held('w5', '2026-10-01', [60])), held('w5', '2026-10-01', [60]))).toEqual([]);
+    expect(hadPersonalBest(log)).toBe(true);                       // 45 → 60
+    expect(hadPersonalBest([log[1], log[2]].map((w, i) => ({ ...w, startedAt: at('2026-09-2' + (4 + i * 4), 18) })))).toBe(false); // 60 → 55
+    expect(workoutOverview(log, null, [gym({ workout: core })], '2026-09-28', at('2026-09-28', 20))?.exercises[0])
+      .toMatchObject({ name: 'Plank', last: '0:55', best: '1:00 hold' });
   });
 });

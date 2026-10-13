@@ -1,15 +1,18 @@
 // src/components/RoutinesSheet.tsx
 //
 // A workout habit's routines (workout.ts), from the habit editor: each routine's name and
-// exercises with their sets × reps, kg or lb, and the rest between sets. Routines take
-// turns in this order.
+// exercises with their sets × reps (or, for a timed one like a plank, how long to hold),
+// kg or lb, and the rest between sets. Routines take turns in this order.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useFontSize } from '../hooks/useFontSize';
 import { generateId } from '../helpers';
-import { cleanPlan, DEFAULT_REST, EXERCISE_SUGGESTIONS, MAX_SETS, REST_LENGTHS, type ExercisePlan, type Routine, type WorkoutPlan } from '../workout';
+import {
+  cleanPlan, DEFAULT_HOLD, DEFAULT_REST, EXERCISE_SUGGESTIONS, holdText, MAX_HOLD, MAX_SETS, MIN_HOLD, newExercise, REST_LENGTHS, stepHold,
+  type ExercisePlan, type Routine, type WorkoutPlan,
+} from '../workout';
 
 /** "Off", "30s", "1 min", "1:30". */
 const restLabel = (s: number) => (s === 0 ? 'Off' : s < 60 ? `${s}s` : s % 60 === 0 ? `${s / 60} min` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
@@ -18,8 +21,11 @@ const C = { bg: '#2A1A18', card: '#5C3D2E', accent: '#D4956A', cream: '#e8d5c0',
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-/** [−] 3 [+] */
-const Stepper = ({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) => {
+/** [−] 3 [+]. `step` gives the next value down or up (one, by default); `format` how it reads. */
+const Stepper = ({ label, value, min, max, onChange, step, format }: {
+  label: string; value: number; min: number; max: number; onChange: (n: number) => void;
+  step?: (value: number, up: boolean) => number; format?: (value: number) => string;
+}) => {
   const fs = useFontSize();
   const Btn = ({ text, to, enabled }: { text: string; to: number; enabled: boolean }) => (
     <TouchableOpacity onPress={() => { if (enabled) { haptic(); onChange(to); } }} disabled={!enabled} hitSlop={6}
@@ -31,9 +37,10 @@ const Stepper = ({ label, value, min, max, onChange }: { label: string; value: n
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, width: 34 }}>{label}</Text>
-      <Btn text="−" to={value - 1} enabled={value > min} />
-      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.cream, minWidth: 26, textAlign: 'center' }} accessibilityLabel={`${value} ${label.toLowerCase()}`}>{value}</Text>
-      <Btn text="+" to={value + 1} enabled={value < max} />
+      <Btn text="−" to={step ? step(value, false) : value - 1} enabled={value > min} />
+      <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(15), color: C.cream, minWidth: format ? 38 : 26, textAlign: 'center' }}
+        accessibilityLabel={`${label}: ${format ? format(value) : value}`}>{format ? format(value) : value}</Text>
+      <Btn text="+" to={step ? step(value, true) : value + 1} enabled={value < max} />
     </View>
   );
 };
@@ -42,6 +49,14 @@ const ExerciseRow = ({ exercise, last, onChange, onRemove }: {
   exercise: ExercisePlan; last: boolean; onChange: (e: ExercisePlan) => void; onRemove: () => void;
 }) => {
   const fs = useFontSize();
+  const timed = !!exercise.seconds;
+  // Counted in reps, or timed: each set a hold. Switching back keeps the reps it had.
+  const setTimed = (on: boolean) => {
+    if (on === timed) return;
+    haptic();
+    const { seconds, ...counted } = exercise;
+    onChange(on ? { ...exercise, seconds: DEFAULT_HOLD } : counted);
+  };
   return (
     <View style={{ paddingVertical: 10, borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(212,149,106,0.1)' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -60,7 +75,19 @@ const ExerciseRow = ({ exercise, last, onChange, onRemove }: {
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 6 }}>
         <Stepper label="Sets" value={exercise.sets} min={1} max={MAX_SETS} onChange={sets => onChange({ ...exercise, sets })} />
-        <Stepper label="Reps" value={exercise.reps} min={1} max={100} onChange={reps => onChange({ ...exercise, reps })} />
+        {timed
+          ? <Stepper label="Hold" value={exercise.seconds!} min={MIN_HOLD} max={MAX_HOLD} step={stepHold} format={holdText} onChange={seconds => onChange({ ...exercise, seconds })} />
+          : <Stepper label="Reps" value={exercise.reps} min={1} max={100} onChange={reps => onChange({ ...exercise, reps })} />}
+        <View style={{ flexDirection: 'row', backgroundColor: C.faint, borderRadius: 10, padding: 2 }}>
+          {([['Reps', false], ['Time', true]] as const).map(([text, on]) => (
+            <TouchableOpacity key={text} onPress={() => setTimed(on)} activeOpacity={0.8}
+              accessibilityRole="button" accessibilityState={{ selected: timed === on }}
+              accessibilityLabel={on ? 'Time each set, like a plank' : 'Count reps'}
+              style={{ height: 26, paddingHorizontal: 12, borderRadius: 8, justifyContent: 'center', backgroundColor: timed === on ? C.accent : 'transparent' }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: timed === on ? '#fff' : 'rgba(232,213,192,0.6)' }}>{text}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -72,7 +99,7 @@ const RoutineCard = ({ routine, index, onChange, onRemove }: {
   const fs = useFontSize();
   const have = new Set(routine.exercises.map(e => e.name.trim().toLowerCase()));
   const suggestions = EXERCISE_SUGGESTIONS.filter(s => !have.has(s.toLowerCase())).slice(0, 10);
-  const add = (name: string) => { haptic(); onChange({ ...routine, exercises: [...routine.exercises, { id: generateId(), name, sets: 3, reps: 10 }] }); };
+  const add = (name: string) => { haptic(); onChange({ ...routine, exercises: [...routine.exercises, newExercise(name, generateId())] }); };
   return (
     <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginTop: 12, borderWidth: 1, borderColor: C.border }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

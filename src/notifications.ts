@@ -298,19 +298,19 @@ export const scheduleFocusNotifs = async (s: FocusSession | null) => {
 
 export const WORKOUT_LINK = 'habbit://workout';
 const REST_ID = 'workout-rest';
+const HOLD_ID = 'workout-hold';
 
-export const cancelRestNotif = async () => {
-  try { await notifee.cancelTriggerNotifications([REST_ID]); } catch {}
+const cancelWorkoutNotif = async (id: string) => {
+  try { await notifee.cancelTriggerNotifications([id]); } catch {}
 };
 
-/** `next`: "Bench press, set 2 of 3". */
-export const scheduleRestNotif = async (at: number, next: string) => {
-  await cancelRestNotif();
+const scheduleWorkoutNotif = async (id: string, at: number, title: string, body: string) => {
+  await cancelWorkoutNotif(id);
   if (at <= Date.now() + 1000) return;
   try {
     await notifee.createTriggerNotification(
       {
-        id: REST_ID, title: 'Rest’s over 💪', body: `Next: ${next}`, data: { link: WORKOUT_LINK },
+        id, title, body, data: { link: WORKOUT_LINK },
         android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } },
         ios: { sound: 'default', foregroundPresentationOptions: { alert: false, banner: false, list: false, sound: false, badge: false } },
       },
@@ -318,6 +318,19 @@ export const scheduleRestNotif = async (at: number, next: string) => {
     );
   } catch {}
 };
+
+export const cancelRestNotif = () => cancelWorkoutNotif(REST_ID);
+
+/** `next`: "Bench press, set 2 of 3". */
+export const scheduleRestNotif = (at: number, next: string) => scheduleWorkoutNotif(REST_ID, at, 'Rest’s over 💪', `Next: ${next}`);
+
+// A timed hold (a plank) reaching its target, the same way: for when the screen's off.
+
+export const cancelHoldNotif = () => cancelWorkoutNotif(HOLD_ID);
+
+/** `target`: "1:00". */
+export const scheduleHoldNotif = (at: number, name: string, target: string) =>
+  scheduleWorkoutNotif(HOLD_ID, at, `${target} reached 💪`, `${name}: stop the timer when you’re done.`);
 
 export const cancelAllNotifications = async () => {
   try { 

@@ -27,11 +27,11 @@ import { CategoriesContext, type CategoriesValue } from './src/context/Categorie
 import { DEFAULT_QUICK_FOCUS, focusMinutes, isQuickFocus, logFocus, nextBlock, parseFocusLog, parseFocusSession, parseQuickFocus, pause as pauseFocus, resume as resumeFocus, settle, startBlock, startQuickFocus, type FocusLogEntry, type FocusSession, type QuickFocusSettings } from './src/focus';
 import { FocusSheet, type FocusDone } from './src/components/FocusSheet';
 import { syncFocusActivity } from './src/utils/focusActivity';
-import { finishWorkout, logWorkout, newBests, nextRoutine, nextUp, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
+import { finishWorkout, holdText, logWorkout, newBests, nextRoutine, nextUp, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
 import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
-import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, type Quiet } from './src/notifications';
+import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, scheduleHoldNotif, cancelHoldNotif, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
@@ -352,17 +352,26 @@ export default function App() {
   }), [saveFocusSession, finishFocus]);
 
   // ── Workouts (workout.ts) ──────────────────────────────────────────────────
-  /** Saves the workout in progress (or clears it), with a notification for when its rest ends. */
+  /**
+   * Saves the workout in progress (or clears it), with a notification for when its rest ends
+   * and one for when a hold being timed reaches its target.
+   */
   const saveWorkout = useCallback((next: ActiveWorkout | null) => {
-    const before = workoutRef.current?.rest?.endsAt;
+    const before = workoutRef.current;
     workoutRef.current = next;
     setWorkout(next);
     (next ? AsyncStorage.setItem(STORAGE_WORKOUT, JSON.stringify(next)) : AsyncStorage.removeItem(STORAGE_WORKOUT)).catch(() => {});
     const rest = next?.rest;
-    if (rest?.endsAt === before) return;
-    const up = next && nextUp(next);
-    if (rest && up) scheduleRestNotif(rest.endsAt, `${up.name}, set ${up.set + 1} of ${up.of}`);
-    else cancelRestNotif();
+    if (rest?.endsAt !== before?.rest?.endsAt) {
+      const up = next && nextUp(next);
+      if (rest && up) scheduleRestNotif(rest.endsAt, `${up.name}, set ${up.set + 1} of ${up.of}`);
+      else cancelRestNotif();
+    }
+    const hold = next?.hold;
+    if (hold?.startedAt !== before?.hold?.startedAt) {
+      if (next && hold && hold.target > 0) scheduleHoldNotif(hold.startedAt + hold.target * 1000, next.exercises[hold.ex]?.name ?? next.routineName, holdText(hold.target));
+      else cancelHoldNotif();
+    }
   }, []);
 
   /** Keeps a finished workout; returns its check-off, for catchUp. */
