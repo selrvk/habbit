@@ -16,6 +16,7 @@ Habbit is an app for tracking habits, spending, focus time and workouts, with Bo
 This stays on your iPhone, in the app's own storage:
 - your Habbits and the days you completed them
 - spending, budgets, bills and savings jars
+- the account balances and debts you enter for your net worth (these are never sent to Bonbon)
 - focus time and workouts
 - achievements
 - your chat with Bonbon

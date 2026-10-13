@@ -30,6 +30,8 @@ import { syncFocusActivity } from './src/utils/focusActivity';
 import { finishWorkout, holdText, logWorkout, newBests, nextRoutine, nextUp, parseActiveWorkout, parseWorkoutLog, settleWorkout, startWorkout as beginWorkout, workoutEvent, workoutTotals, type ActiveWorkout, type WorkoutLog } from './src/workout';
 import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
+import { EMPTY_NET_WORTH, deleteAccount, parseNetWorth, saveAccount, withSnapshot, worthTotals, type NetWorth } from './src/netWorth';
+import type { Worth } from './src/components/NetWorthSheet';
 import notifee, { EventType } from '@notifee/react-native';
 import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, scheduleHoldNotif, cancelHoldNotif, scheduleLeftoverNudge, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
@@ -38,7 +40,7 @@ import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { WhatsNewSheet, WHATS_NEW_VERSION } from './src/components/WhatsNewSheet';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
-import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, STORAGE_QUICK_FOCUS, ALL_STORAGE_KEYS } from './src/storage';
+import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_NET_WORTH, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, STORAGE_QUICK_FOCUS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
 
 import { OnboardingScreen, HomeScreen, TasksScreen, FinanceScreen, ProfileScreen, SettingsScreen } from './src/screens';
@@ -114,6 +116,7 @@ export default function App() {
   const [topUps, setTopUps]                       = useState<TopUp[]>([]);
   const [bills, setBills]                         = useState<Bill[]>([]);
   const [savings, setSavings]                     = useState<Savings>(EMPTY_SAVINGS);
+  const [netWorth, setNetWorth]                   = useState<NetWorth>(EMPTY_NET_WORTH);
   const [customCategories, setCustomCats]         = useState<CustomCategory[]>([]);
   const [focusSession, setFocusSession]           = useState<FocusSession | null>(null);
   const focusRef                                  = useRef<FocusSession | null>(null);
@@ -607,6 +610,8 @@ export default function App() {
       setEarned(earnedRef.current);
       const storedSv = await AsyncStorage.getItem(STORAGE_SAVINGS);
       setSavings(parseSavings(storedSv ? JSON.parse(storedSv) : null));
+      const storedNw = await AsyncStorage.getItem(STORAGE_NET_WORTH);
+      setNetWorth(parseNetWorth(storedNw ? JSON.parse(storedNw) : null));
       const storedCats = await AsyncStorage.getItem(STORAGE_CATEGORIES);
       const loadedCats = parseCustomCategories(storedCats ? JSON.parse(storedCats) : []);
       setCustomCategories(loadedCats);
@@ -724,6 +729,7 @@ export default function App() {
     setTopUps([]);
     setBills([]);
     setSavings(EMPTY_SAVINGS);
+    setNetWorth(EMPTY_NET_WORTH);
     setCustomCategories([]); setCustomCats([]);
     focusRef.current = null; setFocusSession(null); setFocusOpen(false); setFocusDone(null); setQuickSetup(false);
     focusLogRef.current = []; setFocusLog([]);
@@ -1057,6 +1063,28 @@ export default function App() {
       skipOffer: () => { if (offer) updateSavings(s => ({ ...s, lastOffered: offer.periodStart })); },
     };
   }, [savings, offer, leftovers, dayKey, updateSavings]);
+
+  // ── Net worth (netWorth.ts): accounts and debts kept up by hand ─────────
+  const updateNetWorth = useCallback((fn: (n: NetWorth) => NetWorth) => {
+    setNetWorth(prev => {
+      const next = fn(prev);
+      if (next !== prev) AsyncStorage.setItem(STORAGE_NET_WORTH, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const worth: Worth = useMemo(() => ({
+    netWorth,
+    save: (data, id) => updateNetWorth(n => saveAccount(n, id ?? `acct-${generateId()}`, data, dayKey)),
+    remove: id => updateNetWorth(n => deleteAccount(n, id)),
+    setCountJars: on => updateNetWorth(n => { const { countJars: _was, ...rest } = n; return on ? rest : { ...rest, countJars: false }; }),
+  }), [netWorth, dayKey, updateNetWorth]);
+
+  // This month keeps the last total it saw, for the trend.
+  const worthTotal = useMemo(() => worthTotals(netWorth, savings).total, [netWorth, savings]);
+  useEffect(() => {
+    if (ready) updateNetWorth(n => withSnapshot(n, worthTotal, dayKey));
+  }, [ready, worthTotal, dayKey, netWorth.accounts.length, updateNetWorth]);
 
   // Leftovers set to go into a jar by themselves.
   useEffect(() => {
@@ -1398,6 +1426,7 @@ export default function App() {
             bills={bills}
             onSaveBill={handleSaveBill}
             onDeleteBill={handleDeleteBill}
+            worth={worth}
             jar={jar}
             topUps={topUps}
             completionHistory={completionHistory}

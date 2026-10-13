@@ -14,6 +14,8 @@ export const STORAGE_NOTIF_VERSION      = '@habbit_rabbit_notif_version';
 export const STORAGE_TOPUPS             = '@habbit_rabbit_budget_topups';
 export const STORAGE_BILLS              = '@habbit_rabbit_bills';
 export const STORAGE_SAVINGS            = '@habbit_rabbit_savings';
+/** Accounts, debts and each month's total (NetWorth, netWorth.ts). */
+export const STORAGE_NET_WORTH          = '@habbit_rabbit_net_worth';
 /** Achievements earned: { earned: { [id]: day } }. */
 export const STORAGE_ACHIEVEMENTS       = '@habbit_rabbit_achievements';
 /** Custom spending categories (CustomCategory[], categories.ts). */
@@ -46,6 +48,7 @@ export const CONTENT_STORAGE_KEYS = [
   STORAGE_TOPUPS,
   STORAGE_BILLS,
   STORAGE_SAVINGS,
+  STORAGE_NET_WORTH,
   STORAGE_WEEK_NOTES,
   STORAGE_ACHIEVEMENTS,
   STORAGE_CATEGORIES,

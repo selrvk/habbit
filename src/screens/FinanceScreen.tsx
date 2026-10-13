@@ -16,6 +16,7 @@ import { CategoryIcon, Icon } from '../components/Icon';
 import { BillEditor, scheduleWithNext, type BillFormData } from '../components/BillEditor';
 import { upcomingDueDate, type Bill } from '../bills';
 import { SavingsJars, type Jar } from '../components/SavingsJar';
+import { NetWorthSheet, worthSummary, type Worth } from '../components/NetWorthSheet';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
 
@@ -78,7 +79,7 @@ const entryTitle = (e: { note?: string; category?: string }) => e.note || catego
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
   onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
-  bills, onSaveBill, onDeleteBill, jar, topUps, completionHistory, request, onRequestHandled,
+  bills, onSaveBill, onDeleteBill, jar, worth, topUps, completionHistory, request, onRequestHandled,
 }: {
   spentToday: number;
   todayHistory: SpendingEntry[];
@@ -98,6 +99,7 @@ export const FinanceScreen = ({
   onSaveBill: (data: BillFormData, id?: string) => void;
   onDeleteBill: (id: string) => void;
   jar: Jar;
+  worth: Worth;
   topUps: TopUp[];
   completionHistory: CompletionRecord[];
   request?: FinanceRequest | null;
@@ -120,6 +122,7 @@ export const FinanceScreen = ({
   // null: closed; 'new': adding; otherwise the bill being edited.
   const [billEditor, setBillEditor]   = useState<Bill | 'new' | null>(null);
   const [summaryMonth, setSummaryMonth] = useState<string | null>(null);
+  const [worthOpen, setWorthOpen]     = useState(false);
   const summaryData: MonthSummaryData = useMemo(() => ({
     todayKey, dailyTotals, todayHistory, spentToday, topUps, bills, savings: jar.savings,
     history: completionHistory, budgetPeriod: budget.period, budgetAmount, currency,
@@ -132,7 +135,7 @@ export const FinanceScreen = ({
   useEffect(() => {
     if (!request) return;
     setBudgetModal(false); setMoneyModal(false); setSpendModal(false);
-    setSelectedDay(null); setEditingId(null); setBillEditor(null); setSummaryMonth(null);
+    setSelectedDay(null); setEditingId(null); setBillEditor(null); setSummaryMonth(null); setWorthOpen(false);
     const timer = setTimeout(() => {
       onRequestHandled?.();
       if (request.kind === 'spend') {
@@ -296,6 +299,7 @@ export const FinanceScreen = ({
       />
 
       <MonthSummarySheet visible={summaryMonth !== null} initialMonth={summaryMonth ?? todayKey} data={summaryData} onClose={() => setSummaryMonth(null)} />
+      <NetWorthSheet visible={worthOpen} worth={worth} savings={jar.savings} currency={currency} todayKey={todayKey} onClose={() => setWorthOpen(false)} />
 
       {/* ── Edit one of today's entries: category, or remove it ── */}
       <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={() => setEditingId(null)}>
@@ -575,6 +579,17 @@ export const FinanceScreen = ({
               {recapLastMonth ? `Your ${monthLabel(recapMonth).name} recap is ready` : `${monthLabel(recapMonth).name} so far`}
             </Text>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Spending vs last month, categories and how your budget went</Text>
+          </View>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
+        </TouchableOpacity>
+
+        {/* ── Net worth: what you have less what you owe, kept up by hand ── */}
+        <TouchableOpacity onPress={() => { haptic.light(); setWorthOpen(true); }} activeOpacity={0.8} accessibilityRole="button"
+          style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Icon name="money-bag" size={fs(32)} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Net worth</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }} numberOfLines={1}>{worthSummary(worth.netWorth, jar.savings, currency)}</Text>
           </View>
           <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
         </TouchableOpacity>
