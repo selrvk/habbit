@@ -21,7 +21,7 @@ import { streakContinues } from './src/dayRollover';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
-import { EMPTY_SAVINGS, leftoverOffer, parseSavings, storedSavings, type Savings, type SavingsJar } from './src/savings';
+import { EMPTY_SAVINGS, leftoverMode, leftoverNudgeDay, leftoverOffer, parseSavings, storedSavings, type Savings, type SavingsJar } from './src/savings';
 import { parseCustomCategories, setCustomCategories, type Category, type CustomCategory } from './src/categories';
 import { CategoriesContext, type CategoriesValue } from './src/context/CategoriesContext';
 import { DEFAULT_QUICK_FOCUS, focusMinutes, isQuickFocus, logFocus, nextBlock, parseFocusLog, parseFocusSession, parseQuickFocus, pause as pauseFocus, resume as resumeFocus, settle, startBlock, startQuickFocus, type FocusLogEntry, type FocusSession, type QuickFocusSettings } from './src/focus';
@@ -31,7 +31,7 @@ import { finishWorkout, holdText, logWorkout, newBests, nextRoutine, nextUp, par
 import { WorkoutSheet, type WorkoutDone } from './src/components/WorkoutSheet';
 import type { Jar } from './src/components/SavingsJar';
 import notifee, { EventType } from '@notifee/react-native';
-import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, scheduleHoldNotif, cancelHoldNotif, type Quiet } from './src/notifications';
+import { cancelAllNotifications, initNotifications, requestNotificationPermission, scheduleHabitNotifs, cancelHabitNotifs, cancelMidnightNotif, scheduleEveningCheckins, cancelEveningCheckins, scheduleBillReminders, scheduleWeeklyRecap, scheduleFocusNotifs, scheduleRestNotif, cancelRestNotif, scheduleHoldNotif, cancelHoldNotif, scheduleLeftoverNudge, type Quiet } from './src/notifications';
 import { recapWeek, weekSummary } from './src/weekSummary';
 import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSheet';
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
@@ -1017,10 +1017,13 @@ export default function App() {
     remove: (key: string) => updateCategories(list => list.map(k => (k.key === key ? { ...k, archived: true } : k))),
   }), [customCategories, updateCategories]);
 
-  // What was left of last week's or month's budget, offered once.
+  // What was left of the budget that just ended (yesterday's, last week's or last month's),
+  // offered once in the jar's card, or put in a jar by itself if that's how it's set.
+  const leftovers = leftoverMode(savings);
   const offer = useMemo(
-    () => leftoverOffer({ period: budgetPeriod, amount: budgetAmount, todayKey: dayKey, dailyTotals, topUps, bills, lastOffered: savings.lastOffered }),
-    [budgetPeriod, budgetAmount, dayKey, dailyTotals, topUps, bills, savings.lastOffered],
+    () => (leftovers === 'off' ? null
+      : leftoverOffer({ period: budgetPeriod, amount: budgetAmount, todayKey: dayKey, dailyTotals, topUps, bills, lastOffered: savings.lastOffered })),
+    [leftovers, budgetPeriod, budgetAmount, dayKey, dailyTotals, topUps, bills, savings.lastOffered],
   );
 
   const jar: Jar = useMemo(() => {
@@ -1030,7 +1033,12 @@ export default function App() {
       ({ ...s, jars: s.jars.map(j => (j.id === id ? fn(j) : j)) });
     return {
       savings,
-      offer,
+      offer: leftovers === 'ask' ? offer : null,
+      leftover: { mode: leftovers, jarId: savings.leftover?.jarId },
+      setLeftover: (mode, jarId) => updateSavings(s => {
+        const { leftover: _was, ...rest } = s;
+        return mode === 'ask' ? rest : { ...rest, leftover: mode === 'auto' ? { mode, jarId } : { mode } };
+      }),
       saveJar: (id, goal) => {
         if (id) { updateSavings(inJar(id, j => ({ ...j, goal: { ...goal, createdAt: j.goal.createdAt } }))); return id; }
         const newId = `jar-${generateId()}`;
@@ -1043,11 +1051,26 @@ export default function App() {
       takeOffer: id => {
         if (!offer) return;
         const put = inJar(id, j => ({ ...j, entries: [...j.entries, entry(offer.amount, 'leftover', `Left over ${offer.label}`)] }));
-        updateSavings(s => ({ ...put(s), lastOffered: offer.periodStart }));
+        // Never twice: the offer is gone once it's taken.
+        updateSavings(s => (s.lastOffered && s.lastOffered >= offer.periodStart ? s : { ...put(s), lastOffered: offer.periodStart }));
       },
       skipOffer: () => { if (offer) updateSavings(s => ({ ...s, lastOffered: offer.periodStart })); },
     };
-  }, [savings, offer, dayKey, updateSavings]);
+  }, [savings, offer, leftovers, dayKey, updateSavings]);
+
+  // Leftovers set to go into a jar by themselves.
+  useEffect(() => {
+    if (ready && offer && leftovers === 'auto' && savings.leftover?.jarId) jar.takeOffer(savings.leftover.jarId);
+  }, [ready, offer, leftovers, savings.leftover?.jarId, jar]);
+
+  // One nudge on the first morning after a week or month that looks like ending under budget.
+  const nudgeDay = useMemo(
+    () => leftoverNudgeDay({ period: budgetPeriod, todayKey: dayKey, periodLeft: budget.periodLeft, spentThisPeriod: budget.periodSpent - budget.billsSetAside > 0, savings }),
+    [budgetPeriod, dayKey, budget.periodLeft, budget.periodSpent, budget.billsSetAside, savings],
+  );
+  useEffect(() => {
+    if (ready) scheduleLeftoverNudge(nudgeDay, budgetPeriod === 'monthly' ? 'month' : 'week');
+  }, [ready, nudgeDay, budgetPeriod]);
 
   const handleSetCurrency         = useCallback((v: string)  => { setCurrency(v); saveSettings({ currency: v }); }, []);
   const handleSetName             = useCallback((v: string)  => { setName(v); saveSettings({ name: v }); }, []);
@@ -1297,7 +1320,6 @@ export default function App() {
             onSkip={handleSkip}
             onUnskip={handleUnskip}
             onSkipMany={handleSkipMany}
-            jar={jar}
             weekRecap={homeRecap}
             onOpenWeekRecap={() => setRecapOpen(recapWeek(todayKey))}
             focusSession={focusSession}

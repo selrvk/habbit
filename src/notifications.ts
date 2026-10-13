@@ -262,6 +262,31 @@ export const scheduleBillReminders = async (bills: Bill[], currency: string) => 
   } catch {}
 };
 
+// ── Savings jar ──────────────────────────────────────────────────────────────
+// One nudge at 9 AM on the first day after a week or month that looks like ending under
+// budget (savings.ts, leftoverNudgeDay), planned again whenever that changes. It names no
+// amount: spending can still be logged after it's planned. Tapping it opens Finance, where
+// the jar's card makes the offer.
+
+const LEFTOVER_ID = 'jar-leftover';
+
+export const scheduleLeftoverNudge = async (day: string | null, period: 'week' | 'month') => {
+  try {
+    await notifee.cancelTriggerNotifications([LEFTOVER_ID]);
+    if (!day) return;
+    const at = parseDateKey(day); at.setHours(BILL_REMINDER_HOUR, 0, 0, 0);
+    if (at.getTime() <= Date.now()) return;
+    await notifee.createTriggerNotification(
+      {
+        id: LEFTOVER_ID, title: 'Habbit 🫙', body: `You finished last ${period} with money left over 🎉 Put it in your savings jar?`,
+        data: { link: 'habbit://finance' },
+        android: { channelId: NOTIF_CHANNEL, pressAction: { id: 'default' } }, ios: { sound: 'default' },
+      },
+      { type: TriggerType.TIMESTAMP, timestamp: at.getTime() },
+    );
+  } catch {}
+};
+
 // ── Focus timer ──────────────────────────────────────────────────────────────
 // One for each switch still ahead in the session (a round ending, a break ending), so the
 // timer can run on with the app closed. Re-planned whenever the session changes; paused

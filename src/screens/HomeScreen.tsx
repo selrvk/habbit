@@ -11,7 +11,6 @@ import type { FocusSession } from '../focus';
 import type { ActiveWorkout } from '../workout';
 import type { Commission } from '../types';
 import type { HabitSummary } from '../habitStats';
-import { LeftoverBanner, type Jar } from '../components/SavingsJar';
 import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from '../components/CurrencyAmount';
 import { Icon } from '../components/Icon';
@@ -57,7 +56,7 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 export const HomeScreen = ({
   commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
-  onSkip, onUnskip, onSkipMany, jar, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, focusMinutesToday, onOpenFocus, workout, onStartWorkout,
+  onSkip, onUnskip, onSkipMany, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, focusMinutesToday, onOpenFocus, workout, onStartWorkout,
 }: {
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
@@ -68,7 +67,6 @@ export const HomeScreen = ({
   onAddSpending: (amount: string, note?: string, category?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
   onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
-  jar: Jar;
   /** The Sunday recap card, shown on Sunday evening and Monday; null otherwise. */
   weekRecap: { title: string; detail: string } | null;
   onOpenWeekRecap: () => void;
@@ -212,8 +210,6 @@ export const HomeScreen = ({
         </View>
 
         <FocusRow session={focusSession} todayMinutes={focusMinutesToday} onPress={onOpenFocus} />
-
-        <LeftoverBanner jar={jar} currency={currency} />
 
         {weekRecap && (
           <TouchableOpacity onPress={() => { haptic.light(); onOpenWeekRecap(); }} activeOpacity={0.8}

@@ -15,7 +15,7 @@ import { CategoryGrid } from '../components/CategoryGrid';
 import { CategoryIcon, Icon } from '../components/Icon';
 import { BillEditor, scheduleWithNext, type BillFormData } from '../components/BillEditor';
 import { upcomingDueDate, type Bill } from '../bills';
-import { LeftoverBanner, SavingsJars, type Jar } from '../components/SavingsJar';
+import { SavingsJars, type Jar } from '../components/SavingsJar';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
 
@@ -407,8 +407,6 @@ export const FinanceScreen = ({
             <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(13) }}>Edit budget</Text>
           </TouchableOpacity>
         </View>
-
-        <LeftoverBanner jar={jar} currency={currency} />
 
         {/* ── Today + period card ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: isOverToday ? 'rgba(240,144,144,0.4)' : C.border }}>

@@ -1,5 +1,5 @@
 import notifee from '@notifee/react-native';
-import { scheduleBillReminders, scheduleHabitNotifs } from '../src/notifications';
+import { scheduleBillReminders, scheduleHabitNotifs, scheduleLeftoverNudge } from '../src/notifications';
 import type { Bill } from '../src/bills';
 import type { Commission } from '../src/types';
 
@@ -101,5 +101,20 @@ describe('scheduleBillReminders', () => {
   it('plans one reminder for a yearly bill', async () => {
     await scheduleBillReminders([bill({ id: 'ins', name: 'Insurance', amount: 12000, repeat: 'yearly', day: 15, month: 2, remindBefore: 7 })], '₱');
     expect(bodies()).toEqual([{ id: 'bill-ins-0', body: 'Insurance (₱12,000) is due in a week, on Mar 15.', at: new Date(2027, 2, 8, 9, 0) }]);
+  });
+});
+
+describe('scheduleLeftoverNudge', () => {
+  it('plans one nudge at 9 AM that opens Finance, and takes it back when there is nothing to ask', async () => {
+    await scheduleLeftoverNudge('2026-10-05', 'week');
+    expect(mock.cancelTriggerNotifications).toHaveBeenCalledWith(['jar-leftover']);
+    const [[n, t]] = mock.createTriggerNotification.mock.calls;
+    expect(n).toMatchObject({ id: 'jar-leftover', body: 'You finished last week with money left over 🎉 Put it in your savings jar?', data: { link: 'habbit://finance' } });
+    expect(new Date(t.timestamp)).toEqual(new Date(2026, 9, 5, 9, 0));
+
+    jest.clearAllMocks();
+    await scheduleLeftoverNudge(null, 'month');
+    expect(mock.cancelTriggerNotifications).toHaveBeenCalledWith(['jar-leftover']);
+    expect(mock.createTriggerNotification).not.toHaveBeenCalled();
   });
 });
