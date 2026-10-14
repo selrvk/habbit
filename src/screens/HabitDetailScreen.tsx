@@ -4,7 +4,7 @@
 // Opened by tapping a habit in the Habbits list.
 
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Platform, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { parseDateKey, reminderSummary, scheduleLabel } from '../helpers';
@@ -16,7 +16,7 @@ import { addDaysToKey } from '../helpers';
 import { durationLabel, focusMinutes, type FocusLogEntry } from '../focus';
 import { nextRoutine, workoutTotals, type WorkoutLog } from '../workout';
 import { useProStatus } from '../context/ProContext';
-import { PaywallScreen } from './PaywallScreen';
+import { PaywallSheet } from './PaywallScreen';
 import { WorkoutProgressSheet } from '../components/WorkoutProgressSheet';
 import { Icon, ProPill } from '../components/Icon';
 
@@ -242,9 +242,7 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
         {habit.workout && (
           <WorkoutProgressSheet visible={progressOpen} habitId={habit.id} label={habit.label} unit={habit.workout.unit} log={workoutLog} onClose={() => setProgressOpen(false)} />
         )}
-        <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
-          <PaywallScreen onClose={() => setPaywall(false)} />
-        </Modal>
+        <PaywallSheet visible={paywall} onClose={() => setPaywall(false)} />
 
         {/* ── Calendar ── */}
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>

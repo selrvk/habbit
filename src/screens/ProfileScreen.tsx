@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES, AVATAR_KEYS } from '../constants';
 import { avatarImage } from '../helpers';
@@ -8,7 +8,7 @@ import { useFontSize } from '../hooks/useFontSize';
 import { TextModal } from '../components/TextModal';
 import { CompletionCalendar } from '../components/CompletionCalendar';
 import { useProStatus } from '../context/ProContext';
-import { PaywallScreen } from './PaywallScreen';
+import { PaywallSheet } from './PaywallScreen';
 import type { Stats, CompletionRecord } from '../types';
 import { ACHIEVEMENTS, earnedSortKey, type Earned } from '../achievements';
 import { Icon } from '../components/Icon';
@@ -58,9 +58,7 @@ export const ProfileScreen = ({ name, avatar, stats, completionHistory, todayKey
 
   return (
     <>
-      <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet">
-        <PaywallScreen onClose={() => setShowPaywall(false)} />
-      </Modal>
+      <PaywallSheet visible={showPaywall} onClose={() => setShowPaywall(false)} />
       <TextModal visible={nameModal} title="Edit Name" placeholder="Your name" initialValue={name} onSave={v => { onSetName(v); setNameModal(false); }} onClose={() => setNameModal(false)} />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false}>

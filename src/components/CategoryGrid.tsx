@@ -4,12 +4,12 @@
 // user's own, and "New" to make one (Pro). Holding one of your own edits it.
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { MAX_CUSTOM_CATEGORIES, pickableCategories, type CustomCategory } from '../categories';
 import { useCategories } from '../context/CategoriesContext';
 import { useProStatus } from '../context/ProContext';
-import { PaywallScreen } from '../screens/PaywallScreen';
+import { PaywallSheet } from '../screens/PaywallScreen';
 import { CategoryEditor } from './CategoryEditor';
 import { CategoryIcon } from './Icon';
 
@@ -65,9 +65,7 @@ export const CategoryGrid = ({ value, onChange }: { value?: string; onChange: (k
         onRemove={editing && editing !== 'new' ? () => { remove(editing.key); setEditing(null); } : undefined}
         onClose={() => setEditing(null)}
       />
-      <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
-        <PaywallScreen onClose={() => setPaywall(false)} />
-      </Modal>
+      <PaywallSheet visible={paywall} onClose={() => setPaywall(false)} />
     </View>
   );
 };

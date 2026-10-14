@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Linking, Modal } from 'react-native';
 import { useProStatus } from '../context/ProContext';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../icons';
@@ -80,8 +80,9 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
   };
 
   return (
-    // Scrolls on smaller phones, so the price terms and links at the bottom can always be reached.
-    <ScrollView style={{ flex: 1, backgroundColor: '#2A1A18' }} contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#2A1A18' }}>
+    {/* Scrolls on smaller phones, so the price terms and links at the bottom can always be reached. */}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: 56, justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
         <Text style={{ fontFamily: 'DynaPuff', color: '#e8d5c0', fontSize: 28 }}>
           Habbit Pro
@@ -159,8 +160,9 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onClose} style={{ marginTop: 12, alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.3)', fontSize: 12 }}>
+      <TouchableOpacity onPress={() => { haptic.light(); onClose(); }} accessibilityRole="button"
+        style={{ marginTop: 10, alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 28, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(232,213,192,0.25)' }}>
+        <Text style={{ fontFamily: 'Jua', color: 'rgba(232,213,192,0.8)', fontSize: 14 }}>
           Not now
         </Text>
       </TouchableOpacity>
@@ -196,5 +198,19 @@ export const PaywallScreen: React.FC<PaywallScreenProps> = ({ onClose }) => {
         </TouchableOpacity>
       </View>
     </ScrollView>
+
+    {/* Always in reach, however far the page has scrolled. */}
+    <TouchableOpacity onPress={() => { haptic.light(); onClose(); }} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close"
+      style={{ position: 'absolute', top: 14, right: 14, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(232,213,192,0.12)' }}>
+      <Text style={{ color: 'rgba(232,213,192,0.8)', fontSize: 16 }}>✕</Text>
+    </TouchableOpacity>
+    </View>
   );
 };
+
+/** The Pro page as a sheet, the same everywhere: swipe it down, tap ✕ or tap "Not now" to close. */
+export const PaywallSheet = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => (
+  <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" allowSwipeDismissal onRequestClose={onClose}>
+    <PaywallScreen onClose={onClose} />
+  </Modal>
+);

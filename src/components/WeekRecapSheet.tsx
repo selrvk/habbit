@@ -9,7 +9,7 @@ import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFontSize } from '../hooks/useFontSize';
 import { useProStatus } from '../context/ProContext';
-import { PaywallScreen } from '../screens/PaywallScreen';
+import { PaywallSheet } from '../screens/PaywallScreen';
 import { CurrencyAmount } from './CurrencyAmount';
 import { categoryOf, type Category } from '../categories';
 import { CategoryIcon, Icon, ProPill } from './Icon';
@@ -134,9 +134,7 @@ export const WeekRecapSheet = ({ visible, initialWeek, data, onClose }: {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
-          <PaywallScreen onClose={() => setPaywall(false)} />
-        </Modal>
+        <PaywallSheet visible={paywall} onClose={() => setPaywall(false)} />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 }}>
           <NavButton label="‹" enabled={week > first} to={addDaysToKey(week, -7)} />

@@ -11,7 +11,7 @@ import { useFontSize } from '../hooks/useFontSize';
 import { CATEGORIES, MAX_CUSTOM_CATEGORIES, type CustomCategory } from '../categories';
 import { useCategories } from '../context/CategoriesContext';
 import { useProStatus } from '../context/ProContext';
-import { PaywallScreen } from '../screens/PaywallScreen';
+import { PaywallSheet } from '../screens/PaywallScreen';
 import { CategoryEditor } from './CategoryEditor';
 import { CategoryIcon, ProPill } from './Icon';
 
@@ -103,9 +103,7 @@ export const CategoriesSheet = ({ visible, onClose }: { visible: boolean; onClos
           onRemove={editing && editing !== 'new' ? () => { remove(editing.key); setEditing(null); } : undefined}
           onClose={() => setEditing(null)}
         />
-        <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
-          <PaywallScreen onClose={() => setPaywall(false)} />
-        </Modal>
+        <PaywallSheet visible={paywall} onClose={() => setPaywall(false)} />
       </View>
     </Modal>
   );

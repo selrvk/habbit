@@ -12,7 +12,7 @@ import { useFontSize } from '../hooks/useFontSize';
 import { CurrencyAmount } from './CurrencyAmount';
 import { NumpadModal } from './NumpadModal';
 import { Icon, ProPill } from './Icon';
-import { PaywallScreen } from '../screens/PaywallScreen';
+import { PaywallSheet } from '../screens/PaywallScreen';
 import { useProStatus } from '../context/ProContext';
 import { MAX_JARS, jarTotal, type JarEntry, type LeftoverMode, type LeftoverOffer, type Savings, type SavingsGoal, type SavingsJar } from '../savings';
 
@@ -349,9 +349,7 @@ export const SavingsJars = ({ jar, currency }: { jar: Jar; currency: string }) =
   return (
     <View style={{ marginBottom: 24 }} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
       {editorModal}
-      <Modal visible={paywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPaywall(false)}>
-        <PaywallScreen onClose={() => setPaywall(false)} />
-      </Modal>
+      <PaywallSheet visible={paywall} onClose={() => setPaywall(false)} />
 
       {/* The pages need the width, so until it's measured show the first jar on its own. */}
       {jars.length === 1 || width === 0 ? (
