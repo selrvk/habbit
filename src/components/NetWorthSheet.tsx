@@ -13,7 +13,7 @@ import { currencyStr } from '../helpers';
 import { CurrencyAmount } from './CurrencyAmount';
 import { Icon } from './Icon';
 import {
-  ACCOUNT_KINDS, MAX_ACCOUNTS, compactAmount, countsJars, kindOf, monthOf, worthTotals, worthTrend,
+  ACCOUNT_KINDS, MAX_ACCOUNTS, changeSinceLastMonth, compactAmount, countsJars, kindOf, monthOf, worthTotals, worthTrend,
   type Account, type AccountData, type AccountKind, type NetWorth,
 } from '../netWorth';
 import { jarTotal, type Savings } from '../savings';
@@ -49,12 +49,24 @@ const updatedLabel = (day: string, todayKey: string) => {
 
 type Form = { id?: string; kind: AccountKind; name: string; amount: string };
 
-/** "₱27,821.00 · 3 accounts", or what to do when there's nothing yet: the line under Finance's Net worth row. */
-export const worthSummary = (netWorth: NetWorth, savings: Savings, currency: string): string => {
+/**
+ * The line under Finance's Net worth row: the total and how it moved since last month ("▲ ₱6,021
+ * since September"), or the number of accounts in the first month. Null with nothing added yet.
+ */
+export const worthSummary = (netWorth: NetWorth, savings: Savings, currency: string, todayKey: string):
+  { total: string; trend?: { text: string; up: boolean }; detail?: string } | null => {
   const n = netWorth.accounts.length;
-  if (n === 0) return 'Add up what you have and what you owe';
+  if (n === 0) return null;
   const { total } = worthTotals(netWorth, savings);
-  return `${total < 0 ? '−' : ''}${currencyStr(currency, money(Math.abs(total)))} · ${n} ${n === 1 ? 'account' : 'accounts'}`;
+  const change = changeSinceLastMonth(netWorth, total, todayKey);
+  // Whole amounts past 100, so the line fits beside the total.
+  const moved = change && (Math.abs(change.amount) >= 100 ? Math.round(Math.abs(change.amount)).toLocaleString('en-US') : money(Math.abs(change.amount)));
+  return {
+    total: `${total < 0 ? '−' : ''}${currencyStr(currency, money(Math.abs(total)))}`,
+    ...(change
+      ? { trend: { text: `${change.amount > 0 ? '▲' : '▼'} ${currencyStr(currency, moved!)} since ${MONTH_LONG[monthIndex(change.since)]}`, up: change.amount > 0 } }
+      : { detail: `${n} ${n === 1 ? 'account' : 'accounts'}` }),
+  };
 };
 
 export const NetWorthSheet = ({ visible, worth, savings, currency, todayKey, onClose }: {

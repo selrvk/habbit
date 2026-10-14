@@ -111,6 +111,17 @@ export const worthTrend = (n: NetWorth, todayKey: string, count = 6): { points: 
   return { points, change: now && before ? { amount: round2(now.total - before.total), since: before.month } : null };
 };
 
+/**
+ * How `total` (the live one) compares with the last month kept before this one, for Finance's
+ * Net worth row. Null in the first month, or when it hasn't moved.
+ */
+export const changeSinceLastMonth = (n: NetWorth, total: number, todayKey: string): { amount: number; since: string } | null => {
+  const month  = monthOf(todayKey);
+  const before = n.history.filter(p => p.month < month).pop();
+  const amount = before ? round2(total - before.total) : 0;
+  return before && amount !== 0 ? { amount, since: before.month } : null;
+};
+
 /** "27.8k", "1.2M", "−950": an amount short enough to sit over a bar. */
 export const compactAmount = (n: number): string => {
   const a     = Math.abs(n);

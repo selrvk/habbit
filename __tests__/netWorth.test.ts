@@ -1,5 +1,5 @@
 import {
-  EMPTY_NET_WORTH, MAX_ACCOUNTS, compactAmount, deleteAccount, parseNetWorth, saveAccount, withSnapshot, worthTotals, worthTrend,
+  EMPTY_NET_WORTH, MAX_ACCOUNTS, changeSinceLastMonth, compactAmount, deleteAccount, parseNetWorth, saveAccount, withSnapshot, worthTotals, worthTrend,
   type NetWorth,
 } from '../src/netWorth';
 import type { Savings } from '../src/savings';
@@ -71,6 +71,14 @@ describe('the trend', () => {
     // September has no total (the app wasn't opened), so October compares with August.
     expect(t.change).toEqual({ amount: 5500.25, since: '2026-08' });
     expect(worthTrend({ ...mine, history: [{ month: '2026-10', total: 5 }] }, today).change).toBeNull();
+  });
+
+  it('compares the live total with the last month kept before this one', () => {
+    const n = { ...mine, history: [{ month: '2026-08', total: 30000 }, { month: '2026-10', total: 1 }] };
+    expect(changeSinceLastMonth(n, 36020.75, today)).toEqual({ amount: 6020.75, since: '2026-08' });
+    expect(changeSinceLastMonth(n, 28000, today)).toEqual({ amount: -2000, since: '2026-08' });
+    expect(changeSinceLastMonth(n, 30000, today)).toBeNull();
+    expect(changeSinceLastMonth({ ...mine, history: [{ month: '2026-10', total: 5 }] }, 9, today)).toBeNull();
   });
 
   it('writes amounts short', () => {

@@ -125,6 +125,7 @@ export const FinanceScreen = ({
   const [summaryMonth, setSummaryMonth] = useState<string | null>(null);
   const [worthOpen, setWorthOpen]     = useState(false);
   const scanReceipt = useReceiptScan();
+  const worthLine   = worthSummary(worth.netWorth, jar.savings, currency, todayKey);
   const summaryData: MonthSummaryData = useMemo(() => ({
     todayKey, dailyTotals, todayHistory, spentToday, topUps, bills, savings: jar.savings,
     history: completionHistory, budgetPeriod: budget.period, budgetAmount, currency,
@@ -466,6 +467,29 @@ export const FinanceScreen = ({
 
         <SavingsJars jar={jar} currency={currency} />
 
+        {/* ── Net worth: what you have less what you owe, kept up by hand. Next to the jar,
+            which counts toward it, and below Add spending, so it's never in the way. ── */}
+        <TouchableOpacity onPress={() => { haptic.light(); setWorthOpen(true); }} activeOpacity={0.8} accessibilityRole="button"
+          accessibilityLabel={worthLine ? `Net worth ${worthLine.total}${worthLine.trend ? `, ${worthLine.trend.text}` : ''}` : 'Net worth. Add up what you have and what you owe'}
+          style={{ backgroundColor: C.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginTop: -12, marginBottom: 24, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Icon name="money-bag" size={fs(30)} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Net worth</Text>
+            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }} numberOfLines={1}>
+              {!worthLine ? 'Add up what you have and what you owe' : (
+                <>
+                  <Text style={{ color: C.cream }}>{worthLine.total}</Text>
+                  {' · '}
+                  {worthLine.trend
+                    ? <Text style={{ color: worthLine.trend.up ? C.green : C.red }}>{worthLine.trend.text}</Text>
+                    : worthLine.detail}
+                </>
+              )}
+            </Text>
+          </View>
+          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
+        </TouchableOpacity>
+
         {/* ── Today's activity ── */}
         <Text style={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(17), marginBottom: 10 }}>Today</Text>
         {activity.length === 0 ? (
@@ -582,17 +606,6 @@ export const FinanceScreen = ({
               {recapLastMonth ? `Your ${monthLabel(recapMonth).name} recap is ready` : `${monthLabel(recapMonth).name} so far`}
             </Text>
             <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }}>Spending vs last month, categories and how your budget went</Text>
-          </View>
-          <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
-        </TouchableOpacity>
-
-        {/* ── Net worth: what you have less what you owe, kept up by hand ── */}
-        <TouchableOpacity onPress={() => { haptic.light(); setWorthOpen(true); }} activeOpacity={0.8} accessibilityRole="button"
-          style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Icon name="money-bag" size={fs(32)} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Jua', color: C.cream, fontSize: fs(14) }}>Net worth</Text>
-            <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12), marginTop: 2 }} numberOfLines={1}>{worthSummary(worth.netWorth, jar.savings, currency)}</Text>
           </View>
           <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(20) }}>›</Text>
         </TouchableOpacity>
