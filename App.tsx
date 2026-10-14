@@ -17,7 +17,8 @@ import { describeBackupContents, describeBackupTime, summarizeBackup, type Backu
 
 import { DEFAULT_BUDGET, DEFAULT_CURRENCY, DEFAULT_AVATAR, IMAGES } from './src/constants';
 import { getTodayKey, addDaysToKey, parseDateKey, generateId, isScheduledForDay, defaultStats, migrateCommissions, formatTime, currencyStr } from './src/helpers';
-import { streakContinues } from './src/dayRollover';
+import { addEntryOnDay, streakContinues } from './src/dayRollover';
+import { changeEntry, removeEntry, setYesterday, yesterdayState, type Books, type EntryChanges } from './src/pastDays';
 import { computeBudget, type BudgetPeriod, type TopUp } from './src/budget';
 import { habitStats, type HabitSummary } from './src/habitStats';
 import { logDueBills, type Bill } from './src/bills';
@@ -1248,35 +1249,54 @@ export default function App() {
     setTasksSubScreen(null);
   }, [saveFocusSession, saveWorkout]);
 
-  const handleSetEntryCategory = useCallback((id: string, category: string | undefined) => {
-    setTodayHistory(prev => {
-      const updated = prev.map(e => (e.id === id ? { ...e, category } : e));
-      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: liveState.current.spentToday, date: todayKey, history: updated })).catch(() => {});
-      return updated;
-    });
-  }, [todayKey]);
+  // ── Spending, today's and the last few days' (pastDays.ts) ──────────────
+  const currentBooks = (): Books => {
+    const s = liveState.current;
+    return { finance: { spentToday: s.spentToday, date: s.dayKey, history: s.todayHistory }, dailyTotals: s.dailyTotals };
+  };
+  /** Keeps today's spending and the days before it, saving whichever changed. */
+  const keepBooks = useCallback((before: Books, next: Books) => {
+    if (next.finance !== before.finance) {
+      setSpentToday(next.finance.spentToday); setTodayHistory(next.finance.history);
+      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify(next.finance)).catch(() => {});
+    }
+    if (next.dailyTotals !== before.dailyTotals) {
+      setDailyTotals(next.dailyTotals);
+      AsyncStorage.setItem(STORAGE_FINANCE_HISTORY, JSON.stringify({ dailyTotals: next.dailyTotals })).catch(() => {});
+    }
+    // Live state too, so a second change straight after builds on this one.
+    liveState.current = { ...liveState.current, spentToday: next.finance.spentToday, todayHistory: next.finance.history, dailyTotals: next.dailyTotals };
+  }, []);
 
-  const handleUndoEntry = useCallback((id: string) => {
-    setTodayHistory(prev => {
-      const entry = prev.find(e => e.id === id); if (!entry) return prev;
-      const newHistory = prev.filter(e => e.id !== id);
-      const newSpent   = Math.max(spentToday - entry.amount, 0);
-      setSpentToday(newSpent);
-      AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: newSpent, date: todayKey, history: newHistory })).catch(() => {});
-      return newHistory;
-    });
-  }, [spentToday, todayKey]);
+  /** Changes an entry's amount, note or category, on its own day, or moves it to `toDate`. */
+  const handleChangeEntry = useCallback((id: string, date: string, changes: EntryChanges, toDate?: string) => {
+    const books = currentBooks();
+    keepBooks(books, changeEntry(books, id, date, changes, toDate));
+  }, [keepBooks]);
 
-  const handleFinanceAddSpend = useCallback((amount: string, note?: string, category?: string) => {
+  const handleRemoveEntry = useCallback((id: string, date: string) => {
+    const books = currentBooks();
+    keepBooks(books, removeEntry(books, id, date));
+  }, [keepBooks]);
+
+  /** `day`: an earlier day to log it on, for spending that wasn't logged at the time. */
+  const handleFinanceAddSpend = useCallback((amount: string, note?: string, category?: string, day?: string) => {
     const toAdd = parseFloat(amount || '0');
     if (toAdd <= 0) return;
-    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: formatTime(), note, ...(category ? { category } : {}) };
-    const newSpent   = spentToday + toAdd;
-    const newHistory = [...todayHistory, entry];
-    setSpentToday(newSpent);
-    setTodayHistory(newHistory);
-    AsyncStorage.setItem(STORAGE_FINANCE, JSON.stringify({ spentToday: newSpent, date: todayKey, history: newHistory })).catch(() => {});
-  }, [spentToday, todayHistory, todayKey]);
+    const books = currentBooks();
+    const past  = !!day && day < books.finance.date;
+    // An entry logged afterwards has no time of day: the time it was logged would be wrong.
+    const entry: SpendingEntry = { id: generateId(), amount: toAdd, time: past ? '' : formatTime(), ...(note ? { note } : {}), ...(category ? { category } : {}) };
+    keepBooks(books, addEntryOnDay(books.finance, books.dailyTotals, entry, past ? day! : books.finance.date));
+  }, [keepBooks]);
+
+  // ── A Habbit ticked off (or undone) for yesterday, after the day rolled over ──
+  const handleSetYesterday = useCallback((id: string, done: boolean) => {
+    const s = liveState.current;
+    const r = setYesterday({ habitId: id, done, commissions: s.commissions, history: s.completionHistory, stats: s.stats, todayKey: s.dayKey });
+    if (r.history !== s.completionHistory) { setCompletionHistory(r.history); saveCompletionHistory(r.history); }
+    if (r.stats !== s.stats) { setStats(r.stats); saveStats(r.stats); }
+  }, [saveCompletionHistory, saveStats]);
 
   // ── Reset: also zeroes out completionCount ────────────────────────────────
   const handleResetToday = useCallback(() => {
@@ -1333,6 +1353,7 @@ export default function App() {
       case 'home':
         return (
           <HomeScreen
+            todayKey={todayKey}
             commissions={commissions}
             habitStats={habitStatsById}
             spentToday={spentToday}
@@ -1373,6 +1394,8 @@ export default function App() {
               onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
               onSkip={() => handleSkip(detailHabit.id)}
               onUnskip={() => handleUnskip(detailHabit.id)}
+              yesterday={yesterdayState(detailHabit, completionHistory, todayKey)}
+              onSetYesterday={done => handleSetYesterday(detailHabit.id, done)}
               focusLog={focusLog}
               focusRunning={focusSession?.habitId === detailHabit.id}
               onStartFocus={() => startFocus(detailHabit.id)}
@@ -1422,8 +1445,8 @@ export default function App() {
             onSetBudget={handleSetBudget}
             onAddMoney={handleAddMoney}
             onUndoTopUp={handleUndoTopUp}
-            onUndoEntry={handleUndoEntry}
-            onSetEntryCategory={handleSetEntryCategory}
+            onChangeEntry={handleChangeEntry}
+            onRemoveEntry={handleRemoveEntry}
             todayKey={todayKey}
             bills={bills}
             onSaveBill={handleSaveBill}

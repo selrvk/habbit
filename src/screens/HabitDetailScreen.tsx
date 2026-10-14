@@ -34,7 +34,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const haptic = () => ReactNativeHapticFeedback.trigger('impactLight', { enableVibrateFallback: true, ignoreAndroidSystemSettings: false });
 
-export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip, focusLog, focusRunning, onStartFocus, workoutLog, workoutRunning, onStartWorkout }: {
+export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, onSkip, onUnskip, yesterday, onSetYesterday, focusLog, focusRunning, onStartFocus, workoutLog, workoutRunning, onStartWorkout }: {
   habit: Commission;
   history: CompletionRecord[];
   todayKey: string;
@@ -42,6 +42,9 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
   onEdit: () => void;
   onSkip: () => void;
   onUnskip: () => void;
+  /** Yesterday, if it can still be ticked off ('not-done') or undone ('done'); null when it can't (pastDays.ts). */
+  yesterday: 'done' | 'not-done' | null;
+  onSetYesterday: (done: boolean) => void;
   /** Focus-timer habits: time focused, whether its timer is running, and starting it. */
   focusLog: FocusLogEntry[];
   focusRunning: boolean;
@@ -248,6 +251,27 @@ export const HabitDetailScreen = ({ habit, history, todayKey, onBack, onEdit, on
         <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border }}>
           <HabitCalendar days={days} todayKey={todayKey} weekly={!!habit.perWeek} />
         </View>
+
+        {/* ── Yesterday, if it wasn't ticked off in time ── */}
+        {yesterday === 'not-done' && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: C.border }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>Did it yesterday?</Text>
+              <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted, marginTop: 2 }}>If you forgot to tick it off, you still can today.</Text>
+            </View>
+            <TouchableOpacity onPress={() => { haptic(); onSetYesterday(true); }} activeOpacity={0.85} accessibilityRole="button"
+              accessibilityLabel={`Mark ${habit.label} as done yesterday`}
+              style={{ backgroundColor: C.accent, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 }}>
+              <Text style={{ fontFamily: 'DynaPuff', fontSize: fs(13), color: '#fff' }}>Mark done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {yesterday === 'done' && (
+          <TouchableOpacity onPress={() => { haptic(); onSetYesterday(false); }} activeOpacity={0.7} accessibilityRole="button"
+            accessibilityLabel={`Undo ${habit.label} done yesterday`} style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 6, paddingHorizontal: 12 }}>
+            <Text style={{ fontFamily: 'Jua', fontSize: fs(12), color: C.muted }}>Done yesterday ✓ · <Text style={{ textDecorationLine: 'underline' }}>Undo</Text></Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={{ fontFamily: 'Jua', fontSize: fs(13), color: C.muted, textAlign: 'center', marginTop: 16 }}>{hint}</Text>
         {(today === 'skipped' || (today === 'pending' && skips.left > 0)) && (

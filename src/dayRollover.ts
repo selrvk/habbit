@@ -3,7 +3,7 @@
 // Pure "a new day started" logic, shared by app launch and app resume.
 // History is kept in full (it is small) for stats and backups.
 
-import type { Commission, CompletionRecord, DailyTotal, FinanceData, SpendingEntry, Stats } from './types';
+import type { Commission, CompletionRecord, DailyTotal, FinanceData, SpendingEntry, Stats, StreakBase } from './types';
 import { addDaysToKey, isRestRecord, isScheduledForDay, parseDateKey } from './helpers';
 
 /**
@@ -29,7 +29,7 @@ export const onlyRestDaysBetween = (
 };
 
 /** Whether finishing today's habits continues the current streak (vs. starting at 1). */
-export const streakContinues = (stats: Stats, todayKey: string, commissions: Commission[], history: CompletionRecord[] = []): boolean =>
+export const streakContinues = (stats: Pick<Stats, 'currentStreak' | 'lastFullDate'>, todayKey: string, commissions: Commission[], history: CompletionRecord[] = []): boolean =>
   !!stats.lastFullDate && stats.currentStreak > 0 && onlyRestDaysBetween(stats.lastFullDate, todayKey, commissions, history);
 
 export const rolloverFinance = (
@@ -100,8 +100,20 @@ export const rolloverHabits = (
     const streak = streakContinues(before, date, commissions, history) ? before.currentStreak + 1 : 1;
     before = { ...before, currentStreak: streak, bestStreak: Math.max(streak, before.bestStreak), lastFullDate: date };
   }
-  const kept  = { ...before, beforeToday: undefined };
-  const stats = streakContinues(before, todayKey, commissions, history) ? kept : { ...kept, currentStreak: 0 };
+  // What yesterday is measured against if a Habbit is ticked off for it later (pastDays.ts):
+  // the streak before yesterday counted. When the day closing is yesterday, that's how it
+  // stood before its credit (live, kept in beforeToday, or just above); after a gap of days,
+  // it's where the day closing left it.
+  const yesterday = addDaysToKey(todayKey, -1);
+  const pick = (s: StreakBase): StreakBase => ({ currentStreak: s.currentStreak, bestStreak: s.bestStreak, lastFullDate: s.lastFullDate });
+  const p    = prev.stats;
+  const base = date !== yesterday ? pick(before)
+    : p.lastFullDate !== date ? pick(p)
+    : p.beforeToday ? pick(p.beforeToday) : undefined;
+
+  const { beforeToday: _today, yesterday: _yesterday, ...kept } = before;
+  const counting = { ...kept, ...(base ? { yesterday: { date: yesterday, base } } : {}) };
+  const stats = streakContinues(before, todayKey, commissions, history) ? counting : { ...counting, currentStreak: 0 };
 
   return {
     commissions: commissions.map(c => ({ ...c, completed: false, completionCount: 0, skipped: false })),

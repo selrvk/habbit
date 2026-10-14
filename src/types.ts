@@ -70,10 +70,17 @@ export type Settings        = {
   /** The Sunday recap notification. Missing means on. */
   weeklyRecap?: boolean;
 };
-export type Stats           = {
-  currentStreak: number; bestStreak: number; totalCompleted: number; lastFullDate: string;
+/** Where the day streak stands: its length, the best so far, and the last day that counted. */
+export type StreakBase      = { currentStreak: number; bestStreak: number; lastFullDate: string };
+export type Stats           = StreakBase & {
+  totalCompleted: number;
   /** Values from before today's streak credit, so un-completing a habit can revert it. */
-  beforeToday?: { currentStreak: number; bestStreak: number; lastFullDate: string };
+  beforeToday?: StreakBase;
+  /**
+   * The streak from before yesterday counted, kept when the day rolls over, so a Habbit
+   * ticked off for yesterday afterwards (pastDays.ts) can count it, or uncount it, exactly.
+   */
+  yesterday?: { date: string; base: StreakBase };
 };
 
 export type ChartDay        = { date: string; dayName: string; total: number; isToday: boolean };

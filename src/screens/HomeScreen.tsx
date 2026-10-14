@@ -55,17 +55,19 @@ const ProgressBar = ({ pct, color, height = 6 }: { pct: number; color: string; h
 );
 
 export const HomeScreen = ({
-  commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
+  todayKey, commissions, habitStats, spentToday, allocatedPerDay, budget, currency, name, avatar, streak,
   onAddHabit, onGoToFinance, onAddSpending, onCommissionComplete, onCommissionUncomplete,
   onSkip, onUnskip, onSkipMany, weekRecap, onOpenWeekRecap, focusSession, onStartFocus, focusMinutesToday, onOpenFocus, workout, onStartWorkout,
 }: {
+  todayKey: string;
   commissions: Commission[];
   /** Each habit's streak and weekly skips, by id. */
   habitStats: Record<string, HabitSummary>;
   spentToday: number;
   allocatedPerDay: number; budget: BudgetState; currency: string; name: string; avatar: string; streak: number;
   onAddHabit: () => void; onGoToFinance: () => void;
-  onAddSpending: (amount: string, note?: string, category?: string) => void;
+  /** `day`: an earlier day, for spending logged afterwards. */
+  onAddSpending: (amount: string, note?: string, category?: string, day?: string) => void;
   onCommissionComplete: (id: string) => void; onCommissionUncomplete: (id: string) => void;
   onSkip: (id: string) => void; onUnskip: (id: string) => void; onSkipMany: (ids: string[]) => void;
   /** The Sunday recap card, shown on Sunday evening and Monday; null otherwise. */
@@ -132,8 +134,8 @@ export const HomeScreen = ({
   const isOverBudget = remaining < 0;
   const budgetPct    = allocatedPerDay > 0 ? budget.spentToday / allocatedPerDay : 0;
 
-  const handleConfirm = (note?: string, category?: string) => {
-    onAddSpending(addingAmount, note, category);
+  const handleConfirm = (note?: string, category?: string, day?: string) => {
+    onAddSpending(addingAmount, note, category, day);
     setAddingAmount(''); setModalVisible(false);
   };
 
@@ -155,7 +157,7 @@ export const HomeScreen = ({
 
   return (
     <>
-      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote withCategory notePlaceholder="Add a note (optional)" onScan={scanReceipt} />
+      <NumpadModal visible={modalVisible} title="Add to Spent Today" confirmLabel="Add" amount={addingAmount} currency={currency} onChangeAmount={setAddingAmount} onConfirm={handleConfirm} onClose={() => { setModalVisible(false); setAddingAmount(''); }} withNote withCategory notePlaceholder="Add a note (optional)" onScan={scanReceipt} todayKey={todayKey} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: navHeight }} showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
 
         {/* ── Header: greeting + streak ── */}

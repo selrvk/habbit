@@ -1,7 +1,7 @@
 // src/components/NumpadModal.tsx
 
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Animated, Image, TextInput, TouchableWithoutFeedback, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Animated, Image, TextInput, TouchableWithoutFeedback, Platform, ActivityIndicator, ActionSheetIOS } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { IMAGES } from '../constants';
 import { applyNumpadKey } from '../helpers';
@@ -9,6 +9,7 @@ import { CurrencyAmount } from './CurrencyAmount';
 import { CategoryGrid } from './CategoryGrid';
 import { Icon } from './Icon';
 import type { ScanFill } from '../utils/receiptScan';
+import { dayName, recentDays } from '../pastDays';
 
 const haptic = {
   light:   () => ReactNativeHapticFeedback.trigger('impactLight',         { enableVibrateFallback: true, ignoreAndroidSystemSettings: false }),
@@ -22,9 +23,10 @@ const NOTE_MODAL_SHIFT = Platform.OS === 'ios' ? -130 : -110;
 // The category grid makes the note step taller, so it needs to move further for the keyboard.
 const CATEGORY_MODAL_SHIFT = Platform.OS === 'ios' ? -165 : -140;
 
-export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra, initialNote, initialCategory, onScan }: {
+export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, currency, onChangeAmount, onConfirm, onClose, withNote = false, withCategory = false, notePlaceholder = 'What was this for? (optional)', headerExtra, initialNote, initialCategory, onScan, todayKey, initialDay, editing = false }: {
   visible: boolean; title: string; hint?: string; confirmLabel: string; amount: string; currency: string;
-  onChangeAmount: (v: string) => void; onConfirm: (note?: string, category?: string) => void; onClose: () => void;
+  /** `day` is set when the sheet offers a day (todayKey): the one picked. */
+  onChangeAmount: (v: string) => void; onConfirm: (note?: string, category?: string, day?: string) => void; onClose: () => void;
   withNote?: boolean;
   /** Spending: the second step asks for a category (one tap) as well as an optional note. */
   withCategory?: boolean;
@@ -36,6 +38,12 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   initialCategory?: string;
   /** Spending: scans a receipt and fills in the amount, note and category from it, to check and save. */
   onScan?: () => Promise<ScanFill | null>;
+  /** Spending: offers the last few days on the second step, for spending logged afterwards. */
+  todayKey?: string;
+  /** The day it starts on (todayKey when not given). */
+  initialDay?: string;
+  /** Changing an entry: opens on the second step, with the amount shown to tap and change. */
+  editing?: boolean;
 }) => {
   const scaleAnim      = useRef(new Animated.Value(0.88)).current;
   const opacityAnim    = useRef(new Animated.Value(0)).current;
@@ -50,6 +58,7 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
   const [scanning, setScanning] = useState(false);
   // What the last scan found: an amount a line called the total, a best guess, or none.
   const [scanned, setScanned]   = useState<'sure' | 'guess' | 'no-total' | null>(null);
+  const [day, setDay]           = useState<string | undefined>(undefined);
   // A scan that comes back after the sheet was closed is dropped.
   const openRef = useRef(visible);
   openRef.current = visible;
@@ -62,8 +71,11 @@ export const NumpadModal = ({ visible, title, hint, confirmLabel, amount, curren
       setCategory(initialCategory);
       setScanning(false);
       setScanned(null);
+      setDay(initialDay ?? todayKey);
       noteAnim.setValue(0);
       modalShiftAnim.setValue(0);
+      // Changing an entry starts on its details, with the amount there to tap.
+      if (editing) { setStep('note'); noteAnim.setValue(1); }
     }
     Animated.parallel([
       Animated.spring(scaleAnim,   { toValue: visible ? 1 : 0.88, useNativeDriver: true, tension: 120, friction: 8 }),
@@ -138,9 +150,21 @@ const goToNote = () => {
     modalShiftAnim.setValue(0);
   };
 
+  /** The last few days to pick from, newest first. */
+  const pickDay = () => {
+    if (!todayKey) return;
+    haptic.light();
+    noteInputRef.current?.blur();
+    const days = recentDays(todayKey);
+    ActionSheetIOS.showActionSheetWithOptions(
+      { title: 'Which day was it?', options: [...days.map(d => d.label), 'Cancel'], cancelButtonIndex: days.length },
+      i => { if (i < days.length) { haptic.light(); setDay(days[i].key); } },
+    );
+  };
+
   const handleConfirm = (skipNote = false) => {
     haptic.success();
-    onConfirm(skipNote ? undefined : note.trim() || undefined, category);
+    onConfirm(skipNote ? undefined : note.trim() || undefined, category, todayKey ? day : undefined);
     setStep('amount');
     setNote('');
     setCategory(undefined);
@@ -150,8 +174,8 @@ const goToNote = () => {
   };
 
   const hasAmount = parseFloat(amount || '0') > 0;
-  // A scanned amount is shown at full strength on the second step: it's there to be checked.
-  const reviewing = step === 'note' && (scanned === 'sure' || scanned === 'guess');
+  // A scanned amount, or one being changed, is shown at full strength on the second step: it's there to be checked.
+  const reviewing = step === 'note' && (editing || scanned === 'sure' || scanned === 'guess');
 
   const noteSlideY    = noteAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
   const noteOpacity   = noteAnim;
@@ -213,15 +237,26 @@ const goToNote = () => {
 
               {reviewing && (
                 <Text style={{ fontFamily: 'Jua', fontSize: 12, textAlign: 'center', color: scanned === 'guess' ? '#F5C26B' : 'rgba(232,213,192,0.5)', marginBottom: 14 }}>
-                  {scanned === 'guess' ? 'Best guess from your receipt. Check it, and tap the amount to change it.' : 'From your receipt. Tap the amount to change it.'}
+                  {scanned === 'guess' ? 'Best guess from your receipt. Check it, and tap the amount to change it.'
+                    : scanned === 'sure' ? 'From your receipt. Tap the amount to change it.' : 'Tap the amount to change it.'}
                 </Text>
+              )}
+
+              {step === 'note' && todayKey && day && (
+                <TouchableOpacity onPress={pickDay} activeOpacity={0.7} accessibilityRole="button"
+                  accessibilityLabel={`Day: ${dayName(day, todayKey)}`} accessibilityHint="Changes the day it's logged on"
+                  style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: reviewing ? -6 : -8, marginBottom: 14, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99,
+                    backgroundColor: day === todayKey ? 'rgba(212,149,106,0.08)' : 'rgba(212,149,106,0.2)', borderWidth: 1, borderColor: day === todayKey ? 'rgba(212,149,106,0.22)' : '#D4956A' }}>
+                  <Icon name="calendar" size={16} />
+                  <Text style={{ fontFamily: 'Jua', fontSize: 13, color: day === todayKey ? 'rgba(232,213,192,0.7)' : '#e8d5c0' }}>{dayName(day, todayKey)} ▾</Text>
+                </TouchableOpacity>
               )}
 
               {hint && step === 'amount' && (
                 <Text style={{ fontFamily: 'Jua', fontSize: 12, textAlign: 'center', color: 'rgba(232,213,192,0.35)', marginBottom: 16 }}>{hint}</Text>
               )}
 
-              {onScan && step === 'amount' && (
+              {onScan && step === 'amount' && !editing && (
                 <View style={{ alignItems: 'center', marginBottom: 14 }}>
                   <TouchableOpacity onPress={runScan} disabled={scanning} activeOpacity={0.7}
                     accessibilityRole="button" accessibilityLabel={scanning ? 'Reading the receipt' : 'Scan a receipt'}

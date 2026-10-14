@@ -18,6 +18,7 @@ import { upcomingDueDate, type Bill } from '../bills';
 import { SavingsJars, type Jar } from '../components/SavingsJar';
 import { NetWorthSheet, worthSummary, type Worth } from '../components/NetWorthSheet';
 import { useReceiptScan } from '../hooks/useReceiptScan';
+import { dayName, entryOn, type Books, type EntryChanges } from '../pastDays';
 import { MonthSummarySheet, type MonthSummaryData } from '../components/MonthSummarySheet';
 import { monthLabel, monthStart } from '../monthSummary';
 
@@ -79,7 +80,7 @@ const entryTitle = (e: { note?: string; category?: string }) => e.note || catego
 
 export const FinanceScreen = ({
   spentToday, todayHistory, dailyTotals, budget, budgetAmount, topUpsToday, currency, todayKey,
-  onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onUndoEntry, onSetEntryCategory,
+  onSetBudget, onAddMoney, onUndoTopUp, onAddSpending, onChangeEntry, onRemoveEntry,
   bills, onSaveBill, onDeleteBill, jar, worth, topUps, completionHistory, request, onRequestHandled,
 }: {
   spentToday: number;
@@ -93,9 +94,11 @@ export const FinanceScreen = ({
   onSetBudget: (period: BudgetPeriod, amount: number) => void;
   onAddMoney: (amount: string, note?: string) => void;
   onUndoTopUp: (id: string) => void;
-  onAddSpending: (amount: string, note?: string, category?: string) => void;
-  onUndoEntry: (id: string) => void;
-  onSetEntryCategory: (id: string, category: string | undefined) => void;
+  /** `day`: an earlier day, for spending logged afterwards. */
+  onAddSpending: (amount: string, note?: string, category?: string, day?: string) => void;
+  /** Changes a logged entry on its day (`date`), or moves it to `toDate`. */
+  onChangeEntry: (id: string, date: string, changes: EntryChanges, toDate?: string) => void;
+  onRemoveEntry: (id: string, date: string) => void;
   bills: Bill[];
   onSaveBill: (data: BillFormData, id?: string) => void;
   onDeleteBill: (id: string) => void;
@@ -119,7 +122,10 @@ export const FinanceScreen = ({
   const [moneyModal,  setMoneyModal]  = useState(false);
   const [moneyInput,  setMoneyInput]  = useState('');
   const [selectedDay, setSelectedDay] = useState<ChartDay | null>(null);
-  const [editingId, setEditingId]     = useState<string | null>(null);
+  // A logged entry open to change: today's, or one from an earlier day.
+  const [editingAt, setEditingAt]     = useState<{ id: string; date: string } | null>(null);
+  const [changing, setChanging]       = useState(false);
+  const [changeInput, setChangeInput] = useState('');
   // null: closed; 'new': adding; otherwise the bill being edited.
   const [billEditor, setBillEditor]   = useState<Bill | 'new' | null>(null);
   const [summaryMonth, setSummaryMonth] = useState<string | null>(null);
@@ -138,7 +144,7 @@ export const FinanceScreen = ({
   useEffect(() => {
     if (!request) return;
     setBudgetModal(false); setMoneyModal(false); setSpendModal(false);
-    setSelectedDay(null); setEditingId(null); setBillEditor(null); setSummaryMonth(null); setWorthOpen(false);
+    setSelectedDay(null); setEditingAt(null); setChanging(false); setBillEditor(null); setSummaryMonth(null); setWorthOpen(false);
     const timer = setTimeout(() => {
       onRequestHandled?.();
       if (request.kind === 'spend') {
@@ -157,7 +163,10 @@ export const FinanceScreen = ({
   const sortedBills = bills
     .map(b => ({ bill: b, next: upcomingDueDate(b, todayKey) ?? '9999' }))
     .sort((a, b) => a.next.localeCompare(b.next));
-  const editing = editingId ? todayHistory.find(e => e.id === editingId) ?? null : null;
+  const books: Books = { finance: { spentToday, date: todayKey, history: todayHistory }, dailyTotals };
+  const editing = editingAt ? entryOn(books, editingAt.id, editingAt.date) ?? null : null;
+  const editingDay = editingAt?.date ?? todayKey;
+  const closeEntry = () => { setEditingAt(null); setChanging(false); };
 
   // ── derived values ────────────────────────────────────────────────────────
   const period       = budget.period;
@@ -196,14 +205,22 @@ export const FinanceScreen = ({
     setBudgetModal(true);
   };
 
-  const removeEntry = (id: string) => {
-    const entry = todayHistory.find(e => e.id === id);
+  const removeEntry = (id: string, date: string = todayKey) => {
+    const entry = entryOn(books, id, date);
     if (!entry) return;
     haptic.warning();
-    Alert.alert('Remove entry', `Remove ${currencyStr(currency, fmt(entry.amount))} (${entryTitle(entry)}) from today?`, [
+    const from = date === todayKey ? 'today' : dayName(date, todayKey).replace('Yesterday', 'yesterday');
+    Alert.alert('Remove entry', `Remove ${currencyStr(currency, fmt(entry.amount))} (${entryTitle(entry)}) from ${from}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => { haptic.error(); setEditingId(null); onUndoEntry(id); } },
+      { text: 'Remove', style: 'destructive', onPress: () => { haptic.error(); closeEntry(); onRemoveEntry(id, date); } },
     ]);
+  };
+
+  /** Opens an entry from an earlier day: the day's sheet closes first, since iOS can't show one sheet while another is closing. */
+  const openPastEntry = (id: string, date: string) => {
+    haptic.light();
+    setSelectedDay(null);
+    setTimeout(() => setEditingAt({ id, date }), 350);
   };
 
   const handleUndo = (row: ActivityRow) => {
@@ -216,7 +233,7 @@ export const FinanceScreen = ({
         { text: 'Cancel', style: 'cancel' },
         { text: 'Undo', style: 'destructive', onPress: () => {
           haptic.error();
-          if (row.kind === 'spend') onUndoEntry(row.id); else onUndoTopUp(row.id);
+          if (row.kind === 'spend') onRemoveEntry(row.id, todayKey); else onUndoTopUp(row.id);
         } },
       ],
     );
@@ -281,7 +298,7 @@ export const FinanceScreen = ({
         amount={spendInput}
         currency={currency}
         onChangeAmount={setSpendInput}
-        onConfirm={(note, category) => { onAddSpending(spendInput, note, category); setSpendInput(''); setSpendPrefill({}); setSpendModal(false); }}
+        onConfirm={(note, category, day) => { onAddSpending(spendInput, note, category, day); setSpendInput(''); setSpendPrefill({}); setSpendModal(false); }}
         onClose={() => { setSpendModal(false); setSpendInput(''); setSpendPrefill({}); }}
         withNote
         withCategory
@@ -289,6 +306,7 @@ export const FinanceScreen = ({
         initialNote={spendPrefill.note}
         onScan={scanReceipt}
         initialCategory={spendPrefill.category}
+        todayKey={todayKey}
       />
 
       <BillEditor
@@ -305,31 +323,65 @@ export const FinanceScreen = ({
       <MonthSummarySheet visible={summaryMonth !== null} initialMonth={summaryMonth ?? todayKey} data={summaryData} onClose={() => setSummaryMonth(null)} />
       <NetWorthSheet visible={worthOpen} worth={worth} savings={jar.savings} currency={currency} todayKey={todayKey} onClose={() => setWorthOpen(false)} />
 
-      {/* ── Edit one of today's entries: category, or remove it ── */}
-      <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={() => setEditingId(null)}>
+      {/* ── A logged entry, today's or an earlier day's: its category, change it, or remove it ── */}
+      <Modal visible={editing !== null} transparent animationType="fade" onRequestClose={closeEntry}>
         <View style={{ flex: 1, backgroundColor: 'rgba(18,7,5,0.80)', justifyContent: 'flex-end' }}>
-          <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setEditingId(null)} />
+          <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={closeEntry} />
           {editing && (
             <View style={{ backgroundColor: '#3B2220', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1.5, borderBottomWidth: 0, borderColor: 'rgba(212,149,106,0.35)' }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>{entryTitle(editing)} · {editing.billId ? 'Bill' : editing.time}</Text>
+                  <Text style={{ fontFamily: 'Jua', color: C.muted, fontSize: fs(12) }}>
+                    {[entryTitle(editing), editing.billId ? 'Bill' : editing.time, editingDay !== todayKey ? dayName(editingDay, todayKey) : ''].filter(Boolean).join(' · ')}
+                  </Text>
                   <CurrencyAmount currency={currency} amount={fmt(editing.amount)} imageSize={fs(24)}
                     textStyle={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(26) }} />
                 </View>
-                <TouchableOpacity onPress={() => setEditingId(null)} hitSlop={12} accessibilityLabel="Close">
+                <TouchableOpacity onPress={() => { haptic.light(); setChangeInput(String(editing.amount)); setChanging(true); }} activeOpacity={0.8}
+                  accessibilityRole="button" accessibilityHint={editing.billId ? 'Changes the amount or note' : 'Changes the amount, note or day'}
+                  style={{ marginRight: 14, backgroundColor: 'rgba(212,149,106,0.14)', borderRadius: 99, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(212,149,106,0.35)' }}>
+                  <Text style={{ fontFamily: 'Jua', color: C.accent, fontSize: fs(13) }}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={closeEntry} hitSlop={12} accessibilityLabel="Close">
                   <Text style={{ color: 'rgba(232,213,192,0.4)', fontSize: fs(18) }}>✕</Text>
                 </TouchableOpacity>
               </View>
               <Text style={[label, { marginBottom: 8 }]}>Category</Text>
-              <CategoryGrid value={editing.category} onChange={key => { onSetEntryCategory(editing.id, key); setEditingId(null); }} />
-              <TouchableOpacity onPress={() => removeEntry(editing.id)} style={{ alignSelf: 'center', marginTop: 20, paddingVertical: 8, paddingHorizontal: 16 }}>
+              <CategoryGrid value={editing.category} onChange={key => { onChangeEntry(editing.id, editingDay, { amount: editing.amount, note: editing.note, category: key }); closeEntry(); }} />
+              <TouchableOpacity onPress={() => removeEntry(editing.id, editingDay)} style={{ alignSelf: 'center', marginTop: 20, paddingVertical: 8, paddingHorizontal: 16 }}>
                 <Text style={{ fontFamily: 'Jua', color: C.red, fontSize: fs(14) }}>Remove entry</Text>
               </TouchableOpacity>
             </View>
           )}
+          {/* ── Changing that entry: amount, note, category, and (not for a bill) its day. Inside this
+              sheet, since iOS only shows a second sheet over the one it's in. ── */}
+          {editing && (
+            <NumpadModal
+              visible={changing}
+              title="Change spending"
+              confirmLabel="Save"
+              amount={changeInput}
+              currency={currency}
+              onChangeAmount={setChangeInput}
+              onConfirm={(note, category, day) => {
+                const amount = parseFloat(changeInput || '0');
+                if (amount > 0) onChangeEntry(editing.id, editingDay, { amount, note, category }, day ?? editingDay);
+                closeEntry();
+              }}
+              onClose={() => setChanging(false)}
+              withNote
+              withCategory
+              editing
+              notePlaceholder="Add a note (optional)"
+              initialNote={editing.note}
+              initialCategory={editing.category}
+              todayKey={editing.billId ? undefined : todayKey}
+              initialDay={editingDay}
+            />
+          )}
         </View>
       </Modal>
+
 
       {/* ── Add money (top-up) ── */}
       <NumpadModal
@@ -382,15 +434,19 @@ export const FinanceScreen = ({
                 </View>
               ) : (
                 [...selectedEntries].reverse().map(entry => (
-                  <View key={entry.id} style={{ backgroundColor: C.card, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 }}>
+                  <TouchableOpacity key={entry.id} onPress={() => selectedDay && openPastEntry(entry.id, selectedDay.isToday ? todayKey : selectedDay.date)}
+                    activeOpacity={0.7} accessibilityRole="button" accessibilityHint="Change or remove it"
+                    style={{ backgroundColor: C.card, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 }}>
                     <View style={{ marginRight: 10 }}><CategoryIcon category={categoryOf(entry.category)} size={fs(24)} dim={!entry.category} /></View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'Jua', fontSize: fs(14), color: C.cream }}>{entryTitle(entry)}</Text>
-                      <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>{entry.time}</Text>
+                      {(entry.billId || entry.time) ? (
+                        <Text style={{ fontFamily: 'Jua', fontSize: fs(11), color: C.muted, marginTop: 1 }}>{entry.billId ? 'Bill' : entry.time}</Text>
+                      ) : null}
                     </View>
                     <CurrencyAmount currency={currency} amount={fmt(entry.amount)}
                       textStyle={{ fontFamily: 'DynaPuff', color: C.cream, fontSize: fs(15) }} imageSize={fs(15)} />
-                  </View>
+                  </TouchableOpacity>
                 ))
               )}
             </ScrollView>
@@ -500,10 +556,10 @@ export const FinanceScreen = ({
           <View style={{ backgroundColor: C.card, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, overflow: 'hidden' }}>
             {activity.map((row, i) => (
               <TouchableOpacity key={row.id}
-                onPress={() => { if (row.kind === 'spend') { haptic.light(); setEditingId(row.id); } else handleUndo(row); }}
+                onPress={() => { if (row.kind === 'spend') { haptic.light(); setEditingAt({ id: row.id, date: todayKey }); } else handleUndo(row); }}
                 onLongPress={() => (row.kind === 'spend' ? removeEntry(row.id) : handleUndo(row))}
                 activeOpacity={0.7}
-                accessibilityHint={row.kind === 'spend' ? 'Change its category or remove it' : 'Opens undo'}
+                accessibilityHint={row.kind === 'spend' ? 'Change or remove it' : 'Opens undo'}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: 'rgba(212,149,106,0.1)' }}>
                 <View style={{ marginRight: 10 }}>
                   {row.kind === 'topup'
