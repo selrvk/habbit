@@ -40,6 +40,7 @@ import { WeekRecapSheet, type WeekRecapData } from './src/components/WeekRecapSh
 import { achievementById, newlyEarned, EARNED_BEFORE, type AchievementData, type Earned } from './src/achievements';
 import { AchievementToast, type ToastItem } from './src/components/AchievementToast';
 import { WhatsNewSheet, WHATS_NEW_VERSION } from './src/components/WhatsNewSheet';
+import { EdgeSwipeBack } from './src/components/EdgeSwipeBack';
 import { AchievementsSheet } from './src/components/AchievementsSheet';
 import { STORAGE_COMMISSIONS, STORAGE_COMPLETION_HISTORY, STORAGE_FINANCE, STORAGE_FINANCE_HISTORY, STORAGE_ONBOARDED, STORAGE_SETTINGS, STORAGE_STATS, STORAGE_NOTIF_VERSION, STORAGE_TOPUPS, STORAGE_BILLS, STORAGE_SAVINGS, STORAGE_NET_WORTH, STORAGE_ACHIEVEMENTS, STORAGE_COACH_MESSAGES, STORAGE_CATEGORIES, STORAGE_FOCUS, STORAGE_FOCUS_LOG, STORAGE_WORKOUT, STORAGE_WORKOUT_LOG, STORAGE_WHATS_NEW, STORAGE_QUICK_FOCUS, ALL_STORAGE_KEYS } from './src/storage';
 import type { Commission, CommissionsData, DailyTotal, EveningReminder, FinanceData, HabbitFormData, Settings, SpendingEntry, Stats, CompletionRecord, TabKey } from './src/types';
@@ -796,22 +797,25 @@ export default function App() {
   }, [restoreBackup]);
 
   // Another install's backup is in iCloud (a reinstall, a new phone, or iCloud delivering it
-  // after onboarding). Automatic backup is paused until the user picks one, so ask once.
+  // after onboarding). Automatic backup is paused until the user picks one, so ask. "Not now"
+  // leaves both as they are and asks again the next time the app is opened, not on every
+  // return to it.
   const backupPromptOpen = useRef(false);
+  const backupPutOff     = useRef<string | null>(null);
   const offerCloudBackup = useCallback(async () => {
     if (backupPromptOpen.current || !isOnboardedRef.current) return;
     const status = await getCloudBackupStatus().catch(() => null);
     const meta = status?.needsDecision ? status.meta : null;
-    if (!meta || backupPromptOpen.current) return;
+    if (!meta || backupPromptOpen.current || backupPutOff.current === meta.createdAt) return;
     backupPromptOpen.current = true;
     Alert.alert(
       'Found an iCloud backup',
       `Backed up ${describeBackupTime(meta.createdAt)} · ${describeBackupContents(meta)}.\n\nRestore it? This replaces what’s on this phone. Keeping this phone’s data replaces the backup instead.`,
       [
-        { text: 'Keep this phone’s data', onPress: () => { backupPromptOpen.current = false; markBackupHandled(meta.createdAt); } },
         { text: 'Restore', onPress: () => { backupPromptOpen.current = false; restoreFromICloud(); } },
+        { text: 'Keep this phone’s data', onPress: () => { backupPromptOpen.current = false; markBackupHandled(meta.createdAt); } },
+        { text: 'Not now', style: 'cancel', onPress: () => { backupPromptOpen.current = false; backupPutOff.current = meta.createdAt; } },
       ],
-      { cancelable: false },
     );
   }, [restoreFromICloud]);
 
@@ -1386,38 +1390,42 @@ export default function App() {
         const detailHabit = tasksSubScreen?.mode === 'detail' ? commissions.find(c => c.id === tasksSubScreen.id) : undefined;
         if (detailHabit) {
           return (
-            <HabitDetailScreen
-              habit={detailHabit}
-              history={completionHistory}
-              todayKey={todayKey}
-              onBack={() => setTasksSubScreen(null)}
-              onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
-              onSkip={() => handleSkip(detailHabit.id)}
-              onUnskip={() => handleUnskip(detailHabit.id)}
-              yesterday={yesterdayState(detailHabit, completionHistory, todayKey)}
-              onSetYesterday={done => handleSetYesterday(detailHabit.id, done)}
-              focusLog={focusLog}
-              focusRunning={focusSession?.habitId === detailHabit.id}
-              onStartFocus={() => startFocus(detailHabit.id)}
-              workoutLog={workoutLog}
-              workoutRunning={workout?.habitId === detailHabit.id}
-              onStartWorkout={() => startWorkout(detailHabit.id)}
-            />
+            <EdgeSwipeBack onBack={() => setTasksSubScreen(null)}>
+              <HabitDetailScreen
+                habit={detailHabit}
+                history={completionHistory}
+                todayKey={todayKey}
+                onBack={() => setTasksSubScreen(null)}
+                onEdit={() => setTasksSubScreen({ mode: 'edit', item: detailHabit, fromDetail: true })}
+                onSkip={() => handleSkip(detailHabit.id)}
+                onUnskip={() => handleUnskip(detailHabit.id)}
+                yesterday={yesterdayState(detailHabit, completionHistory, todayKey)}
+                onSetYesterday={done => handleSetYesterday(detailHabit.id, done)}
+                focusLog={focusLog}
+                focusRunning={focusSession?.habitId === detailHabit.id}
+                onStartFocus={() => startFocus(detailHabit.id)}
+                workoutLog={workoutLog}
+                workoutRunning={workout?.habitId === detailHabit.id}
+                onStartWorkout={() => startWorkout(detailHabit.id)}
+              />
+            </EdgeSwipeBack>
           );
         }
         // Sub-screen: add or edit
         if (tasksSubScreen?.mode === 'add' || tasksSubScreen?.mode === 'edit') {
           return (
-            <AddHabbitScreen
-              initialValue={tasksSubScreen.mode === 'edit' ? tasksSubScreen.item : undefined}
-              onSave={
-                tasksSubScreen.mode === 'edit'
-                  ? (data) => handleEdit(tasksSubScreen.item.id, data)
-                  : handleAdd
-              }
-              onClose={() => setTasksSubScreen(afterEditor)}
-              onDelete={tasksSubScreen.mode === 'edit' ? () => handleDelete(tasksSubScreen.item.id) : undefined}
-            />
+            <EdgeSwipeBack onBack={() => setTasksSubScreen(afterEditor)}>
+              <AddHabbitScreen
+                initialValue={tasksSubScreen.mode === 'edit' ? tasksSubScreen.item : undefined}
+                onSave={
+                  tasksSubScreen.mode === 'edit'
+                    ? (data) => handleEdit(tasksSubScreen.item.id, data)
+                    : handleAdd
+                }
+                onClose={() => setTasksSubScreen(afterEditor)}
+                onDelete={tasksSubScreen.mode === 'edit' ? () => handleDelete(tasksSubScreen.item.id) : undefined}
+              />
+            </EdgeSwipeBack>
           );
         }
         return (
@@ -1479,22 +1487,24 @@ export default function App() {
 
       case 'settings':
         return (
-          <SettingsScreen
-            currency={currency}
-            budgetPeriod={budgetPeriod}
-            budgetAmount={budgetAmount}
-            eveningReminder={eveningReminder}
-            onSetEveningReminder={handleSetEveningReminder}
-            weeklyRecap={weeklyRecap}
-            onSetWeeklyRecap={handleSetWeeklyRecap}
-            onOpenBudget={() => setActiveTab('finance')}
-            onResetToday={handleResetToday}
-            onDeleteAllData={handleDeleteAllData}
-            onRestoreFromICloud={restoreFromICloud}
-            onImportBackupFile={() => importBackupFile(true).then(() => {})}
-            onBack={() => setActiveTab('profile')}
-            onSetCurrency={handleSetCurrency}
-          />
+          <EdgeSwipeBack onBack={() => setActiveTab('profile')}>
+            <SettingsScreen
+              currency={currency}
+              budgetPeriod={budgetPeriod}
+              budgetAmount={budgetAmount}
+              eveningReminder={eveningReminder}
+              onSetEveningReminder={handleSetEveningReminder}
+              weeklyRecap={weeklyRecap}
+              onSetWeeklyRecap={handleSetWeeklyRecap}
+              onOpenBudget={() => setActiveTab('finance')}
+              onResetToday={handleResetToday}
+              onDeleteAllData={handleDeleteAllData}
+              onRestoreFromICloud={restoreFromICloud}
+              onImportBackupFile={() => importBackupFile(true).then(() => {})}
+              onBack={() => setActiveTab('profile')}
+              onSetCurrency={handleSetCurrency}
+            />
+          </EdgeSwipeBack>
         );
     }
   };
