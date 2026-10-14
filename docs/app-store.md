@@ -28,6 +28,9 @@ A lot of this update came from your feedback. Thank you!
 • Yearly bills, and reminders a day, three days or a week ahead
 • Leftover budget is offered to your savings jar quietly, on daily budgets too
 • Workouts: time holds like planks and wall sits
+• Forgot to tick a Habbit off? Mark it done the next day and keep your streak
+• Log spending on an earlier day, and change or remove anything you've logged
+• Swipe from the left edge to go back
 • Copy your Account ID in Settings, and other small fixes
 ```
 

@@ -42,6 +42,12 @@ const NEW_PAGES: Page[] = [
       'Leftover budget is offered to your jar quietly, on daily budgets too',
     ],
     hint: 'Net worth is on the Finance tab, below the month’s recap.' },
+  { icons: ['calendar', 'check'], title: 'Fix it after the fact',
+    lines: [
+      'Forgot to tick a Habbit off? Mark it done the next day, from its page, and keep your streak',
+      'Log spending on an earlier day, and change or remove anything you’ve logged',
+      'Swipe from the left edge to go back',
+    ] },
   { icons: ['dumbbell'], title: 'Planks count too',
     lines: [
       'Time holds like planks and wall sits in a workout',
@@ -59,6 +65,7 @@ const TOUR_PAGES: Page[] = [
       'A streak for every Habbit, not just one for the day',
       '“3× a week” goals, for things like the gym',
       'Skip a day when life happens, without losing your streak',
+      'Forgot to tick one off? Mark it done the next day',
       'Tap a Habbit to see its calendar and best streak',
     ] },
   { icons: ['stopwatch', 'dumbbell'], title: 'Focus and workouts',
@@ -74,6 +81,7 @@ const TOUR_PAGES: Page[] = [
       'Bills that log themselves when they’re due, monthly, weekly or yearly',
       'A savings jar for what’s left over',
       'A summary of every month, and your net worth',
+      'Log or fix spending on earlier days',
     ] },
   { icons: ['lightning'], title: 'Log from anywhere',
     lines: [
